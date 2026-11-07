@@ -128,4 +128,10 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<void> purgeLocalUserData({
+    required String tenantId,
+    required String userId,
+  }) async {}
 }

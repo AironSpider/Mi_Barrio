@@ -1,4 +1,5 @@
 import '../../../../core/auth/auth_session_store.dart';
+import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
@@ -71,7 +72,17 @@ class AuthRepositoryImpl implements AuthRepository {
       return verified;
     } on AuthException catch (error) {
       if (error.statusCode == 401 || error.statusCode == 403) {
-        await _sessionStore.clear();
+        try {
+          final tenantId = cachedUser.tenantId;
+          if (tenantId != null) {
+            await SyncOutboxDao().clearUserData(
+              tenantId: tenantId,
+              userId: cachedUser.id,
+            );
+          }
+        } finally {
+          await _sessionStore.clear();
+        }
         return null;
       }
       if (error.statusCode == null) return cachedUser;
@@ -107,4 +118,12 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> logout() => _sessionStore.clear();
+
+  @override
+  Future<void> purgeLocalUserData({
+    required String tenantId,
+    required String userId,
+  }) {
+    return SyncOutboxDao().clearUserData(tenantId: tenantId, userId: userId);
+  }
 }

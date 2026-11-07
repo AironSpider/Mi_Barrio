@@ -83,4 +83,46 @@ class SyncOutboxDao {
       whereArgs: recordIds,
     );
   }
+
+  /// Removes only the cached rows and queued mutations owned by this account.
+  Future<void> clearUserData({
+    required String tenantId,
+    required String userId,
+  }) async {
+    final db = await _dbProvider.database;
+    const ownerColumns = <String, String>{
+      'solidarity_posts': 'author_user_id',
+      'local_services': 'provider_user_id',
+      'neighbor_endorsements': 'endorser_user_id',
+      'users': 'id',
+    };
+
+    await db.transaction((txn) async {
+      final ownedRecordIds = <String>{};
+      for (final entry in ownerColumns.entries) {
+        final rows = await txn.query(
+          entry.key,
+          columns: ['id'],
+          where: 'tenant_id = ? AND ${entry.value} = ?',
+          whereArgs: [tenantId, userId],
+        );
+        final ids = rows.map((row) => row['id'] as String).toSet();
+        ownedRecordIds.addAll(ids);
+        if (ids.isNotEmpty) {
+          final placeholders = List.filled(ids.length, '?').join(',');
+          await txn.delete(
+            entry.key,
+            where: 'id IN ($placeholders)',
+            whereArgs: ids.toList(),
+          );
+        }
+      }
+
+      await txn.delete(
+        'sync_outbox',
+        where: 'tenant_id = ?',
+        whereArgs: [tenantId],
+      );
+    });
+  }
 }

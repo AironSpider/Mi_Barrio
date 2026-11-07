@@ -24,4 +24,9 @@ abstract interface class AuthRepository {
   });
 
   Future<void> logout();
+
+  Future<void> purgeLocalUserData({
+    required String tenantId,
+    required String userId,
+  });
 }

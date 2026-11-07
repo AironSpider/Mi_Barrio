@@ -24,6 +24,11 @@ la clave JWT. La base de datos también impone unicidad al código de invitació
 si ocurre una colisión al generar uno, el backend lo regenera antes de guardar
 el barrio.
 
+La clave JWT que se compartió anteriormente debe considerarse comprometida:
+cada desarrollador debe generar una nueva con `openssl rand -hex 32`, guardarla
+solo en su `.env` local y reiniciar FastAPI. Esto invalida todos los tokens
+emitidos con la clave anterior.
+
 El comando de bootstrap solicita nombre, correo y contraseña sin almacenarlos en
 el código. Ejecútalo manualmente una sola vez para crear el SUPER_ADMIN inicial.
 Desde su pantalla de administración se crean barrios y cuentas ADMIN_BARRIO; el
@@ -61,5 +66,14 @@ flutter test
 ```
 
 Las pruebas de `test/e2e` requieren el backend levantado, las migraciones
-actualizadas y `MI_BARRIO_JWT_SECRET` configurada; se omiten cuando esos
-requisitos no están disponibles.
+actualizadas, una cuenta SUPER_ADMIN y estas variables para aprovisionar un
+barrio de prueba aislado (no se modifica `BARRIO-01`):
+
+```bash
+flutter test test/e2e --dart-define=API_BASE_URL=http://localhost:8000 \
+  --dart-define=E2E_SUPER_ADMIN_EMAIL=admin@example.test \
+  --dart-define=E2E_SUPER_ADMIN_PASSWORD='tu-clave-local'
+```
+
+La cuenta debe existir en la instancia local. Si el backend, las migraciones o
+las credenciales no están disponibles, la integración se omite.

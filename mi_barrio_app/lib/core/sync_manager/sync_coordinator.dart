@@ -98,7 +98,17 @@ class SyncCoordinator {
         phase.value = SyncPhase.syncing;
         final tenant = _tenantId();
         final push = await worker.pushLocalChanges(tenant);
+        if (push.unauthorized) {
+          phase.value = SyncPhase.error;
+          lastError.value = push.message;
+          break;
+        }
         final pull = await worker.pullRemoteChanges(tenant);
+        if (pull.unauthorized) {
+          phase.value = SyncPhase.error;
+          lastError.value = pull.message;
+          break;
+        }
         if (push.success && pull.success) {
           phase.value = SyncPhase.idle;
           lastError.value = null;

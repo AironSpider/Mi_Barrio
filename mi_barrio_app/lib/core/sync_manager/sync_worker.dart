@@ -13,12 +13,14 @@ class PushResult {
   final int sentCount;
   final int processedCount;
   final String? message;
+  final bool unauthorized;
 
   const PushResult({
     required this.success,
     this.sentCount = 0,
     this.processedCount = 0,
     this.message,
+    this.unauthorized = false,
   });
 }
 
@@ -28,12 +30,14 @@ class PullResult {
   final int savedCount;
   final int skippedPendingCount;
   final String? message;
+  final bool unauthorized;
 
   const PullResult({
     required this.success,
     this.savedCount = 0,
     this.skippedPendingCount = 0,
     this.message,
+    this.unauthorized = false,
   });
 }
 
@@ -136,10 +140,14 @@ class SyncWorker {
           .timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
+        if (response.statusCode == 401) {
+          await AuthSessionStore.instance.invalidate();
+        }
         return PushResult(
           success: false,
           sentCount: pending.length,
           message: 'El servidor respondio ${response.statusCode}',
+          unauthorized: response.statusCode == 401,
         );
       }
 
@@ -147,16 +155,24 @@ class SyncWorker {
       final confirmed = ((data['processed_record_ids'] as List?) ?? [])
           .map((e) => e.toString())
           .toSet();
-      final rejected = ((data['rejected'] as List?) ?? const [])
+      final rejectedItems = ((data['rejected'] as List?) ?? const [])
           .whereType<Map>()
-          .map((item) => item['reason']?.toString())
-          .whereType<String>()
-          .where((reason) => reason.isNotEmpty)
+          .where((item) =>
+              item['record_id'] is String && item['target_table'] is String)
           .toList(growable: false);
+      final rejectedReasons = <String, String>{
+        for (final item in rejectedItems)
+          '${item['target_table']}:${item['record_id']}':
+              item['reason']?.toString() ?? 'Rechazado por el servidor',
+      };
 
-      // Solo lo que el servidor confirmo.
+      // Confirmed changes and terminal rejections are both removed from outbox.
       final toClean = pending
-          .where((m) => confirmed.contains(m['record_id']))
+          .where((m) =>
+              confirmed.contains(m['record_id']) ||
+              rejectedReasons.containsKey(
+                '${m['target_table']}:${m['record_id']}',
+              ))
           .toList();
 
       final db = await LocalDatabase.instance.database;
@@ -179,10 +195,12 @@ class SyncWorker {
             whereArgs: [tenantId, recordId],
             limit: 1,
           );
-          if (remaining.isEmpty && _syncableTables.contains(table)) {
+          final wasRejected = rejectedReasons.containsKey('$table:$recordId');
+          if (_syncableTables.contains(table) &&
+              (wasRejected || remaining.isEmpty)) {
             await txn.update(
               table,
-              {'sync_status': 'SYNCED'},
+              {'sync_status': wasRejected ? 'FAILED' : 'SYNCED'},
               where: 'id = ?',
               whereArgs: [recordId],
             );
@@ -191,13 +209,15 @@ class SyncWorker {
       });
 
       return PushResult(
-        success: toClean.length == pending.length,
+        success: toClean.length == pending.length && rejectedReasons.isEmpty,
         sentCount: pending.length,
-        processedCount: toClean.length,
-        message: toClean.length == pending.length
+        processedCount: pending
+            .where((m) => confirmed.contains(m['record_id']))
+            .length,
+        message: rejectedReasons.isNotEmpty
+            ? 'El servidor rechazó ${rejectedReasons.length} cambio(s): ${rejectedReasons.values.join('; ')}'
+            : toClean.length == pending.length
             ? null
-            : rejected.isNotEmpty
-            ? 'El servidor rechazó ${pending.length - toClean.length} cambio(s): ${rejected.join('; ')}'
             : 'El servidor no confirmó ${pending.length - toClean.length} cambio(s)',
       );
     } catch (e) {
@@ -239,9 +259,13 @@ class SyncWorker {
           .timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
+        if (response.statusCode == 401) {
+          await AuthSessionStore.instance.invalidate();
+        }
         return PullResult(
           success: false,
           message: 'El servidor respondio ${response.statusCode}',
+          unauthorized: response.statusCode == 401,
         );
       }
 
@@ -260,8 +284,8 @@ class SyncWorker {
           final pendingIds = (await txn.query(
             table,
             columns: ['id'],
-            where: 'tenant_id = ? AND sync_status = ?',
-            whereArgs: [tenantId, 'PENDING'],
+            where: 'tenant_id = ? AND sync_status IN (?, ?)',
+            whereArgs: [tenantId, 'PENDING', 'FAILED'],
           )).map((r) => r['id']).toSet();
 
           for (final raw in rows) {

@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:mi_barrio_app/core/barrio_context/tenant_session.dart';
 import 'package:mi_barrio_app/core/auth/auth_session_store.dart';
 import 'package:mi_barrio_app/core/database_sqlite/sqlite_database.dart';
 import 'package:mi_barrio_app/core/network/connectivity_monitor.dart';
@@ -31,11 +30,16 @@ void main() {
     'API_BASE_URL',
     defaultValue: 'http://localhost:8000',
   );
-  const tenant = TenantSession.demoTenantId;
+  const superAdminEmail = String.fromEnvironment('E2E_SUPER_ADMIN_EMAIL');
+  const superAdminPassword = String.fromEnvironment('E2E_SUPER_ADMIN_PASSWORD');
+  const centerLat = -5.1945;
+  const centerLng = -80.6328;
 
   final local = LocalDatabase.instance;
   var backendReady = false;
   var backendReadinessMessage = 'Backend no disponible';
+  var tenant = '';
+  var joinCode = '';
   var neighborId = '';
   var neighborToken = '';
   var merchantId = '';
@@ -53,7 +57,7 @@ void main() {
         'email': email,
         'password': 'MiBarrio-e2e-123',
         'role': role,
-        'join_code': 'BARRIO-01',
+        'join_code': joinCode,
       }),
     );
     if (response.statusCode != 201) {
@@ -77,27 +81,77 @@ void main() {
       final r = await http
           .get(Uri.parse('$baseUrl/health'))
           .timeout(const Duration(seconds: 3));
-      if (r.statusCode == 200) {
+      if (r.statusCode == 200 &&
+          superAdminEmail.isNotEmpty &&
+          superAdminPassword.isNotEmpty) {
         final health = jsonDecode(r.body) as Map<String, dynamic>;
         final healthData = health['data'] as Map<String, dynamic>?;
         if (healthData?['migrations_up_to_date'] == true) {
-          final neighbor = await registerUser('VECINO');
-          final merchant = await registerUser('COMERCIANTE');
-          final provider = await registerUser('COMERCIANTE');
-          if (neighbor != null && merchant != null && provider != null) {
-            neighborId = neighbor['id']!;
-            neighborToken = neighbor['token']!;
-            merchantId = merchant['id']!;
-            merchantToken = merchant['token']!;
-            providerId = provider['id']!;
-            providerToken = provider['token']!;
-            backendReady = true;
+          final adminLogin = await http.post(
+            Uri.parse('$baseUrl/api/v1/auth/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': superAdminEmail,
+              'password': superAdminPassword,
+            }),
+          );
+          if (adminLogin.statusCode == 200) {
+            final adminToken =
+                (jsonDecode(adminLogin.body) as Map<String, dynamic>)['access_token']
+                    as String;
+            final unique = const Uuid().v4();
+            final neighborhoodResponse = await http.post(
+              Uri.parse('$baseUrl/api/v1/platform/neighborhoods'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $adminToken',
+              },
+              body: jsonEncode({
+                'neighborhood_name': 'E2E $unique',
+                'admin_full_name': 'Administrador E2E',
+                'admin_email': 'e2e-admin-$unique@example.test',
+                'admin_password': 'MiBarrio-e2e-admin-123',
+                'center_lat': centerLat,
+                'center_lng': centerLng,
+              }),
+            );
+            if (neighborhoodResponse.statusCode == 201) {
+              final created = jsonDecode(neighborhoodResponse.body)
+                  as Map<String, dynamic>;
+              final neighborhood =
+                  created['neighborhood'] as Map<String, dynamic>;
+              tenant = neighborhood['id'] as String;
+              joinCode = neighborhood['join_code'] as String;
+              final neighbor = await registerUser('VECINO');
+              final merchant = await registerUser('COMERCIANTE');
+              final provider = await registerUser('COMERCIANTE');
+              if (neighbor != null && merchant != null && provider != null) {
+                neighborId = neighbor['id']!;
+                neighborToken = neighbor['token']!;
+                merchantId = merchant['id']!;
+                merchantToken = merchant['token']!;
+                providerId = provider['id']!;
+                providerToken = provider['token']!;
+                backendReady = true;
+              }
+            } else {
+              backendReadinessMessage =
+                  'No se pudo crear el barrio E2E (HTTP ${neighborhoodResponse.statusCode})';
+            }
+          } else {
+            backendReadinessMessage =
+                'No se pudo autenticar el superadministrador E2E';
           }
         } else {
           backendReadinessMessage = 'Faltan migraciones de base de datos';
         }
+      } else if (r.statusCode == 200) {
+        backendReadinessMessage =
+            'Define E2E_SUPER_ADMIN_EMAIL y E2E_SUPER_ADMIN_PASSWORD para crear un barrio aislado';
       }
-    } catch (_) {}
+    } catch (error) {
+      backendReadinessMessage = 'Falló la preparación del backend E2E: $error';
+    }
   });
   setUp(() => local.resetForTesting(path: inMemoryDatabasePath));
   tearDown(() async {
@@ -129,8 +183,8 @@ void main() {
       authorUserId: neighborId,
       modality: SolidarityModality.prestamoHerramienta,
       title: 'Checkpoint 1 ${DateTime.now().toUtc().toIso8601String()}',
-      lat: TenantSession.demoCenterLat,
-      lng: TenantSession.demoCenterLng,
+      lat: centerLat,
+      lng: centerLng,
     );
     await Future<void>.delayed(const Duration(milliseconds: 700));
     final db = await local.database;
@@ -203,8 +257,8 @@ void main() {
         'category': ServiceCategory.electricidad,
         'title': 'E2E Electricista $stamp',
         'description': 'Creado por otro teléfono',
-        'lat': TenantSession.demoCenterLat,
-        'lng': TenantSession.demoCenterLng,
+        'lat': centerLat,
+        'lng': centerLng,
       }),
     );
     expect(created.statusCode, 201, reason: created.body);
@@ -242,8 +296,8 @@ void main() {
       providerUserId: merchantId,
       category: ServiceCategory.gasfiteria,
       title: 'E2E Gasfitero $stamp',
-      lat: TenantSession.demoCenterLat,
-      lng: TenantSession.demoCenterLng,
+      lat: centerLat,
+      lng: centerLng,
       publisherType: 'EMPRENDEDOR',
       publisherName: 'Gasfitería E2E',
     );
@@ -260,8 +314,8 @@ void main() {
       tenantId: tenant,
       fullName: 'Vecina E2E',
       phone: '987654321',
-      homeLat: TenantSession.demoCenterLat,
-      homeLng: TenantSession.demoCenterLng,
+      homeLat: centerLat,
+      homeLng: centerLng,
       email: 'vecina.e2e@example.com',
     );
     await Future<void>.delayed(const Duration(milliseconds: 700));

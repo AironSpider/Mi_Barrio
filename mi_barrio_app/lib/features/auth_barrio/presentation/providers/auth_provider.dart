@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/auth/auth_session_store.dart';
+import '../../../../core/sync_manager/sync_coordinator.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -47,9 +49,28 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
 
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._repository, {AuthState? initialState})
-    : super(initialState ?? const AuthState.loading());
+    : super(initialState ?? const AuthState.loading()) {
+    _sessionExpiredSubscription = AuthSessionStore.instance.onSessionExpired
+        .listen((_) => unawaited(expireSession()));
+  }
 
   final AuthRepository _repository;
+  late final StreamSubscription<void> _sessionExpiredSubscription;
+
+  Future<void> _endCurrentSession(UserEntity? user) async {
+    await SyncCoordinator.instance.stop();
+    try {
+      final tenantId = user?.tenantId;
+      if (user != null && tenantId != null) {
+        await _repository.purgeLocalUserData(
+          tenantId: tenantId,
+          userId: user.id,
+        );
+      }
+    } finally {
+      await _repository.logout();
+    }
+  }
 
   String _message(Object error) {
     final text = error.toString();
@@ -71,8 +92,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> login({required String email, required String password}) async {
+    final previousUser = state.user;
     state = const AuthState.loading();
     try {
+      await _endCurrentSession(previousUser);
       state = AuthState.authenticated(
         await _repository.login(email: email, password: password),
       );
@@ -88,8 +111,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required UserRole role,
     required String joinCode,
   }) async {
+    final previousUser = state.user;
     state = const AuthState.loading();
     try {
+      await _endCurrentSession(previousUser);
       state = AuthState.authenticated(
         await _repository.register(
           fullName: fullName,
@@ -105,12 +130,31 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    final currentUser = state.user;
     state = const AuthState.loading();
     try {
-      await _repository.logout();
+      await _endCurrentSession(currentUser);
       state = const AuthState.unauthenticated();
     } catch (error) {
       state = AuthState(status: AuthStatus.error, message: _message(error));
+    }
+  }
+
+  Future<void> expireSession() async {
+    if (state.status == AuthStatus.unauthenticated ||
+        state.status == AuthStatus.loading) {
+      return;
+    }
+    final currentUser = state.user;
+    state = const AuthState.loading();
+    try {
+      await _endCurrentSession(currentUser);
+      state = const AuthState.unauthenticated();
+    } catch (error) {
+      state = AuthState(
+        status: AuthStatus.error,
+        message: 'No se pudo cerrar la sesión vencida: ${_message(error)}',
+      );
     }
   }
 
@@ -150,5 +194,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return null;
     }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_sessionExpiredSubscription.cancel());
+    super.dispose();
   }
 }

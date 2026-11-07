@@ -6,8 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mi_barrio_app/core/barrio_context/emergency_mode_provider.dart';
+import 'package:mi_barrio_app/core/auth/auth_session_store.dart';
 import 'package:mi_barrio_app/core/database_sqlite/sqlite_database.dart';
 import 'package:mi_barrio_app/core/database_sqlite/sqlite_tables.dart';
+import 'package:mi_barrio_app/core/database_sqlite/sync_outbox_dao.dart';
 import 'package:mi_barrio_app/core/network/connectivity_monitor.dart';
 import 'package:mi_barrio_app/core/sync_manager/sync_coordinator.dart';
 import 'package:mi_barrio_app/core/sync_manager/sync_worker.dart';
@@ -20,6 +22,7 @@ import 'package:mi_barrio_app/features/solidarity_network/data/datasources/solid
 import 'package:mi_barrio_app/features/solidarity_network/data/models/solidarity_post_model.dart';
 import 'package:mi_barrio_app/shared/local_distance.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Worker falso que cuenta cuántas veces se sincronizó.
 class _CountingWorker extends SyncWorker {
@@ -52,6 +55,7 @@ void main() {
   setUpAll(() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+    SharedPreferences.setMockInitialValues({});
   });
   setUp(() => local.resetForTesting(path: inMemoryDatabasePath));
   tearDown(() => local.close());
@@ -178,7 +182,7 @@ void main() {
     });
 
     test(
-      'push: un rechazo del servidor queda pendiente y reporta el motivo',
+      'push: un rechazo terminal pasa a FAILED y sale de la cola',
       () async {
         final post = await publish();
         final client = MockClient(
@@ -207,13 +211,62 @@ void main() {
 
         expect(result.success, isFalse);
         expect(result.message, contains('autor no registrado'));
-        expect((await (await db()).query('sync_outbox')).length, 1);
+        expect(await (await db()).query('sync_outbox'), isEmpty);
         expect(
           (await (await db()).query('solidarity_posts')).single['sync_status'],
-          'PENDING',
+          'FAILED',
         );
       },
     );
+
+    test('push: un 401 invalida la sesión y notifica al provider', () async {
+      await publish();
+      await AuthSessionStore.instance.save({'token': 'expired-token'});
+      final sessionExpired = AuthSessionStore.instance.onSessionExpired.first;
+      final client = MockClient((_) async => http.Response('unauthorized', 401));
+
+      final result = await SyncWorker(
+        baseUrl: 'http://api',
+        client: client,
+      ).pushLocalChanges(tenant);
+
+      await sessionExpired;
+      expect(result.unauthorized, isTrue);
+      expect(AuthSessionStore.instance.token, isNull);
+    });
+
+    test('pull: un 401 invalida la sesión', () async {
+      await AuthSessionStore.instance.save({'token': 'expired-token'});
+      final sessionExpired = AuthSessionStore.instance.onSessionExpired.first;
+      final client = MockClient((_) async => http.Response('unauthorized', 401));
+
+      final result = await SyncWorker(
+        baseUrl: 'http://api',
+        client: client,
+      ).pullRemoteChanges(tenant);
+
+      await sessionExpired;
+      expect(result.unauthorized, isTrue);
+      expect(AuthSessionStore.instance.token, isNull);
+    });
+
+    test('cambiar de usuario borra solo sus filas y outbox', () async {
+      await publish();
+      final otherPost = await SolidaritySqliteDatasource().publishInThreeClicks(
+        tenantId: tenant,
+        authorUserId: provider,
+        modality: SolidarityModality.prestamoHerramienta,
+        title: 'Post de otra cuenta',
+        lat: lat,
+        lng: lng,
+      );
+
+      await SyncOutboxDao().clearUserData(tenantId: tenant, userId: me);
+
+      final rows = await (await db()).query('solidarity_posts');
+      expect(rows.map((row) => row['id']), [otherPost.id]);
+      expect(await (await db()).query('sync_outbox'), isEmpty);
+    });
 
     test('push: el perfil se sincroniza sin permitir asignar un rol', () async {
       final profile = await ProfileLocalStorage().saveProfile(
