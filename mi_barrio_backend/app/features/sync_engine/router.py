@@ -77,7 +77,7 @@ async def push_offline_mutations(
 
 @router.get("/pull", response_model=SyncPullResponse)
 async def pull_delta(
-    since: Optional[datetime] = Query(None),
+    since: str | None = Query(default=None, description="Timestamp ISO-8601 UTC"),
     x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
     db: AsyncSession = Depends(get_db_session),
 ):
@@ -87,8 +87,14 @@ async def pull_delta(
         raise HTTPException(status_code=400, detail="X-Tenant-ID no válido")
 
     stmt = select(SolidarityPost).where(SolidarityPost.tenant_id == tenant_uuid)
+    
     if since:
-        stmt = stmt.where(SolidarityPost.updated_at > since)
+        try:
+            # Soportar sufijo 'Z' de UTC en strings ISO desde Flutter
+            parsed_since = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            stmt = stmt.where(SolidarityPost.updated_at > parsed_since)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usar ISO-8601.")
 
     results = await db.execute(stmt)
     records = results.scalars().all()
