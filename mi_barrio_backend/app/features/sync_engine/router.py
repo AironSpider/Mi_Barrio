@@ -6,7 +6,9 @@ import uuid
 
 from app.core.database import get_db_session
 from app.features.sync_engine.schemas import SyncPushRequest, SyncPushResponse, SyncPullResponse
+from app.features.sync_engine.service import process_sync_push
 from app.features.solidarity_network.models import SolidarityPost
+from app.features.proximity_services.models import LocalService
 
 router = APIRouter(prefix="/api/v1/sync", tags=["Sync Engine"])
 
@@ -19,54 +21,10 @@ async def push_offline_mutations(
     try:
         tenant_uuid = uuid.UUID(x_tenant_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID debe ser un UUID válido")
+        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
 
-    processed_ids = []
-    
-    for item in request.mutations:
-        table = item.target_table
-        payload = item.payload
-        rec_id = uuid.UUID(item.record_id)
-        
-        if table == "solidarity_posts":
-            query = select(SolidarityPost).where(
-                SolidarityPost.id == rec_id,
-                SolidarityPost.tenant_id == tenant_uuid,
-            )
-            result = await db.execute(query)
-            existing = result.scalar_one_or_none()
-
-            client_updated_at = datetime.fromisoformat(
-                payload.get("updated_at", datetime.now(timezone.utc).isoformat())
-            )
-
-            if existing:
-                # Last-Write-Wins: sólo sobreescribimos si el cambio es posterior
-                if existing.updated_at <= client_updated_at:
-                    for key, val in payload.items():
-                        if hasattr(existing, key) and key not in ["id", "tenant_id", "created_at"]:
-                            setattr(existing, key, val)
-                    existing.updated_at = client_updated_at
-            else:
-                new_post = SolidarityPost(
-                    id=rec_id,
-                    tenant_id=tenant_uuid,
-                    author_user_id=uuid.UUID(payload["author_user_id"]),
-                    flow_type=payload["flow_type"],
-                    modality=payload["modality"],
-                    title=payload["title"],
-                    description=payload.get("description"),
-                    is_emergency_context=payload.get("is_emergency_context", False),
-                    status=payload.get("status", "DISPONIBLE"),
-                    lat=payload["lat"],
-                    lng=payload["lng"],
-                    updated_at=client_updated_at,
-                )
-                db.add(new_post)
-            
-            processed_ids.append(item.record_id)
-
-    await db.commit()
+    # Delegamos el trabajo pesado al servicio que acabamos de crear
+    processed_ids = await process_sync_push(tenant_uuid, request, db)
 
     return SyncPushResponse(
         success=True,
@@ -84,41 +42,37 @@ async def pull_delta(
     try:
         tenant_uuid = uuid.UUID(x_tenant_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID no válido")
+        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
 
-    stmt = select(SolidarityPost).where(SolidarityPost.tenant_id == tenant_uuid)
+    # Consultamos las tablas filtrando por el barrio actual
+    posts_stmt = select(SolidarityPost).where(SolidarityPost.tenant_id == tenant_uuid)
+    services_stmt = select(LocalService).where(LocalService.tenant_id == tenant_uuid)
     
     if since:
         try:
-            # Soportar sufijo 'Z' de UTC en strings ISO desde Flutter
             parsed_since = datetime.fromisoformat(since.replace("Z", "+00:00"))
-            stmt = stmt.where(SolidarityPost.updated_at > parsed_since)
+            posts_stmt = posts_stmt.where(SolidarityPost.updated_at > parsed_since)
+            services_stmt = services_stmt.where(LocalService.updated_at > parsed_since)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usar ISO-8601.")
+            raise HTTPException(status_code=400, detail="Formato de fecha inválido.")
 
-    results = await db.execute(stmt)
-    records = results.scalars().all()
+    posts_results = await db.execute(posts_stmt)
+    services_results = await db.execute(services_stmt)
 
-    posts_list = []
-    for r in records:
-        posts_list.append({
-            "id": str(r.id),
-            "tenant_id": str(r.tenant_id),
-            "author_user_id": str(r.author_user_id),
-            "flow_type": r.flow_type,
-            "modality": r.modality,
-            "title": r.title,
-            "description": r.description,
-            "is_emergency_context": r.is_emergency_context,
-            "status": r.status,
-            "lat": r.lat,
-            "lng": r.lng,
-            "updated_at": r.updated_at.isoformat(),
-            "is_deleted": r.is_deleted,
-        })
+    # Serialización manual rápida para evitar errores de validación de Pydantic con SQLAlchemy
+    def serialize_records(records):
+        return [
+            {**{c.name: getattr(r, c.name) for c in r.__table__.columns}, 
+             "id": str(r.id), "tenant_id": str(r.tenant_id), 
+             "updated_at": r.updated_at.isoformat()}
+            for r in records
+        ]
 
     return SyncPullResponse(
         server_timestamp=datetime.now(timezone.utc),
         has_more=False,
-        delta={"solidarity_posts": posts_list},
+        delta={
+            "solidarity_posts": serialize_records(posts_results.scalars().all()),
+            "local_services": serialize_records(services_results.scalars().all()),
+        },
     )
