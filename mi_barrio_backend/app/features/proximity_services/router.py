@@ -10,6 +10,8 @@ from app.features.proximity_services.schemas import (
     LocalServiceCreate,
     LocalServiceResponse,
     NeighborEndorsementCreate,
+    NeighborEndorsementResponse,
+    EndorsementPhotoResponse,
 )
 from app.features.proximity_services.service import (
     rating_avg_by_service,
@@ -18,6 +20,7 @@ from app.features.proximity_services.service import (
 )
 
 router = APIRouter(prefix="/api/v1/services", tags=["Proximity Services"])
+endorsement_router = APIRouter(prefix="/api/v1/endorsements", tags=["Proximity Services"])
 
 
 def _to_response(service: LocalService, rating_avg: float | None) -> dict:
@@ -141,4 +144,55 @@ async def endorse_service(
             "rating_avg": averages.get(payload.service_id),
             "endorsements_count": service.endorsements_count if service else 0,
         },
+    }
+
+
+@router.get("/{service_id}/endorsements", response_model=list[NeighborEndorsementResponse])
+async def list_service_endorsements(
+    service_id: uuid.UUID,
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db_session),
+):
+    service = (await db.execute(
+        select(LocalService).where(
+            LocalService.id == service_id,
+            LocalService.tenant_id == tenant_uuid,
+            LocalService.is_deleted.is_(False),
+        )
+    )).scalar_one_or_none()
+    if service is None:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+
+    endorsements = (await db.execute(
+        select(NeighborEndorsement).where(
+            NeighborEndorsement.service_id == service_id,
+            NeighborEndorsement.tenant_id == tenant_uuid,
+            NeighborEndorsement.is_deleted.is_(False),
+        ).order_by(NeighborEndorsement.created_at.desc())
+    )).scalars().all()
+    return endorsements
+
+
+@endorsement_router.get("/{endorsement_id}/photo", response_model=EndorsementPhotoResponse)
+async def get_endorsement_photo(
+    endorsement_id: uuid.UUID,
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db_session),
+):
+    endorsement = (await db.execute(
+        select(NeighborEndorsement).where(
+            NeighborEndorsement.id == endorsement_id,
+            NeighborEndorsement.tenant_id == tenant_uuid,
+            NeighborEndorsement.is_deleted.is_(False),
+        )
+    )).scalar_one_or_none()
+    if endorsement is None or endorsement.photo_b64 is None:
+        raise HTTPException(status_code=404, detail="Foto de calificación no encontrada")
+
+    return {
+        "id": endorsement.id,
+        "photo_b64": endorsement.photo_b64,
+        "content_type": "image/jpeg",
     }
