@@ -1,74 +1,79 @@
-import 'package:sqflite/sqflite.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
+import 'sqlite_tables.dart';
+
+/// Instancia única de la base de datos local `mi_barrio_offline.db`.
+///
+/// Es el motor primario de la app (Local-First): la UI lee y escribe aquí
+/// siempre, con o sin internet.
 class LocalDatabase {
   static final LocalDatabase instance = LocalDatabase._init();
-  static Database? _database;
+  static const fileName = 'mi_barrio_offline.db';
+
+  Database? _database;
+  Future<Database>? _opening;
+  String? _pathOverride;
 
   LocalDatabase._init();
 
-  Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDB('mi_barrio_offline.db');
-    return _database!;
+  /// Abre la base una sola vez, aunque varias pantallas la pidan a la vez.
+  Future<Database> get database {
+    final db = _database;
+    if (db != null && db.isOpen) return Future.value(db);
+    return _opening ??= _open().then((opened) {
+      _database = opened;
+      _opening = null;
+      return opened;
+    }, onError: (Object error, StackTrace stack) {
+      _opening = null;
+      Error.throwWithStackTrace(error, stack);
+    });
   }
 
-  Future<Database> _initDB(String filePath) async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
-
-    return await openDatabase(
+  Future<Database> _open() async {
+    final path = _pathOverride ?? join(await getDatabasesPath(), fileName);
+    return openDatabase(
       path,
-      version: 1,
-      onCreate: _createDB,
+      version: SqliteTables.schemaVersion,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
-  Future<void> _createDB(Database db, int version) async {
-    // 1. Tabla espejo de solidaridad con columna local sync_status
-    await db.execute('''
-      CREATE TABLE solidarity_posts (
-        id TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL,
-        author_user_id TEXT NOT NULL,
-        flow_type TEXT NOT NULL,
-        modality TEXT NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT,
-        is_emergency_context INTEGER NOT NULL DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'DISPONIBLE',
-        lat REAL NOT NULL,
-        lng REAL NOT NULL,
-        is_deleted INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL,
-        sync_status TEXT NOT NULL DEFAULT 'SYNCED'
-      )
-    ''');
+  Future<void> _onCreate(Database db, int version) async {
+    final batch = db.batch();
+    for (final sql in SqliteTables.createAll) {
+      batch.execute(sql);
+    }
+    await batch.commit(noResult: true);
+  }
 
-    // 2. Cola Outbox: almacena mutaciones pendientes de subir
-    await db.execute('''
-      CREATE TABLE sync_outbox (
-        outbox_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tenant_id TEXT NOT NULL,
-        target_table TEXT NOT NULL,
-        record_id TEXT NOT NULL,
-        operation TEXT NOT NULL,
-        payload_json TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    ''');
-
-    // 3. Control de última descarga incremental
-    await db.execute('''
-      CREATE TABLE sync_state (
-        tenant_id TEXT PRIMARY KEY,
-        last_pulled_at TEXT NOT NULL
-      )
-    ''');
+  /// Actualiza teléfonos que ya tenían una versión anterior instalada
+  /// sin borrar sus datos ni sus mutaciones pendientes.
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    final batch = db.batch();
+    for (var v = oldVersion + 1; v <= newVersion; v++) {
+      for (final sql in SqliteTables.migrations[v] ?? const <String>[]) {
+        batch.execute(sql);
+      }
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<void> close() async {
-    final db = await instance.database;
-    db.close();
+    final db = _database;
+    _database = null;
+    _opening = null;
+    if (db != null && db.isOpen) await db.close();
+  }
+
+  /// Solo para tests: cierra la base actual y usa otra ruta
+  /// (por ejemplo `inMemoryDatabasePath`).
+  @visibleForTesting
+  Future<void> resetForTesting({String? path}) async {
+    await close();
+    _pathOverride = path;
   }
 }
