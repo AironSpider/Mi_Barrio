@@ -5,6 +5,7 @@ se puede guardar por ahí lo que REST rechaza (lat=999, status inventados, fotos
 de 3 MB...). Cada error lanza ValueError con un mensaje claro, que el sync
 devuelve en `rejected` para ese ítem.
 """
+import re
 from typing import get_args
 
 from app.shared.contract_values import (
@@ -64,8 +65,19 @@ _RULES: dict[str, dict[str, tuple[str, object]]] = {
         "address_reference": ("text_opt", (0, 200)),
         "home_lat": ("lat", None),
         "home_lng": ("lng", None),
+        # Migración B: mismas reglas que la app (profile_local_storage.dart).
+        "whatsapp": ("phone_opt", None),
+        "facebook_url": ("url_opt", 300),
+        "instagram_url": ("url_opt", 300),
+        "photo_b64": ("text_opt", (0, 110_000)),
+        "publisher_type": ("enum_opt", _one_of(PublisherType)),
+        "publisher_category": ("text_opt", (0, 50)),
+        "publisher_name": ("text_opt", (0, 120)),
     },
 }
+
+_PHONE = re.compile(r"^\+?[0-9 ]{6,20}$")
+_URL = re.compile(r"^https?://[^\s]+$")
 
 _BOOL_FIELDS = {"is_deleted", "is_emergency_context", "is_available_in_emergency", "tutorial_completed"}
 
@@ -102,6 +114,16 @@ def validate_payload(table: str, payload: dict) -> None:
         elif rule == "lng":
             if not -180 <= _number(field, value) <= 180:
                 raise ValueError(f"{field} fuera de rango (-180 a 180)")
+        elif rule == "phone_opt":
+            if value is None:
+                continue
+            if not isinstance(value, str) or not _PHONE.match(value):
+                raise ValueError(f"{field} inválido: usa solo dígitos (6 a 20), con + opcional")
+        elif rule == "url_opt":
+            if value is None:
+                continue
+            if not isinstance(value, str) or len(value) > param or not _URL.match(value):
+                raise ValueError(f"{field} debe ser un enlace http:// o https:// de hasta {param} caracteres")
         elif rule == "rating":
             if value is None:
                 continue

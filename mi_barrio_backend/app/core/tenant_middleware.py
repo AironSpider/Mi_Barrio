@@ -36,6 +36,8 @@ EXEMPT_PATHS = {
     "/openapi.json",
 }
 PLATFORM_ADMIN_PREFIX = "/api/v1/platform/"
+# Público: antes de registrarse, el vecino confirma a qué barrio pertenece el código.
+PUBLIC_TENANT_LOOKUP_PREFIX = "/api/v1/tenants/by-code/"
 
 class TenantMiddleware(BaseHTTPMiddleware):
     """
@@ -50,7 +52,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
             is_public_auth = request.url.path in {
                 "/api/v1/auth/login",
                 "/api/v1/auth/register",
-            }
+            } or request.url.path.startswith(PUBLIC_TENANT_LOOKUP_PREFIX)
             if not is_public_auth:
                 authorization = request.headers.get("Authorization", "")
                 scheme, _, token = authorization.partition(" ")
@@ -87,7 +89,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
                         },
                     )
 
-            if request.url.path.startswith("/api/v1/auth/"):
+            if request.url.path.startswith(("/api/v1/auth/", PUBLIC_TENANT_LOOKUP_PREFIX)):
                 return await call_next(request)
 
             claims = getattr(request.state, "auth_claims", None)

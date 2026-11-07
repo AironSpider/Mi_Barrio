@@ -19,6 +19,7 @@ from app.features.solidarity_network.router import router as solidarity_router
 from app.features.proximity_services.router import router as services_router
 from app.features.emergency_support.router import router as emergency_router
 from app.features.auth_barrio.router import router as tenants_router
+from app.features.auth_barrio.profile_router import router as profile_router
 from app.features.auth_barrio.auth_router import (
     platform_router,
     router as auth_router,
@@ -49,6 +50,7 @@ app.include_router(solidarity_router)
 app.include_router(services_router)
 app.include_router(emergency_router)
 app.include_router(tenants_router)
+app.include_router(profile_router)
 app.include_router(auth_router)
 app.include_router(platform_router)
 

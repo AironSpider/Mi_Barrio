@@ -1,3 +1,4 @@
+from datetime import datetime
 import uuid
 from typing import Literal
 
@@ -85,3 +86,37 @@ class NeighborhoodAdminCreate(BaseModel):
 class NeighborhoodAdminCreated(BaseModel):
     neighborhood: TenantResponse
     administrator: AuthUserResponse
+
+
+class TenantLookupResponse(BaseModel):
+    """Lo mínimo para confirmar el barrio antes de registrarse (ruta pública)."""
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    join_code: str
+    center_lat: float
+    center_lng: float
+
+
+class UserProfileResponse(BaseModel):
+    """Perfil completo del propio vecino (GET /users/me). Nunca se expone el de otros."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    full_name: str
+    email: str | None = None
+    role: str
+    phone: str
+    address_reference: str | None = None
+    home_lat: float
+    home_lng: float
+    tutorial_completed: bool
+    whatsapp: str | None = None
+    facebook_url: str | None = None
+    instagram_url: str | None = None
+    photo_b64: str | None = None
+    publisher_type: str | None = None
+    publisher_category: str | None = None
+    publisher_name: str | None = None
+    updated_at: datetime
