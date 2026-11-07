@@ -22,12 +22,16 @@ class SyncOutboxDao {
   /// El SyncCoordinator lo escucha para sincronizar apenas haya red.
   static Stream<String> get onQueued => _queued.stream;
 
-  /// Cantidad de mutaciones pendientes del barrio (para el aviso de "N cambios sin sincronizar").
+  /// Cantidad de registros con cambios sin subir en el barrio (para el aviso
+  /// "Tienes N cambios sin sincronizar"). Editar 3 veces el mismo favor cuenta 1.
   Future<int> countPending(String tenantId) async {
     final db = await _dbProvider.database;
     final r = await db.rawQuery(
-        'SELECT COUNT(*) AS c FROM sync_outbox WHERE tenant_id = ?', [tenantId]);
-    return r.first['c'] as int;
+      'SELECT COUNT(*) AS c FROM '
+      '(SELECT DISTINCT target_table, record_id FROM sync_outbox WHERE tenant_id = ?)',
+      [tenantId],
+    );
+    return (r.first['c'] as int?) ?? 0;
   }
 
   /// Encola una mutación pendiente de subir.
