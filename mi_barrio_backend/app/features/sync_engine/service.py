@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.features.sync_engine.schemas import SyncPushRequest
+from app.features.auth_barrio.models import User
 from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService, NeighborEndorsement
 from app.features.proximity_services.service import recalculate_service_rating
@@ -14,13 +15,22 @@ logger = logging.getLogger("mi_barrio.sync")
 
 TABLE_MODEL_MAP = {
     "solidarity_posts": SolidarityPost,
+    "users": User,
     "local_services": LocalService,
     "neighbor_endorsements": NeighborEndorsement,
     "vulnerable_reports": VulnerableReport,
 }
 
 # Campos que el celular nunca puede escribir: los controla el servidor.
-PROTECTED_FIELDS = {"id", "tenant_id", "created_at", "updated_at", "endorsements_count", "rating_avg"}
+PROTECTED_FIELDS = {
+    "id",
+    "tenant_id",
+    "created_at",
+    "updated_at",
+    "endorsements_count",
+    "rating_avg",
+    "role",
+}
 
 
 def _coerce(key: str, val):

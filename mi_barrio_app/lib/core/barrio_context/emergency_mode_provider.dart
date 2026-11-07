@@ -37,14 +37,14 @@ class EmergencyModeProvider {
 
   /// Carga el toggle guardado. Llamar una vez al iniciar la app.
   Future<void> load() async {
-    try {
-      final db = await LocalDatabase.instance.database;
-      final rows = await db.query('app_settings',
-          where: 'key = ?', whereArgs: [_settingKey], limit: 1);
-      _local.value = rows.isNotEmpty && rows.first['value'] == '1';
-    } catch (_) {
-      _local.value = false; // si falla la lectura, la app arranca en modo normal
-    }
+    final db = await LocalDatabase.instance.database;
+    final rows = await db.query(
+      'app_settings',
+      where: 'key = ?',
+      whereArgs: [_settingKey],
+      limit: 1,
+    );
+    _local.value = rows.isNotEmpty && rows.first['value'] == '1';
     _recompute();
   }
 
@@ -52,11 +52,13 @@ class EmergencyModeProvider {
   /// Si la junta vecinal la activó, no se puede desactivar desde aquí.
   Future<void> setLocal(bool value) async {
     if (_tenant.value && !value) return;
+    final db = await LocalDatabase.instance.database;
+    await db.insert('app_settings', {
+      'key': _settingKey,
+      'value': value ? '1' : '0',
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
     _local.value = value;
     _recompute();
-    final db = await LocalDatabase.instance.database;
-    await db.insert('app_settings', {'key': _settingKey, 'value': value ? '1' : '0'},
-        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   /// Bandera del barrio recibida del servidor (Sprint 8).

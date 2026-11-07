@@ -1,23 +1,17 @@
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.database import engine
-from app.core.exceptions import (
-    custom_http_exception_handler,
-    unhandled_exception_handler,
-    validation_exception_handler,
-)
+from app.core.exceptions import custom_http_exception_handler, validation_exception_handler
 from app.core.tenant_middleware import TenantMiddleware
 
 from app.features.sync_engine.router import router as sync_router
 from app.features.solidarity_network.router import router as solidarity_router
 from app.features.proximity_services.router import router as services_router
 from app.features.emergency_support.router import router as emergency_router
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Mi Barrio API - Backend Resiliente",
@@ -61,22 +55,7 @@ EXPECTED_MIGRATION = _expected_migration()
 
 
 @app.get("/health", tags=["System"])
-async def health_check():
-    """Comprueba de verdad la base de datos y si faltan migraciones."""
-    db_status, db_migration, hint = "ok", None, None
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-            db_migration = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar()
-    except Exception as exc:
-        db_status = f"error: {type(exc).__name__}: {exc}"[:200]
-        hint = "Revisa que PostgreSQL esté encendido y la variable DATABASE_URL (usuario y contraseña)."
-
-    migrations_ok = db_migration is not None and db_migration == EXPECTED_MIGRATION
-    if db_status == "ok" and not migrations_ok:
-        hint = "Faltan migraciones: ejecuta `alembic upgrade head`."
-
-    healthy = db_status == "ok" and migrations_ok
+def health_check():
     return {
         "success": healthy,
         "error": None if healthy else hint,

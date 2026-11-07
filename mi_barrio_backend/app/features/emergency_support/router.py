@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db_session
+# AQUÍ ESTÁ EL IMPORT QUE FALTABA
 from app.core.tenant_middleware import get_current_tenant_id
+
 from app.features.emergency_support.models import VulnerableReport
 from app.features.emergency_support.schemas import (
     VulnerableReportCreate,
@@ -77,7 +79,7 @@ async def attend_emergency_report(
     report.status = "VECINOS_EN_CAMINO"
     report.helper_user_id = helper_user_id
     report.updated_at = datetime.now(timezone.utc)
-
+    
     await db.commit()
     await db.refresh(report)
     return report

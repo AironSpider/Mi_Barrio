@@ -133,14 +133,18 @@ class _VistoBuenoBadgeState extends State<VistoBuenoBadge>
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      widget.isEndorsed ? 'Recomendado' : 'Visto bueno',
-                      style: texto.labelLarge?.copyWith(
-                        color: widget.isEndorsed
-                            ? contenido
-                            : colores.isEmergency
-                            ? esquema.onSurface
-                            : esquema.primary,
+                    Flexible(
+                      child: Text(
+                        widget.isEndorsed ? 'Recomendado' : 'Visto bueno',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: texto.labelLarge?.copyWith(
+                          color: widget.isEndorsed
+                              ? contenido
+                              : colores.isEmergency
+                              ? esquema.onSurface
+                              : esquema.primary,
+                        ),
                       ),
                     ),
                   ],

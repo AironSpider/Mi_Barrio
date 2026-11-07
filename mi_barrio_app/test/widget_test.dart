@@ -3,18 +3,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mi_barrio_app/core/ui_kit/app_theme.dart';
 import 'package:mi_barrio_app/core/ui_kit/main_navigation_shell.dart';
 import 'package:mi_barrio_app/core/ui_kit/quick_publish_fab.dart';
+import 'package:mi_barrio_app/core/barrio_context/emergency_mode_provider.dart';
 import 'package:mi_barrio_app/features/proximity_services/presentation/screens/services_directory_screen.dart';
 import 'package:mi_barrio_app/main.dart';
 
 void main() {
-  testWidgets('arranca en modo día a día con 3 pestañas y botón Publicar',
-      (tester) async {
+  testWidgets('arranca en modo día a día con 4 pestañas y botón Publicar', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MiBarrioApp());
 
     expect(find.text('Mi Barrio'), findsOneWidget);
-    expect(find.text('Oficios'), findsOneWidget);
-    expect(find.text('Muro'), findsOneWidget);
-    expect(find.text('Emergencia'), findsOneWidget);
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    for (final label in ['Servicios', 'Apoyo', 'Mapa', 'Tú']) {
+      expect(find.text(label), findsOneWidget);
+    }
     expect(find.text('Publicar'), findsOneWidget);
     expect(find.byType(ServicesDirectoryScreen), findsOneWidget);
     expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsNothing);
@@ -23,32 +26,32 @@ void main() {
   testWidgets('las pestañas cambian el contenido', (tester) async {
     await tester.pumpWidget(const MiBarrioApp());
 
-    await tester.tap(find.text('Muro'));
+    await tester.tap(find.text('Apoyo'));
     await tester.pumpAndSettle();
     expect(find.text('Muro solidario'), findsOneWidget);
 
-    await tester.tap(find.text('Emergencia'));
+    await tester.tap(find.text('Mapa'));
     await tester.pumpAndSettle();
-    expect(find.text('Barrio preparado'), findsOneWidget);
+    expect(find.text('Mapa de ayuda'), findsOneWidget);
   });
 
-  testWidgets('el modo emergencia transforma la app y abre en Ayuda',
-      (tester) async {
+  testWidgets('el modo emergencia conserva las pestañas y aplica el tema', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MiBarrioApp());
 
-    // Estando en otra pestaña, al activar la emergencia debe volver a la 1.ª.
-    await tester.tap(find.text('Muro'));
-    await tester.pumpAndSettle();
-
+    await tester.ensureVisible(
+      find.byKey(MainNavigationShell.emergencyPreviewSwitchKey),
+    );
     await tester.tap(find.byKey(MainNavigationShell.emergencyPreviewSwitchKey));
     await tester.pumpAndSettle();
 
     expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsOneWidget);
-    for (final label in ['Ayuda', 'Mapa', 'Apoyo', 'Recursos']) {
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    for (final label in ['Servicios', 'Apoyo', 'Mapa', 'Tú']) {
       expect(find.text(label), findsOneWidget);
     }
     expect(find.text('Pedir ayuda'), findsOneWidget);
-    expect(find.text('Pedidos de ayuda'), findsOneWidget);
 
     final context = tester.element(find.byType(MainNavigationShell));
     expect(Theme.of(context).colorScheme.primary, AppPalette.emergencyPrimary);
@@ -60,8 +63,24 @@ void main() {
     expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsNothing);
   });
 
-  testWidgets('el botón (+) abre el modal de publicación rápida',
-      (tester) async {
+  testWidgets('el estado de emergencia del barrio actualiza la app', (
+    tester,
+  ) async {
+    final emergency = EmergencyModeProvider.instance;
+    await tester.pumpWidget(const MiBarrioApp());
+
+    emergency.setTenantFlag(true);
+    await tester.pumpAndSettle();
+    expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsOneWidget);
+
+    emergency.setTenantFlag(false);
+    await tester.pumpAndSettle();
+    expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsNothing);
+  });
+
+  testWidgets('el botón (+) abre el modal de publicación rápida', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MiBarrioApp());
 
     await tester.tap(find.byKey(QuickPublishFab.fabKey));
@@ -69,28 +88,34 @@ void main() {
     expect(find.byType(BottomSheet), findsOneWidget);
   });
 
-  testWidgets('sin onPublish, el botón (+) avisa en lugar de fallar',
-      (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      theme: AppTheme.day(),
-      home: const MainNavigationShell(isEmergencyMode: false),
-    ));
+  testWidgets('sin onPublish, el botón (+) avisa en lugar de fallar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.day(),
+        home: const MainNavigationShell(isEmergencyMode: false),
+      ),
+    );
 
     await tester.tap(find.byKey(QuickPublishFab.fabKey));
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
   });
 
-  testWidgets('el botón (+) llama a onPublish cuando está conectado',
-      (tester) async {
+  testWidgets('el botón (+) llama a onPublish cuando está conectado', (
+    tester,
+  ) async {
     var calls = 0;
-    await tester.pumpWidget(MaterialApp(
-      theme: AppTheme.day(),
-      home: MainNavigationShell(
-        isEmergencyMode: false,
-        onPublish: () => calls++,
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.day(),
+        home: MainNavigationShell(
+          isEmergencyMode: false,
+          onPublish: () => calls++,
+        ),
       ),
-    ));
+    );
 
     await tester.tap(find.byKey(QuickPublishFab.fabKey));
     await tester.pump();
@@ -98,8 +123,7 @@ void main() {
   });
 
   for (final emergency in [false, true]) {
-    testWidgets(
-        'accesibilidad (${emergency ? 'emergencia' : 'día a día'}): '
+    testWidgets('accesibilidad (${emergency ? 'emergencia' : 'día a día'}): '
         'áreas táctiles, etiquetas y contraste', (tester) async {
       final handle = tester.ensureSemantics();
       await tester.pumpWidget(MiBarrioApp(initialEmergencyMode: emergency));

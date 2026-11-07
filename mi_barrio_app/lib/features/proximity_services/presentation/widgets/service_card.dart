@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/ui_kit/app_theme.dart';
 import 'visto_bueno_badge.dart';
@@ -111,43 +111,56 @@ class ServiceCard extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  VistoBuenoBadge(
-                    count: endorsementsCount,
-                    isEndorsed: isEndorsed,
-                    onPressed: onEndorse,
-                  ),
-                  const Spacer(),
-                  if (isAvailableInEmergency)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
+              LayoutBuilder(
+                builder: (context, constraints) => Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.spaceBetween,
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: constraints.maxWidth,
                       ),
-                      decoration: BoxDecoration(
-                        color: colores.urgencyHigh.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.health_and_safety,
-                            size: 20,
-                            color: colores.urgencyHigh,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'En emergencias',
-                            style: texto.labelMedium?.copyWith(
-                              color: colores.urgencyHigh,
-                            ),
-                          ),
-                        ],
+                      child: VistoBuenoBadge(
+                        count: endorsementsCount,
+                        isEndorsed: isEndorsed,
+                        onPressed: onEndorse,
                       ),
                     ),
-                ],
+                    if (isAvailableInEmergency)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colores.urgencyHigh.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.health_and_safety,
+                              size: 20,
+                              color: colores.urgencyHigh,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'En emergencias',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: texto.labelMedium?.copyWith(
+                                  color: colores.urgencyHigh,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -156,4 +169,3 @@ class ServiceCard extends StatelessWidget {
     );
   }
 }
-

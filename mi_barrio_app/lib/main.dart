@@ -36,7 +36,33 @@ class MiBarrioApp extends StatefulWidget {
 }
 
 class _MiBarrioAppState extends State<MiBarrioApp> {
-  late bool _isEmergencyMode = widget.initialEmergencyMode;
+  late bool _isEmergencyMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _isEmergencyMode =
+        widget.initialEmergencyMode ||
+        EmergencyModeProvider.instance.isActive.value;
+    EmergencyModeProvider.instance.isActive.addListener(
+      _onEmergencyModeChanged,
+    );
+  }
+
+  void _onEmergencyModeChanged() {
+    final active = EmergencyModeProvider.instance.isActive.value;
+    if (_isEmergencyMode != active) {
+      setState(() => _isEmergencyMode = active);
+    }
+  }
+
+  @override
+  void dispose() {
+    EmergencyModeProvider.instance.isActive.removeListener(
+      _onEmergencyModeChanged,
+    );
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -58,23 +58,26 @@ void main() {
 
   Future<Database> db() => local.database;
 
-  Future<SolidarityPostModel> publish({String title = 'Préstamo de escalera'}) =>
-      SolidaritySqliteDatasource().publishInThreeClicks(
-        tenantId: tenant,
-        authorUserId: me,
-        modality: SolidarityModality.prestamoHerramienta,
-        title: title,
-        lat: lat,
-        lng: lng,
-      );
+  Future<SolidarityPostModel> publish({
+    String title = 'Préstamo de escalera',
+  }) => SolidaritySqliteDatasource().publishInThreeClicks(
+    tenantId: tenant,
+    authorUserId: me,
+    modality: SolidarityModality.prestamoHerramienta,
+    title: title,
+    lat: lat,
+    lng: lng,
+  );
 
   group('Esquema v3', () {
     test('crea neighbor_endorsements, users y app_settings', () async {
-      final names = (await (await db())
-              .rawQuery("SELECT name FROM sqlite_master WHERE type = 'table'"))
-          .map((r) => r['name'])
-          .toSet();
-      expect(names, containsAll(['neighbor_endorsements', 'users', 'app_settings']));
+      final names = (await (await db()).rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table'",
+      )).map((r) => r['name']).toSet();
+      expect(
+        names,
+        containsAll(['neighbor_endorsements', 'users', 'app_settings']),
+      );
       expect(await (await db()).getVersion(), 3);
     });
 
@@ -94,16 +97,18 @@ void main() {
           endorsements_count INTEGER NOT NULL DEFAULT 0, lat REAL NOT NULL, lng REAL NOT NULL,
           is_deleted INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL,
           sync_status TEXT NOT NULL DEFAULT 'SYNCED')''';
-      final v2 = await databaseFactoryFfi.openDatabase(path,
-          options: OpenDatabaseOptions(
-            version: 2,
-            onCreate: (d, _) async {
-              await d.execute(SqliteTables.createSolidarityPosts);
-              await d.execute(v2LocalServices);
-              await d.execute(SqliteTables.createSyncOutbox);
-              await d.execute(SqliteTables.createSyncState);
-            },
-          ));
+      final v2 = await databaseFactoryFfi.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 2,
+          onCreate: (d, _) async {
+            await d.execute(SqliteTables.createSolidarityPosts);
+            await d.execute(v2LocalServices);
+            await d.execute(SqliteTables.createSyncOutbox);
+            await d.execute(SqliteTables.createSyncState);
+          },
+        ),
+      );
       await v2.insert('local_services', {
         'id': 'c0ffee00-0000-4000-8000-000000000001',
         'tenant_id': tenant,
@@ -133,17 +138,20 @@ void main() {
         expect(req.headers['X-Tenant-ID'], tenant);
         sentBody = jsonDecode(req.body) as Map<String, dynamic>;
         return http.Response(
-            jsonEncode({
-              'success': true,
-              'processed_count': 1,
-              'server_timestamp': '2026-11-07T15:00:00Z',
-              'processed_record_ids': [post.id],
-            }),
-            200);
+          jsonEncode({
+            'success': true,
+            'processed_count': 1,
+            'server_timestamp': '2026-11-07T15:00:00Z',
+            'processed_record_ids': [post.id],
+          }),
+          200,
+        );
       });
 
-      final result = await SyncWorker(baseUrl: 'http://api', client: client)
-          .pushLocalChanges(tenant);
+      final result = await SyncWorker(
+        baseUrl: 'http://api',
+        client: client,
+      ).pushLocalChanges(tenant);
 
       expect(result.success, isTrue);
       expect(result.processedCount, 1);
@@ -157,78 +165,124 @@ void main() {
     test('push: si el servidor falla (500), la cola queda intacta', () async {
       await publish();
       final client = MockClient((_) async => http.Response('error', 500));
-      final result = await SyncWorker(baseUrl: 'http://api', client: client)
-          .pushLocalChanges(tenant);
+      final result = await SyncWorker(
+        baseUrl: 'http://api',
+        client: client,
+      ).pushLocalChanges(tenant);
       expect(result.success, isFalse);
       expect((await (await db()).query('sync_outbox')).length, 1);
-      expect((await (await db()).query('solidarity_posts')).single['sync_status'], 'PENDING');
+      expect(
+        (await (await db()).query('solidarity_posts')).single['sync_status'],
+        'PENDING',
+      );
     });
 
-    test('pull: guarda posts y servicios, sin pisar PENDING ni aceptar otro barrio',
-        () async {
+    test('push: el perfil se sincroniza sin permitir asignar un rol', () async {
+      final profile = await ProfileLocalStorage().saveProfile(
+        userId: me,
+        tenantId: tenant,
+        fullName: 'Ana Torres',
+        homeLat: lat,
+        homeLng: lng,
+      );
+      late Map<String, dynamic> sentBody;
+      final client = MockClient((request) async {
+        sentBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({
+            'success': true,
+            'processed_count': 1,
+            'server_timestamp': '2026-11-07T15:00:00Z',
+            'processed_record_ids': [profile.id],
+          }),
+          200,
+        );
+      });
+
+      final result = await SyncWorker(
+        baseUrl: 'http://api',
+        client: client,
+      ).pushLocalChanges(tenant);
+
+      expect(result.success, isTrue);
+      expect(result.processedCount, 1);
+      final mutation = (sentBody['mutations'] as List).single as Map;
+      expect(mutation['target_table'], 'users');
+      expect((mutation['payload'] as Map).containsKey('role'), isFalse);
+      expect(await (await db()).query('sync_outbox'), isEmpty);
+      expect(
+        (await (await db()).query('users')).single['sync_status'],
+        'SYNCED',
+      );
+    });
+
+    test('pull: guarda posts y servicios, sin pisar PENDING ni aceptar otro barrio', () async {
       final mine = await publish(title: 'Versión local sin subir');
       final client = MockClient((req) async {
         expect(req.url.path, '/api/v1/sync/pull');
         return http.Response(
-            jsonEncode({
-              'server_timestamp': '2026-11-07T15:00:00.123456Z',
-              'has_more': false,
-              'delta': {
-                'solidarity_posts': [
-                  {
-                    'id': mine.id, // el servidor tiene una versión vieja
-                    'tenant_id': tenant,
-                    'author_user_id': me,
-                    'flow_type': 'SOLICITO_AYUDA',
-                    'modality': 'PRESTAMO_HERRAMIENTA',
-                    'title': 'Versión vieja del servidor',
-                    'description': null,
-                    'is_emergency_context': false,
-                    'status': 'DISPONIBLE',
-                    'lat': lat,
-                    'lng': lng,
-                    'is_deleted': false,
-                    'updated_at': '2026-11-07T09:00:00+00:00',
-                    'created_at': '2026-11-07T09:00:00+00:00',
-                  },
-                  {
-                    'id': 'deadbeef-0000-4000-8000-000000000002',
-                    'tenant_id': otherTenant, // nunca debe guardarse
-                    'author_user_id': me,
-                    'flow_type': 'SOLICITO_AYUDA',
-                    'modality': 'PRESTAMO_HERRAMIENTA',
-                    'title': 'De otro barrio',
-                    'lat': lat,
-                    'lng': lng,
-                    'is_deleted': false,
-                    'updated_at': '2026-11-07T09:00:00+00:00',
-                  },
-                ],
-                'local_services': [
-                  {
-                    'id': 'c0ffee00-0000-4000-8000-000000000003',
-                    'tenant_id': tenant,
-                    'provider_user_id': provider,
-                    'category': 'ELECTRICIDAD',
-                    'title': 'Rosa, electricista',
-                    'description': 'Cortocircuitos',
-                    'is_available_in_emergency': true,
-                    'endorsements_count': 9,
-                    'rating_avg': 4.6,
-                    'lat': lat,
-                    'lng': lng,
-                    'is_deleted': false,
-                    'updated_at': '2026-11-07T08:00:00+00:00',
-                    'created_at': '2026-11-07T08:00:00+00:00',
-                  },
-                ],
-              },
-            }),
-            200);
+          jsonEncode({
+            'server_timestamp': '2026-11-07T15:00:00.123456Z',
+            'has_more': false,
+            'delta': {
+              'solidarity_posts': [
+                {
+                  'id': mine.id, // el servidor tiene una versión vieja
+                  'tenant_id': tenant,
+                  'author_user_id': me,
+                  'flow_type': 'SOLICITO_AYUDA',
+                  'modality': 'PRESTAMO_HERRAMIENTA',
+                  'title': 'Versión vieja del servidor',
+                  'description': null,
+                  'is_emergency_context': false,
+                  'status': 'DISPONIBLE',
+                  'lat': lat,
+                  'lng': lng,
+                  'is_deleted': false,
+                  'updated_at': '2026-11-07T09:00:00+00:00',
+                  'created_at': '2026-11-07T09:00:00+00:00',
+                },
+                {
+                  'id': 'deadbeef-0000-4000-8000-000000000002',
+                  'tenant_id': otherTenant, // nunca debe guardarse
+                  'author_user_id': me,
+                  'flow_type': 'SOLICITO_AYUDA',
+                  'modality': 'PRESTAMO_HERRAMIENTA',
+                  'title': 'De otro barrio',
+                  'lat': lat,
+                  'lng': lng,
+                  'is_deleted': false,
+                  'updated_at': '2026-11-07T09:00:00+00:00',
+                },
+              ],
+              'local_services': [
+                {
+                  'id': 'c0ffee00-0000-4000-8000-000000000003',
+                  'tenant_id': tenant,
+                  'provider_user_id': provider,
+                  'category': 'ELECTRICIDAD',
+                  'title': 'Rosa, electricista',
+                  'description': 'Cortocircuitos',
+                  'is_available_in_emergency': true,
+                  'endorsements_count': 9,
+                  'rating_avg': 4.6,
+                  'lat': lat,
+                  'lng': lng,
+                  'is_deleted': false,
+                  'updated_at': '2026-11-07T08:00:00+00:00',
+                  'created_at': '2026-11-07T08:00:00+00:00',
+                },
+              ],
+            },
+          }),
+          200,
+        );
       });
 
-      final result = await SyncWorker(baseUrl: 'http://api', client: client)
-          .pullRemoteChanges(tenant);
+      final result = await SyncWorker(
+        baseUrl: 'http://api',
+        client: client,
+      ).pullRemoteChanges(tenant);
 
       expect(result.success, isTrue);
       expect(result.skippedPendingCount, 1);
@@ -248,7 +302,9 @@ void main() {
 
     test('sin red: push y pull fallan sin lanzar excepciones', () async {
       await publish();
-      final client = MockClient((_) async => throw const SocketException('sin red'));
+      final client = MockClient(
+        (_) async => throw const SocketException('sin red'),
+      );
       final worker = SyncWorker(baseUrl: 'http://api', client: client);
       expect((await worker.pushLocalChanges(tenant)).success, isFalse);
       expect((await worker.pullRemoteChanges(tenant)).success, isFalse);
@@ -325,22 +381,31 @@ void main() {
     });
 
     test('el id es el mismo en cualquier teléfono (UUID v5)', () {
-      expect(EndorsementModel.idFor(service.id, me),
-          EndorsementModel.idFor(service.id, me));
-      expect(EndorsementModel.idFor(service.id, me),
-          isNot(EndorsementModel.idFor(service.id, provider)));
+      expect(
+        EndorsementModel.idFor(service.id, me),
+        EndorsementModel.idFor(service.id, me),
+      );
+      expect(
+        EndorsementModel.idFor(service.id, me),
+        isNot(EndorsementModel.idFor(service.id, provider)),
+      );
     });
 
     test('calificar dos veces edita la misma fila (upsert)', () async {
       final ds = EndorsementsSqliteDatasource();
       await ds.rateService(
-          tenantId: tenant, serviceId: service.id, endorserUserId: me, rating: 3);
+        tenantId: tenant,
+        serviceId: service.id,
+        endorserUserId: me,
+        rating: 3,
+      );
       await ds.rateService(
-          tenantId: tenant,
-          serviceId: service.id,
-          endorserUserId: me,
-          rating: 5,
-          shortComment: '  Muy puntual  ');
+        tenantId: tenant,
+        serviceId: service.id,
+        endorserUserId: me,
+        rating: 5,
+        shortComment: '  Muy puntual  ',
+      );
 
       final list = await ds.listForService(tenant, service.id);
       expect(list.single.rating, 5);
@@ -352,23 +417,39 @@ void main() {
     test('permite estrellas vacías y rechaza datos inválidos', () async {
       final ds = EndorsementsSqliteDatasource();
       final empty = await ds.rateService(
-          tenantId: tenant, serviceId: service.id, endorserUserId: me);
+        tenantId: tenant,
+        serviceId: service.id,
+        endorserUserId: me,
+      );
       expect(empty.rating, isNull);
 
-      Future<void> rate({int? rating, String? comment, String user = me, String? sid}) =>
-          ds.rateService(
-              tenantId: tenant,
-              serviceId: sid ?? service.id,
-              endorserUserId: user,
-              rating: rating,
-              shortComment: comment);
+      Future<void> rate({
+        int? rating,
+        String? comment,
+        String user = me,
+        String? sid,
+      }) => ds.rateService(
+        tenantId: tenant,
+        serviceId: sid ?? service.id,
+        endorserUserId: user,
+        rating: rating,
+        shortComment: comment,
+      );
 
       await expectLater(rate(rating: 0), throwsArgumentError);
       await expectLater(rate(rating: 6), throwsArgumentError);
-      await expectLater(rate(rating: 4, comment: 'x' * 141), throwsArgumentError);
-      await expectLater(rate(rating: 5, user: provider), throwsArgumentError); // su propio servicio
       await expectLater(
-          rate(rating: 5, sid: 'c0ffee00-0000-4000-8000-0000000000ff'), throwsArgumentError);
+        rate(rating: 4, comment: 'x' * 141),
+        throwsArgumentError,
+      );
+      await expectLater(
+        rate(rating: 5, user: provider),
+        throwsArgumentError,
+      ); // su propio servicio
+      await expectLater(
+        rate(rating: 5, sid: 'c0ffee00-0000-4000-8000-0000000000ff'),
+        throwsArgumentError,
+      );
     });
   });
 
@@ -415,17 +496,17 @@ void main() {
         String fb = 'https://facebook.com/ana',
         String type = 'EMPRENDEDOR',
         String name = 'Ana',
-      }) =>
-          storage.saveProfile(
-              userId: me,
-              tenantId: tenant,
-              fullName: name,
-              homeLat: lat,
-              homeLng: lng,
-              email: email,
-              whatsapp: whatsapp,
-              facebookUrl: fb,
-              publisherType: type);
+      }) => storage.saveProfile(
+        userId: me,
+        tenantId: tenant,
+        fullName: name,
+        homeLat: lat,
+        homeLng: lng,
+        email: email,
+        whatsapp: whatsapp,
+        facebookUrl: fb,
+        publisherType: type,
+      );
 
       await expectLater(save(email: 'no-es-correo'), throwsArgumentError);
       await expectLater(save(whatsapp: 'abc'), throwsArgumentError);
@@ -465,16 +546,19 @@ void main() {
       expect(p.isActive.value, isTrue);
     });
 
-    test('si la junta vecinal la activa, el vecino no puede apagarla', () async {
-      final p = EmergencyModeProvider.instance;
-      await p.load();
-      p.setTenantFlag(true);
-      expect(p.isActive.value, isTrue);
-      expect(p.isLockedByTenant.value, isTrue);
-      await p.setLocal(false);
-      expect(p.isActive.value, isTrue);
-      p.setTenantFlag(false);
-      expect(p.isActive.value, isFalse);
-    });
+    test(
+      'si la junta vecinal la activa, el vecino no puede apagarla',
+      () async {
+        final p = EmergencyModeProvider.instance;
+        await p.load();
+        p.setTenantFlag(true);
+        expect(p.isActive.value, isTrue);
+        expect(p.isLockedByTenant.value, isTrue);
+        await p.setLocal(false);
+        expect(p.isActive.value, isTrue);
+        p.setTenantFlag(false);
+        expect(p.isActive.value, isFalse);
+      },
+    );
   });
 }
