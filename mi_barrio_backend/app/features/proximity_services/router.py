@@ -77,16 +77,28 @@ async def endorse_service(
     except ValueError:
         raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
 
-    stmt = select(LocalService).where(
+    # Verificar si el servicio existe
+    stmt_service = select(LocalService).where(
         LocalService.id == payload.service_id,
         LocalService.tenant_id == tenant_uuid,
         LocalService.is_deleted.is_(False),
     )
-    result = await db.execute(stmt)
-    service = result.scalar_one_or_none()
+    result_service = await db.execute(stmt_service)
+    service = result_service.scalar_one_or_none()
 
     if not service:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
+
+    # FIX: Verificar si ya dio el visto bueno
+    stmt_endorsement = select(NeighborEndorsement).where(
+        NeighborEndorsement.service_id == payload.service_id,
+        NeighborEndorsement.endorser_user_id == payload.endorser_user_id
+    )
+    result_endorsement = await db.execute(stmt_endorsement)
+    existing_endorsement = result_endorsement.scalar_one_or_none()
+    
+    if existing_endorsement:
+        raise HTTPException(status_code=400, detail="El vecino ya registró un visto bueno para este servicio")
 
     endorsement = NeighborEndorsement(
         tenant_id=tenant_uuid,
@@ -94,6 +106,7 @@ async def endorse_service(
         endorser_user_id=payload.endorser_user_id,
         short_comment=payload.short_comment,
     )
+    
     service.endorsements_count += 1
     service.updated_at = datetime.now(timezone.utc)
 

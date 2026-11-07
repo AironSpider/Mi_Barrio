@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from app.shared.base_model import BarrioBaseMixin
+from sqlalchemy import String, Float, Boolean, Text, Integer, ForeignKey, UniqueConstraint
 
 class LocalService(Base, BarrioBaseMixin):
     __tablename__ = "local_services"
@@ -23,3 +24,8 @@ class NeighborEndorsement(Base, BarrioBaseMixin):
     service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("local_services.id"), nullable=False)
     endorser_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     short_comment: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # FIX: Un vecino solo puede avalar un servicio una vez
+    __table_args__ = (
+        UniqueConstraint("service_id", "endorser_user_id", name="uix_service_endorser"),
+    )

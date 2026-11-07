@@ -65,6 +65,8 @@ async def list_emergency_board(
     result = await db.execute(stmt)
     return result.scalars().all()
 
+# ... código existente ...
+
 @router.patch("/{report_id}/attend", response_model=VulnerableReportResponse)
 async def attend_emergency_report(
     report_id: uuid.UUID,
@@ -88,9 +90,11 @@ async def attend_emergency_report(
     if not report:
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
 
-    report.status = "EN_ATENCION"
+    # FIX: Ajustado al estado definido en el contrato de la Hackathon
+    report.status = "VECINOS_EN_CAMINO"
     report.helper_user_id = helper_user_id
     report.updated_at = datetime.now(timezone.utc)
+    
     await db.commit()
     await db.refresh(report)
     return report

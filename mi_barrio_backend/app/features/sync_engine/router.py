@@ -32,6 +32,8 @@ async def push_offline_mutations(
         processed_record_ids=processed_ids,
     )
 
+# ... importaciones existentes ...
+
 @router.get("/pull", response_model=SyncPullResponse)
 async def pull_delta(
     since: str | None = Query(default=None, description="Timestamp ISO-8601 UTC"),
@@ -48,11 +50,10 @@ async def pull_delta(
 
     if since:
         try:
+            # FIX: Parsear directamente y usarlo en la consulta sin alterar el timezone
             parsed_since = datetime.fromisoformat(since.replace("Z", "+00:00"))
-            # Normalizar a naive UTC si la base de datos almacena sin tzinfo
-            parsed_since_naive = parsed_since.astimezone(timezone.utc).replace(tzinfo=None)
-            posts_stmt = posts_stmt.where(SolidarityPost.updated_at > parsed_since_naive)
-            services_stmt = services_stmt.where(LocalService.updated_at > parsed_since_naive)
+            posts_stmt = posts_stmt.where(SolidarityPost.updated_at > parsed_since)
+            services_stmt = services_stmt.where(LocalService.updated_at > parsed_since)
         except ValueError:
             raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usar ISO-8601.")
 
