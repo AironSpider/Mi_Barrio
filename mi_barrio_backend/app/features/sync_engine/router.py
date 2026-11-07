@@ -1,17 +1,57 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from datetime import datetime, timezone
+from sqlalchemy import func, select
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from app.core.database import get_db_session
-from app.features.sync_engine.schemas import SyncPushRequest, SyncPushResponse, SyncPullResponse
+from app.features.sync_engine.schemas import (
+    SyncPullResponse,
+    SyncPushRequest,
+    SyncPushResponse,
+    TenantInfo,
+)
 from app.features.sync_engine.service import process_sync_push
+from app.features.auth_barrio.models import Tenant
 from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService
 from app.features.proximity_services.service import rating_avg_by_service
+from app.features.emergency_support.models import VulnerableReport
 
 router = APIRouter(prefix="/api/v1/sync", tags=["Sync Engine"])
+
+# Margen de seguridad del pull: una escritura que empezó justo antes del pull y se
+# confirmó justo después tendría un server_updated_at anterior al cursor. Volver a
+# mirar unos segundos atrás evita perderla (los duplicados el celular los ignora).
+PULL_SAFETY_MARGIN = timedelta(seconds=30)
+
+# Tablas que baja el pull (todas filtradas por barrio y por server_updated_at).
+PULL_MODELS = {
+    "solidarity_posts": SolidarityPost,
+    "local_services": LocalService,
+    "vulnerable_reports": VulnerableReport,
+}
+
+
+def _parse_tenant(x_tenant_id: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(x_tenant_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
+
+
+def _serialize(record) -> dict:
+    item = {}
+    for col in record.__table__.columns:
+        val = getattr(record, col.name)
+        if isinstance(val, uuid.UUID):
+            item[col.name] = str(val)
+        elif isinstance(val, datetime):
+            item[col.name] = val.isoformat()
+        else:
+            item[col.name] = val
+    return item
+
 
 @router.post("/push", response_model=SyncPushResponse)
 async def push_offline_mutations(
@@ -19,10 +59,7 @@ async def push_offline_mutations(
     x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
     db: AsyncSession = Depends(get_db_session),
 ):
-    try:
-        tenant_uuid = uuid.UUID(x_tenant_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
+    tenant_uuid = _parse_tenant(x_tenant_id)
 
     processed_ids, rejected = await process_sync_push(tenant_uuid, request, db)
 
@@ -34,58 +71,61 @@ async def push_offline_mutations(
         rejected=rejected,
     )
 
+
 @router.get("/pull", response_model=SyncPullResponse)
 async def pull_delta(
-    since: str | None = Query(default=None, description="Timestamp ISO-8601 UTC"),
+    since: str | None = Query(
+        default=None,
+        description="Usar el `server_timestamp` del pull anterior (ISO-8601 UTC). Vacío = todo.",
+    ),
     x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
     db: AsyncSession = Depends(get_db_session),
 ):
-    try:
-        tenant_uuid = uuid.UUID(x_tenant_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
+    """Cambios del barrio desde el último pull + estado del barrio (Modo Emergencia).
 
-    posts_stmt = select(SolidarityPost).where(SolidarityPost.tenant_id == tenant_uuid)
-    services_stmt = select(LocalService).where(LocalService.tenant_id == tenant_uuid)
+    Filtra por `server_updated_at` (reloj del servidor), no por `updated_at`
+    (reloj del celular): así un post creado offline y subido tarde sí aparece.
+    """
+    tenant_uuid = _parse_tenant(x_tenant_id)
 
+    cutoff = None
     if since:
         try:
-            # FIX: Mantener el timezone para que asyncpg lo compare correctamente
             parsed_since = datetime.fromisoformat(since.replace("Z", "+00:00"))
-            posts_stmt = posts_stmt.where(SolidarityPost.updated_at > parsed_since)
-            services_stmt = services_stmt.where(LocalService.updated_at > parsed_since)
         except ValueError:
             raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usar ISO-8601.")
+        if parsed_since.tzinfo is None:
+            parsed_since = parsed_since.replace(tzinfo=timezone.utc)
+        cutoff = parsed_since - PULL_SAFETY_MARGIN
 
-    posts_results = await db.execute(posts_stmt)
-    services_results = await db.execute(services_stmt)
+    # Cursor tomado del reloj de PostgreSQL ANTES de leer: lo que se escriba
+    # mientras tanto llegará en el próximo pull.
+    server_now: datetime = await db.scalar(select(func.now()))
 
-    def serialize(records):
-        out = []
-        for r in records:
-            item = {}
-            for col in r.__table__.columns:
-                val = getattr(r, col.name)
-                if isinstance(val, uuid.UUID):
-                    item[col.name] = str(val)
-                elif isinstance(val, datetime):
-                    item[col.name] = val.isoformat()
-                else:
-                    item[col.name] = val
-            out.append(item)
-        return out
+    delta: dict[str, list[dict]] = {}
+    for name, model in PULL_MODELS.items():
+        stmt = select(model).where(model.tenant_id == tenant_uuid)
+        if cutoff is not None:
+            stmt = stmt.where(model.server_updated_at > cutoff)
+        stmt = stmt.order_by(model.server_updated_at)
+        delta[name] = [_serialize(r) for r in (await db.execute(stmt)).scalars().all()]
 
+    # El celular guarda el promedio de estrellas ya calculado (sin fotos).
     averages = await rating_avg_by_service(db, tenant_uuid)
+    for svc in delta["local_services"]:
+        svc["rating_avg"] = averages.get(uuid.UUID(svc["id"]))
+
+    tenant = await db.get(Tenant, tenant_uuid)
+    tenant_info = TenantInfo(
+        id=str(tenant_uuid),
+        name=tenant.name if tenant else None,
+        is_emergency_active=bool(tenant and tenant.is_emergency_active),
+        registered=tenant is not None,
+    )
 
     return SyncPullResponse(
-        server_timestamp=datetime.now(timezone.utc),
+        server_timestamp=server_now.astimezone(timezone.utc),
         has_more=False,
-        delta={
-            "solidarity_posts": serialize(posts_results.scalars().all()),
-            "local_services": [
-                # El celular guarda el promedio de estrellas ya calculado (sin fotos).
-                {**svc, "rating_avg": averages.get(uuid.UUID(svc["id"]))}
-                for svc in serialize(services_results.scalars().all())
-            ],
-        },
+        tenant=tenant_info,
+        delta=delta,
     )

@@ -49,7 +49,15 @@ class SyncPushResponse(BaseModel):
     # Mutaciones que NO se guardaron y por qué (quedan en la cola del celular).
     rejected: List[RejectedMutation] = []
 
+class TenantInfo(BaseModel):
+    """Estado del barrio que viaja en cada pull (la app lo usa para el Modo Emergencia)."""
+    id: str
+    name: Optional[str] = None
+    is_emergency_active: bool = False
+    registered: bool = False  # False si el barrio no existe en la tabla tenants
+
 class SyncPullResponse(BaseModel):
     server_timestamp: datetime
     has_more: bool
+    tenant: Optional[TenantInfo] = None
     delta: Dict[str, List[Dict[str, Any]]]

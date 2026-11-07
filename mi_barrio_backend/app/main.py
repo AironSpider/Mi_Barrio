@@ -18,6 +18,7 @@ from app.features.sync_engine.router import router as sync_router
 from app.features.solidarity_network.router import router as solidarity_router
 from app.features.proximity_services.router import router as services_router
 from app.features.emergency_support.router import router as emergency_router
+from app.features.auth_barrio.router import router as tenants_router
 
 app = FastAPI(
     title="Mi Barrio API - Backend Resiliente",
@@ -43,6 +44,7 @@ app.include_router(sync_router)
 app.include_router(solidarity_router)
 app.include_router(services_router)
 app.include_router(emergency_router)
+app.include_router(tenants_router)
 
 
 def _expected_migration() -> str | None:

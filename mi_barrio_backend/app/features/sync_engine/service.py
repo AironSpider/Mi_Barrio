@@ -30,6 +30,7 @@ PROTECTED_FIELDS = {
     "endorsements_count",
     "rating_avg",
     "role",
+    "server_updated_at",
 }
 
 

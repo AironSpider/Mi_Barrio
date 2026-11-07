@@ -5,6 +5,19 @@
 
 ---
 
+## 🚦 Sprint 6 en curso — Backend (Dev 1) ✅ terminado (sáb 12:30)
+
+| Entregable | Estado |
+|---|---|
+| `server_updated_at` (reloj del servidor) en las 5 tablas sincronizadas + migración `b4e8d2c6f913` | ✅ El pull filtra por este campo: **un post creado offline horas antes ahora sí llega a los demás celulares.** `updated_at` sigue siendo del celular y se usa para LWW. |
+| Pull devuelve `tenant` y `vulnerable_reports` | ✅ `"tenant": {"id", "name", "is_emergency_active", "registered"}` + `delta.vulnerable_reports` |
+| `GET /api/v1/tenants/current` y `PATCH /api/v1/tenants/emergency-toggle` (body `{"is_emergency_active": true}`) | ✅ |
+| Barrio demo `BARRIO-01` creado por la migración | ✅ |
+| Pruebas | ✅ `scripts/test_sprint6_backend.py` 22/22 · `smoke_test_api.py` 34/34 · app 60/60 |
+
+**Para Dev 2 (Sprint 8):** en `sync_worker.pullRemoteChanges`, leer `data['tenant']['is_emergency_active']` → `EmergencyModeProvider.instance.setTenantFlag(...)`, y agregar `vulnerable_reports` a `_pullColumns`. La app actual ignora estos campos, así que no se rompe nada.
+**Pendiente Sprint 6:** Dev 2 (`emergency_ranking.dart` + tests, `gps_service.dart`) y Dev 3 (directorio con SQLite, toggle y podio).
+
 ## ✅ SPRINT 5 CERRADO (sáb 11:30, H16.5) → todos pasamos al **Sprint 6**
 
 Verificado en la PC de Dandy contra PostgreSQL real: **13 endpoints (40/40 pruebas)**, calificaciones (15/15), sincronización de `users`, y **59/59 tests de la app**, incluido el e2e del Checkpoint 1. Dev 3: card con texto grande corregido y tests actualizados (Adrian). Backend: `main.py` reparado tras el último merge, y `/health` ahora revisa la base de datos y las migraciones.
