@@ -21,6 +21,7 @@ import 'features/auth_barrio/presentation/screens/platform_admin_screen.dart';
 import 'features/emergency_support/data/repositories/emergency_repository_impl.dart';
 import 'features/emergency_support/presentation/providers/emergency_provider.dart';
 import 'features/emergency_support/presentation/widgets/sos_sheet.dart';
+import 'features/onboarding_tutorial/presentation/screens/tutorial_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -155,17 +156,21 @@ class _AuthGate extends ConsumerWidget {
     return switch (user.role) {
       UserRole.superAdmin => PlatformAdminScreen(user: user),
       UserRole.adminBarrio => NeighborhoodAdminScreen(user: user),
-      UserRole.comerciante || UserRole.vecino => MainNavigationShell(
-        isEmergencyMode: isEmergencyMode,
-        // En emergencia el botón principal es "Pedir ayuda" (SOS en 3 clics).
-        onPublish: () => isEmergencyMode
-            ? showSosSheet(context)
-            : QuickPublishLauncher.open(
-                context,
-                isEmergencyMode: isEmergencyMode,
-              ),
-        onEmergencyPreviewChanged: onEmergencyPreviewChanged,
-      ),
+      // La primera vez que una cuenta entra, ve el tutorial de 3 pasos.
+      UserRole.comerciante || UserRole.vecino => TutorialGate(
+          userId: user.id,
+          child: MainNavigationShell(
+            isEmergencyMode: isEmergencyMode,
+            // En emergencia el botón principal es "Pedir ayuda" (SOS en 3 clics).
+            onPublish: () => isEmergencyMode
+                ? showSosSheet(context)
+                : QuickPublishLauncher.open(
+                    context,
+                    isEmergencyMode: isEmergencyMode,
+                  ),
+            onEmergencyPreviewChanged: onEmergencyPreviewChanged,
+          ),
+        ),
     };
   }
 }

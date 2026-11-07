@@ -12,11 +12,14 @@ import 'package:mi_barrio_app/features/auth_barrio/presentation/providers/auth_p
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/neighborhood_admin_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/platform_admin_screen.dart';
 import 'package:mi_barrio_app/main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> _pumpAuthenticatedApp(
   WidgetTester tester, {
   bool initialEmergencyMode = false,
 }) async {
+  // La cuenta de prueba ya vio el tutorial (Sprint 11): entra directo a las pestañas.
+  SharedPreferences.setMockInitialValues({'tutorial_completed_test-user': true});
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -42,6 +45,7 @@ Future<void> _pumpAuthenticatedApp(
       child: MiBarrioApp(initialEmergencyMode: initialEmergencyMode),
     ),
   );
+  await tester.pump(); // TutorialGate termina de leer la bandera
 }
 
 void main() {

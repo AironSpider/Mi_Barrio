@@ -10,6 +10,7 @@ import '../../../auth_barrio/presentation/providers/auth_provider.dart';
 import '../../data/profile_local_storage.dart';
 import '../../data/user_profile_model.dart';
 import 'edit_profile_screen.dart';
+import 'history_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key, this.storage});
@@ -228,6 +229,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           },
           icon: const Icon(Icons.manage_accounts_rounded),
           label: const Text('Redes y perfil de publicador'),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          key: const ValueKey('open_history'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const HistoryScreen()),
+          ),
+          icon: const Icon(Icons.history_rounded),
+          label: const Text('Mi historial'),
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
