@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db_session
+from app.core.tenant_middleware import get_current_tenant_id
 from app.features.proximity_services.models import LocalService, NeighborEndorsement
 from app.features.proximity_services.schemas import (
     LocalServiceCreate,
@@ -17,14 +18,9 @@ router = APIRouter(prefix="/api/v1/services", tags=["Proximity Services"])
 @router.post("", response_model=LocalServiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_service(
     payload: LocalServiceCreate,
-    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db_session),
 ):
-    try:
-        tenant_uuid = uuid.UUID(x_tenant_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
-
     new_service = LocalService(
         tenant_id=tenant_uuid,
         provider_user_id=payload.provider_user_id,
@@ -42,16 +38,11 @@ async def create_service(
 
 @router.get("", response_model=list[LocalServiceResponse])
 async def list_services(
-    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
     category: str | None = Query(None),
-    available_in_emergency: bool = Query(False),
+    emergency_only: bool = Query(False),
     db: AsyncSession = Depends(get_db_session),
 ):
-    try:
-        tenant_uuid = uuid.UUID(x_tenant_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
-
     stmt = select(LocalService).where(
         LocalService.tenant_id == tenant_uuid,
         LocalService.is_deleted.is_(False),
@@ -59,25 +50,19 @@ async def list_services(
 
     if category:
         stmt = stmt.where(LocalService.category == category)
-    if available_in_emergency:
+    if emergency_only:
         stmt = stmt.where(LocalService.is_available_in_emergency.is_(True))
 
-    stmt = stmt.order_by(LocalService.endorsements_count.desc())
+    stmt = stmt.order_by(LocalService.endorsements_count.desc(), LocalService.created_at.desc())
     result = await db.execute(stmt)
     return result.scalars().all()
 
 @router.post("/endorse", status_code=status.HTTP_201_CREATED)
 async def endorse_service(
     payload: NeighborEndorsementCreate,
-    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db_session),
 ):
-    try:
-        tenant_uuid = uuid.UUID(x_tenant_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
-
-    # Verificar si el servicio existe
     stmt_service = select(LocalService).where(
         LocalService.id == payload.service_id,
         LocalService.tenant_id == tenant_uuid,
@@ -89,16 +74,13 @@ async def endorse_service(
     if not service:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
-    # FIX: Verificar si ya dio el visto bueno
     stmt_endorsement = select(NeighborEndorsement).where(
         NeighborEndorsement.service_id == payload.service_id,
-        NeighborEndorsement.endorser_user_id == payload.endorser_user_id
+        NeighborEndorsement.endorser_user_id == payload.endorser_user_id,
     )
     result_endorsement = await db.execute(stmt_endorsement)
-    existing_endorsement = result_endorsement.scalar_one_or_none()
-    
-    if existing_endorsement:
-        raise HTTPException(status_code=400, detail="El vecino ya registró un visto bueno para este servicio")
+    if result_endorsement.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Ya registró un visto bueno para este servicio")
 
     endorsement = NeighborEndorsement(
         tenant_id=tenant_uuid,
@@ -106,7 +88,6 @@ async def endorse_service(
         endorser_user_id=payload.endorser_user_id,
         short_comment=payload.short_comment,
     )
-    
     service.endorsements_count += 1
     service.updated_at = datetime.now(timezone.utc)
 

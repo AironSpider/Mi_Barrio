@@ -4,10 +4,8 @@ from fastapi.security import APIKeyHeader
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-# Header scheme para que Swagger UI lo detecte automáticamente
 tenant_header_scheme = APIKeyHeader(name="X-Tenant-ID", auto_error=False)
 
-# Endpoints que no requieren pertenecer a un barrio (ej. documentación o estado de salud)
 EXEMPT_PATHS = {
     "/health",
     "/docs",
@@ -17,15 +15,13 @@ EXEMPT_PATHS = {
 
 class TenantMiddleware(BaseHTTPMiddleware):
     """
-    Middleware global que verifica la presencia y validez del header X-Tenant-ID
-    en todas las peticiones a la API de negocio.
+    Middleware global que intercepta las peticiones a /api/v1/ y valida la presencia
+    y formato del header X-Tenant-ID, inyectándolo en request.state.tenant_id.
     """
     async def dispatch(self, request: Request, call_next):
-        # Permitir paso a rutas exentas y peticiones CORS (OPTIONS)
         if request.url.path in EXEMPT_PATHS or request.method == "OPTIONS":
             return await call_next(request)
 
-        # Aplicar validación estricta solo a los endpoints de la API (v1)
         if request.url.path.startswith("/api/v1/"):
             tenant_id = request.headers.get("X-Tenant-ID")
             if not tenant_id:
@@ -38,7 +34,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     },
                 )
             try:
-                # Validar formato UUID y almacenarlo en el contexto de la petición
                 request.state.tenant_id = uuid.UUID(tenant_id)
             except ValueError:
                 return JSONResponse(
@@ -54,13 +49,22 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
 def get_current_tenant_id(request: Request) -> uuid.UUID:
     """
-    Dependencia de FastAPI (Depends) para inyectar el UUID del tenant en los endpoints
-    de forma limpia, leyéndolo desde el estado pre-validado por el middleware.
+    Dependencia FastAPI para inyectar directamente el UUID validado del tenant
+    en cualquier endpoint.
     """
     tenant_id = getattr(request.state, "tenant_id", None)
     if not tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error de configuración: X-Tenant-ID no encontrado en el contexto de la petición.",
-        )
+        raw_header = request.headers.get("X-Tenant-ID")
+        if not raw_header:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Header 'X-Tenant-ID' no presente en la petición",
+            )
+        try:
+            tenant_id = uuid.UUID(raw_header)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Header 'X-Tenant-ID' inválido",
+            )
     return tenant_id
