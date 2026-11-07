@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -19,8 +18,6 @@ from app.features.sync_engine.router import router as sync_router
 from app.features.solidarity_network.router import router as solidarity_router
 from app.features.proximity_services.router import router as services_router
 from app.features.emergency_support.router import router as emergency_router
-
-logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Mi Barrio API - Backend Resiliente",
