@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/barrio_context/tenant_session.dart';
+
+import '../../../../core/sync_manager/pending_changes.dart';
+
 import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../../auth_barrio/presentation/providers/auth_provider.dart';
 import '../../data/profile_local_storage.dart';
@@ -105,6 +108,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  
+  Future<void> _confirmLogout() async {
+    final user = ref.read(authProvider).user;
+    final aviso = PendingChanges.logoutWarning(
+      await PendingChanges.count(user?.tenantId),
+    );
+    if (!mounted) return;
+
+    if (aviso != null) {
+      final salir = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.sync_problem_rounded),
+          title: const Text('Cambios sin sincronizar'),
+          content: Text(aviso),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Quedarme'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Cerrar sesión igual'),
+            ),
+          ],
+        ),
+      );
+      if (salir != true || !mounted) return;
+    }
+    await ref.read(authProvider.notifier).logout();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -199,7 +234,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: () => ref.read(authProvider.notifier).logout(),
+          onPressed: _confirmLogout,
           icon: const Icon(Icons.logout_rounded),
           label: const Text('Cerrar sesión'),
         ),

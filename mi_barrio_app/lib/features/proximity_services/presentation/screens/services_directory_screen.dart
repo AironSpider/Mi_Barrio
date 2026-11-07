@@ -12,6 +12,12 @@ import '../../data/models/endorsement_model.dart';
 import '../../data/models/service_model.dart';
 import '../widgets/service_card.dart';
 
+import '../../../../core/barrio_context/emergency_mode_provider.dart';
+import '../../../../core/ui_kit/priority_podium_frame.dart';
+import '../../../../shared/emergency_ranking.dart';
+
+
+
 class ServicesDirectoryScreen extends StatefulWidget {
   const ServicesDirectoryScreen({
     super.key,
@@ -301,13 +307,49 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
                   : 'No hay servicios de ${ServiceCategory.labels[_selectedCategory]}.',
             )
           else
-            for (final service in _visibleServices)
-              _buildServiceCard(context, service),
+                       _buildServiceList(context),
         ],
       ),
     );
   }
-
+  
+  Widget _buildServiceList(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: EmergencyModeProvider.instance.isActive,
+      builder: (context, emergency, _) {
+        final session = TenantSession.instance;
+        final ranked = emergency
+            ? EmergencyRanking.rankServices(
+                _visibleServices,
+                lat: session.centerLat,
+                lng: session.centerLng,
+              )
+            : null;
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          child: Column(
+            key: ValueKey(
+              ranked == null
+                  ? 'normal'
+                  : 'podio_${ranked.map((r) => r.item.id).join(',')}',
+            ),
+            children: ranked == null
+                ? [
+                    for (final s in _visibleServices)
+                      _buildServiceCard(context, s),
+                  ]
+                : [
+                    for (final r in ranked)
+                      PriorityPodiumFrame(
+                        priority: r.priority,
+                        child: _buildServiceCard(context, r.item),
+                      ),
+                  ],
+          ),
+        );
+      },
+    );
+  }
   Widget _buildServiceCard(BuildContext context, LocalServiceModel service) {
     final endorsement = _myEndorsements[service.id];
     final isOwnService = service.providerUserId == _userId;

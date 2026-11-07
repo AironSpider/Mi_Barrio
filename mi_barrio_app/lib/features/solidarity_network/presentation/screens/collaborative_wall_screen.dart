@@ -9,6 +9,10 @@ import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../data/datasources/solidarity_sqlite_ds.dart';
 import '../../data/models/solidarity_post_model.dart';
 
+import '../../../../core/barrio_context/emergency_mode_provider.dart';
+import '../../../../core/ui_kit/priority_podium_frame.dart';
+import '../../../../shared/emergency_ranking.dart';
+
 class CollaborativeWallScreen extends StatefulWidget {
   const CollaborativeWallScreen({
     super.key,
@@ -169,9 +173,45 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
                   : 'No hay publicaciones en esta categoría.',
             )
           else
-            for (final post in _visiblePosts) _PostCard(post: post),
+            _buildPostList(),
         ],
       ),
+    );
+  }
+
+  
+  Widget _buildPostList() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: EmergencyModeProvider.instance.isActive,
+      builder: (context, emergency, _) {
+        final session = TenantSession.instance;
+        final ranked = emergency
+            ? EmergencyRanking.rankPosts(
+                _visiblePosts,
+                lat: session.centerLat,
+                lng: session.centerLng,
+              )
+            : null;
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          child: Column(
+            key: ValueKey(
+              ranked == null
+                  ? 'normal'
+                  : 'podio_${ranked.map((r) => r.item.id).join(',')}',
+            ),
+            children: ranked == null
+                ? [for (final post in _visiblePosts) _PostCard(post: post)]
+                : [
+                    for (final r in ranked)
+                      PriorityPodiumFrame(
+                        priority: r.priority,
+                        child: _PostCard(post: r.item),
+                      ),
+                  ],
+          ),
+        );
+      },
     );
   }
 

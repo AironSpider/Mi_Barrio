@@ -120,6 +120,12 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         // (puntos suspensivos) en vez de desbordar.
         title: Row(
           children: [
+                        Image.asset(
+              'assets/images/logo_mi_barrio.png',
+              height: 32,
+              excludeFromSemantics: true,
+            ),
+            const SizedBox(width: 8),
             const Flexible(
               child: Text('Mi Barrio', maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
