@@ -129,6 +129,22 @@ class SyncWorker {
       'is_deleted',
       'updated_at',
     ],
+    // Solo bajada (Sprint 11): los registra la junta en el servidor.
+    'support_groups': [
+      'id',
+      'tenant_id',
+      'name',
+      'group_type',
+      'description',
+      'contact_phone',
+      'meeting_point',
+      'lat',
+      'lng',
+      'coordinator_user_id',
+      'is_active',
+      'is_deleted',
+      'updated_at',
+    ],
   };
 
   /// Columnas booleanas: el servidor manda true/false, SQLite guarda 1/0.
@@ -136,6 +152,7 @@ class SyncWorker {
     'is_emergency_context',
     'is_available_in_emergency',
     'is_deleted',
+    'is_active',
   };
 
   SyncWorker({required this.baseUrl, http.Client? client})

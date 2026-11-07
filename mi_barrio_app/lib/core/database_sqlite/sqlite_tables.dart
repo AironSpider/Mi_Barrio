@@ -13,7 +13,7 @@ class SqliteTables {
 
   /// Versión actual del esquema. Súbela al agregar tablas o columnas
   /// y añade el paso correspondiente en [migrations].
-  static const int schemaVersion = 4;
+  static const int schemaVersion = 5;
 
   // ── Valores permitidos (idénticos al contrato del backend) ──
   static const syncPending = 'PENDING';
@@ -176,6 +176,32 @@ class SqliteTables {
         'ON vulnerable_reports (tenant_id, is_deleted, status)',
   ];
 
+  /// Grupos de apoyo del barrio (Sprint 11). Solo bajada: los registra la
+  /// junta en el servidor y el teléfono los guarda para verlos sin internet.
+  static const createSupportGroups = '''
+    CREATE TABLE IF NOT EXISTS support_groups (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      group_type TEXT NOT NULL,
+      description TEXT,
+      contact_phone TEXT,
+      meeting_point TEXT,
+      lat REAL,
+      lng REAL,
+      coordinator_user_id TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      is_deleted INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      sync_status TEXT NOT NULL DEFAULT 'SYNCED'
+    )
+  ''';
+
+  static const indexesV5 = [
+    'CREATE INDEX IF NOT EXISTS idx_support_groups_tenant '
+        'ON support_groups (tenant_id, is_deleted, is_active)',
+  ];
+
   static const indexesV3 = [
     'CREATE INDEX IF NOT EXISTS idx_endorsements_service '
         'ON neighbor_endorsements (tenant_id, service_id, is_deleted)',
@@ -192,9 +218,11 @@ class SqliteTables {
     createSyncState,
     createAppSettings,
     createVulnerableReports,
+    createSupportGroups,
     ...indexes,
     ...indexesV3,
     ...indexesV4,
+    ...indexesV5,
   ];
 
   /// Pasos de actualización: clave = versión destino.
@@ -202,10 +230,12 @@ class SqliteTables {
   /// v2 (Sprint 2): + local_services + índices.
   /// v3 (Sprint 5): + neighbor_endorsements, users, app_settings.
   /// v4 (Sprint 8): + vulnerable_reports (SOS sin red).
+  /// v5 (Sprint 11): + support_groups (grupos de apoyo sin red).
   static const Map<int, List<String>> migrations = {
     2: [createLocalServices, ...indexes],
     3: [createNeighborEndorsements, createUsers, createAppSettings, ...indexesV3],
     4: [createVulnerableReports, ...indexesV4],
+    5: [createSupportGroups, ...indexesV5],
   };
 
   /// Columnas nuevas en tablas existentes, por versión destino.

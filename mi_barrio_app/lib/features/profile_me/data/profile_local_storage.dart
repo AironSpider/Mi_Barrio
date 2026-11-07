@@ -2,6 +2,7 @@ import '../../../core/database_sqlite/record_validation.dart';
 import '../../../core/database_sqlite/sqlite_database.dart';
 import '../../../core/database_sqlite/sqlite_tables.dart';
 import '../../../core/database_sqlite/sync_outbox_dao.dart';
+import 'tutorial_progress.dart';
 import 'user_profile_model.dart';
 
 /// Guarda y lee el perfil del vecino en SQLite ("Mi Perfil y Cuenta").
@@ -71,6 +72,10 @@ class ProfileLocalStorage {
     if (type != null) RecordValidation.oneOf(type, PublisherType.values, 'publisherType');
 
     final previous = await getProfile(userId);
+    // Si ya vio el tutorial (aunque la fila no lo tenga), guardar el perfil no lo
+    // "des-marca": el payload completo viaja al servidor.
+    final tutorialSeen = (previous?.tutorialCompleted ?? false) ||
+        await TutorialProgress(database: _db, outboxDao: _outboxDao).localFlag(userId);
     final profile = UserProfileModel(
       id: userId,
       tenantId: tenantId,
@@ -81,7 +86,7 @@ class ProfileLocalStorage {
       homeLng: homeLng,
       // El rol nunca se cambia desde el perfil: se conserva el que había.
       role: previous?.role ?? UserRole.vecino,
-      tutorialCompleted: tutorialCompleted ?? previous?.tutorialCompleted ?? false,
+      tutorialCompleted: tutorialCompleted ?? tutorialSeen,
       email: cleanEmail,
       whatsapp: cleanWhatsapp,
       facebookUrl: clean(facebookUrl),

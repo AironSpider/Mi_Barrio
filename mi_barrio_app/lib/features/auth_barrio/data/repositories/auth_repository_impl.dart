@@ -1,5 +1,6 @@
 import '../../../../core/auth/auth_session_store.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
+import '../../../profile_me/data/profile_sync.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
@@ -9,11 +10,18 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
     AuthRemoteDatasource? remote,
     AuthSessionStore? sessionStore,
+    ProfileSync? profileSync,
   }) : _remote = remote ?? AuthRemoteDatasource(),
-       _sessionStore = sessionStore ?? AuthSessionStore.instance;
+       _sessionStore = sessionStore ?? AuthSessionStore.instance,
+       _profileSync = profileSync ?? ProfileSync();
 
   final AuthRemoteDatasource _remote;
   final AuthSessionStore _sessionStore;
+  final ProfileSync _profileSync;
+
+  /// Tiempo máximo que el login espera el perfil completo; si no llega, se
+  /// sigue con lo local (rol y nombre del login) y no se bloquea la entrada.
+  static const profileWait = Duration(seconds: 4);
 
   @override
   Future<UserEntity> login({
@@ -21,7 +29,34 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
   }) async {
     final response = await _remote.login(email: email, password: password);
-    return _persistResponse(response);
+    return _afterAuth(await _persistResponse(response), online: true);
+  }
+
+  /// Guarda en SQLite el perfil del propio vecino (rol real, nombre, tutorial).
+  /// Sin esto, un COMERCIANTE no veía "Ofrecer servicio" y "Tú" salía vacío.
+  /// Nunca hace fallar el login.
+  Future<UserEntity> _afterAuth(UserEntity user, {required bool online}) async {
+    final tenantId = user.tenantId;
+    if (tenantId == null || user.role == UserRole.superAdmin) return user;
+    try {
+      final sync = _profileSync;
+      await sync.seedFromLogin(
+        userId: user.id,
+        tenantId: tenantId,
+        fullName: user.fullName,
+        role: user.role.apiValue,
+        centerLat: user.centerLat,
+        centerLng: user.centerLng,
+      );
+      if (online) {
+        await sync
+            .refreshFromServer(tenantId: tenantId, userId: user.id)
+            .timeout(profileWait, onTimeout: () => null);
+      }
+    } catch (_) {
+      // Sin base local o sin red: la sesión sigue igual.
+    }
+    return user;
   }
 
   @override
@@ -39,7 +74,7 @@ class AuthRepositoryImpl implements AuthRepository {
       role: role.apiValue,
       joinCode: joinCode,
     );
-    return _persistResponse(response);
+    return _afterAuth(await _persistResponse(response), online: true);
   }
 
   Future<UserModel> _persistResponse(Map<String, dynamic> response) async {
@@ -69,7 +104,7 @@ class AuthRepositoryImpl implements AuthRepository {
         'access_token': cachedUser.token,
       });
       await _sessionStore.save(verified.toJson());
-      return verified;
+      return await _afterAuth(verified, online: true);
     } on AuthException catch (error) {
       if (error.statusCode == 401 || error.statusCode == 403) {
         // Sesión vencida: NO se borran los cambios hechos sin internet. Si la
@@ -84,7 +119,8 @@ class AuthRepositoryImpl implements AuthRepository {
         }
         return null;
       }
-      if (error.statusCode == null) return cachedUser;
+      // Sin red: entra con lo guardado y solo se asegura la fila local.
+      if (error.statusCode == null) return _afterAuth(cachedUser, online: false);
       rethrow;
     }
   }

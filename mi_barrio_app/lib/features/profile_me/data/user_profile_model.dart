@@ -7,10 +7,15 @@ class UserRole {
   static const liderVecinal = 'LIDER_VECINAL';
   static const grupoApoyo = 'GRUPO_APOYO';
 
+  static const comerciante = 'COMERCIANTE';
+  static const adminBarrio = 'ADMIN_BARRIO';
+
   static const labels = {
     vecino: 'Vecino',
     liderVecinal: 'Líder vecinal',
     grupoApoyo: 'Grupo de apoyo',
+    comerciante: 'Comerciante',
+    adminBarrio: 'Junta vecinal',
   };
 
   static Set<String> get values => labels.keys.toSet();

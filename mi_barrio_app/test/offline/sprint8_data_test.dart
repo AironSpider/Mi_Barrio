@@ -92,7 +92,7 @@ void main() {
     test('un teléfono en v3 sube a v4 sin perder datos', () async {
       final db = await local.database;
       expect(await db.getVersion(), SqliteTables.schemaVersion);
-      expect(SqliteTables.schemaVersion, 4);
+      expect(SqliteTables.schemaVersion, greaterThanOrEqualTo(4));
       final names = (await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'")).map((r) => r['name']).toSet();
       expect(names, contains('vulnerable_reports'));
     });
