@@ -1,6 +1,8 @@
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+import uuid
+from fastapi import Header, HTTPException
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
@@ -26,3 +28,9 @@ class Base(DeclarativeBase):
 async def get_db_session() -> AsyncSession:
     async with async_session_factory() as session:
         yield session
+
+def get_current_tenant_id(x_tenant_id: str = Header(..., alias="X-Tenant-ID")) -> uuid.UUID:
+    try:
+        return uuid.UUID(x_tenant_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="X-Tenant-ID debe ser un UUID válido")

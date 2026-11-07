@@ -4,6 +4,8 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.exceptions import custom_http_exception_handler, validation_exception_handler
+from app.core.tenant_middleware import TenantMiddleware
+
 from app.features.sync_engine.router import router as sync_router
 from app.features.solidarity_network.router import router as solidarity_router
 from app.features.proximity_services.router import router as services_router
@@ -15,6 +17,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# 1. CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,10 +26,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 2. Multi-Tenancy Middleware
+app.add_middleware(TenantMiddleware)
+
+# 3. Manejadores de errores globales
 app.add_exception_handler(StarletteHTTPException, custom_http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
-# Registro de routers
+# 4. Routers
 app.include_router(sync_router)
 app.include_router(solidarity_router)
 app.include_router(services_router)
