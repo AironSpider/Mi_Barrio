@@ -80,6 +80,35 @@ async def get_solidarity_post(
         raise HTTPException(status_code=404, detail="Publicación no encontrada en este barrio")
     return post
 
+
+@router.patch("/{post_id}/coordinate", response_model=SolidarityPostResponse)
+async def coordinate_solidarity_post(
+    post_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(get_current_principal),
+    db: AsyncSession = Depends(get_db_session),
+):
+    post = (await db.execute(
+        select(SolidarityPost).where(
+            SolidarityPost.id == post_id,
+            SolidarityPost.tenant_id == tenant_id,
+            SolidarityPost.is_deleted.is_(False),
+        ).with_for_update()
+    )).scalar_one_or_none()
+    if post is None:
+        raise HTTPException(status_code=404, detail="Publicación no encontrada en este barrio")
+    if post.author_user_id == uuid.UUID(principal["sub"]):
+        raise HTTPException(status_code=403, detail="Solo otra persona puede coordinar esta publicación")
+    if post.status not in ("DISPONIBLE", "EN_COORDINACION"):
+        raise HTTPException(status_code=409, detail="Esta publicación ya no está disponible para coordinar")
+
+    post.status = "EN_COORDINACION"
+    post.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(post)
+    return post
+
+
 @router.delete("/{post_id}", status_code=status.HTTP_200_OK)
 async def delete_solidarity_post(
     post_id: uuid.UUID,

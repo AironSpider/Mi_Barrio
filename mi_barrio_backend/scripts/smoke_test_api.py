@@ -23,7 +23,7 @@ results: list[tuple[bool, str, str]] = []
 
 def check(name, ok, detail=""):
     results.append((bool(ok), name, detail))
-    print(f"{'OK  ' if ok else 'FALLA'} {name}" + (f"  -> {str(detail)[:250]}" if detail and not ok else ""))
+    print(f"{'OK  ' if ok else 'FALLA'} {name}" + (f"  -> {str(detail)[:1000]}" if detail and not ok else ""))
 
 
 def now(delta_s=0):
@@ -42,6 +42,7 @@ def main():
     other = isolated_neighborhood(BASE, "Smoke test (otro barrio)")
     TENANT, OTHER_TENANT = hood["tenant_id"], other["tenant_id"]
     vecino = register(BASE, hood["join_code"], "VECINO", "Vecina smoke")
+    vecino2 = register(BASE, hood["join_code"], "VECINO", "Vecino smoke dos")
     comerciante = register(BASE, hood["join_code"], "COMERCIANTE", "Comerciante smoke")
     ajeno = register(BASE, other["join_code"], "VECINO", "Vecino de otro barrio")
     ME, PROVIDER = vecino["id"], comerciante["id"]
@@ -53,6 +54,9 @@ def main():
     # ── Seguridad básica ──
     s, b = http(BASE, "GET", "/api/v1/services", tenant=TENANT)
     check("sin token -> 401", s == 401, f"{s} {b}")
+    s, restored_user = call("GET", "/api/v1/auth/me")
+    check("GET /auth/me restaura la sesión del usuario", s == 200 and restored_user.get("id") == ME,
+          f"{s} {restored_user}")
     s, b = http(BASE, "GET", "/api/v1/services", token=vecino["token"])
     check("sin X-Tenant-ID -> 400", s == 400, f"{s} {b}")
     s, b = http(BASE, "GET", "/api/v1/services", tenant="no-es-uuid", token=vecino["token"])
@@ -84,11 +88,40 @@ def main():
     s, b = call("GET", "/api/v1/services", who=ajeno, tenant=OTHER_TENANT)
     check("GET /services de otro barrio no ve el servicio", s == 200 and not any(x["id"] == sid for x in b))
 
-    s, b = call("POST", "/api/v1/services/endorse", {"service_id": sid, "endorser_user_id": ME, "rating": 4, "short_comment": "Bien"})
+    photo_b64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/"
+    s, b = call("POST", "/api/v1/services/endorse", {
+        "service_id": sid, "endorser_user_id": ME, "rating": 4,
+        "short_comment": "Bien", "photo_b64": photo_b64})
     check("POST /services/endorse (4 estrellas)", s == 200 and b["data"]["rating_avg"] == 4.0, f"{s} {b}")
-    s, b = call("POST", "/api/v1/services/endorse", {"service_id": sid, "endorser_user_id": ME, "rating": 5})
+    s, b = call("POST", "/api/v1/services/endorse", {
+        "service_id": sid, "endorser_user_id": ME, "rating": 5,
+        "short_comment": "Excelente", "photo_b64": photo_b64})
     check("endorse otra vez = upsert (200, count 1, avg 5)",
           s == 200 and b["data"]["endorsements_count"] == 1 and b["data"]["rating_avg"] == 5.0, f"{s} {b}")
+    s, endorsements = call("GET", f"/api/v1/services/{sid}/endorsements")
+    check("GET /services/{id}/endorsements no incluye fotos",
+          s == 200 and len(endorsements) == 1 and endorsements[0]["rating"] == 5
+          and endorsements[0]["short_comment"] == "Excelente"
+          and "photo_b64" not in endorsements[0], f"{s} {endorsements}")
+    endorsement_id = endorsements[0]["id"] if s == 200 and endorsements else str(uuid.uuid4())
+    s, photo = call("GET", f"/api/v1/endorsements/{endorsement_id}/photo")
+    check("GET /endorsements/{id}/photo devuelve la foto separada",
+          s == 200 and photo.get("photo_b64") == photo_b64, f"{s} {photo}")
+    s, b = call("GET", f"/api/v1/endorsements/{uuid.uuid4()}/photo")
+    check("GET foto de endorsement inexistente -> 404", s == 404, f"{s} {b}")
+    s, b = call("GET", f"/api/v1/endorsements/{endorsement_id}/photo",
+                who=ajeno, tenant=OTHER_TENANT)
+    check("GET foto de otro barrio -> 404", s == 404, f"{s} {b}")
+    s, b = call("POST", "/api/v1/services/endorse", {
+        "service_id": sid, "endorser_user_id": vecino2["id"], "rating": 4}, who=vecino2)
+    check("vecino puede dejar una calificación sin foto", s == 200, f"{s} {b}")
+    s, endorsements = call("GET", f"/api/v1/services/{sid}/endorsements")
+    without_photo = next(
+        (item for item in endorsements if item["endorser_user_id"] == vecino2["id"]),
+        {},
+    ) if s == 200 else {}
+    s, b = call("GET", f"/api/v1/endorsements/{without_photo.get('id', uuid.uuid4())}/photo")
+    check("GET foto de calificación sin foto -> 404", s == 404, f"{s} {b}")
     s, b = call("POST", "/api/v1/services/endorse", {"service_id": sid, "endorser_user_id": PROVIDER, "rating": 5}, who=comerciante)
     check("endorse el propio servicio -> 400", s == 400, f"{s} {b}")
     s, b = call("POST", "/api/v1/services/endorse", {"service_id": sid, "endorser_user_id": ME, "rating": 9})
@@ -97,7 +130,7 @@ def main():
     check("endorse servicio inexistente -> 404", s == 404, f"{s} {b}")
     s, b = call("GET", "/api/v1/services")
     mine = next((x for x in b if x["id"] == sid), {}) if s == 200 else {}
-    check("GET /services trae rating_avg", mine.get("rating_avg") == 5.0, f"{mine}")
+    check("GET /services trae rating_avg", mine.get("rating_avg") == 4.5, f"{mine}")
 
     # ── Red solidaria ──
     s, post = call("POST", "/api/v1/solidarity", {
@@ -117,6 +150,21 @@ def main():
     check("GET /solidarity/{id} de otro barrio -> 404", s == 404, f"{s}")
     s, b = call("DELETE", f"/api/v1/solidarity/{pid}", who=comerciante)
     check("borrar el post de otra persona -> 403", s == 403, f"{s} {b}")
+    s, coordinate_post = call("POST", "/api/v1/solidarity", {
+        "author_user_id": ME, "flow_type": "OFREZCO_AYUDA", "modality": "AYUDA_TEMPORAL",
+        "title": "Favor para coordinar", "lat": LAT, "lng": LNG})
+    coordinate_id = coordinate_post.get("id") if isinstance(coordinate_post, dict) else None
+    s, b = call("PATCH", f"/api/v1/solidarity/{coordinate_id}/coordinate")
+    check("autor no puede coordinar su propio favor -> 403", s == 403, f"{s} {b}")
+    s, coordinated = call("PATCH", f"/api/v1/solidarity/{coordinate_id}/coordinate", who=comerciante)
+    check("otro vecino coordina el favor cambiando solo status",
+          s == 200 and coordinated.get("status") == "EN_COORDINACION"
+          and all(coordinated.get(field) == coordinate_post.get(field) for field in (
+              "author_user_id", "flow_type", "modality", "title", "description",
+              "is_emergency_context", "lat", "lng", "is_deleted",
+          )), f"{s} {coordinated}")
+    s, b = call("PATCH", f"/api/v1/solidarity/{uuid.uuid4()}/coordinate")
+    check("coordinar favor inexistente -> 404", s == 404, f"{s} {b}")
     s, b = call("DELETE", f"/api/v1/solidarity/{pid}")
     check("DELETE /solidarity/{id} (borrado lógico)", s == 200, f"{s} {b}")
     s, b = call("GET", f"/api/v1/solidarity/{pid}")
@@ -196,6 +244,49 @@ def main():
     s2, p2 = call("GET", f"/api/v1/solidarity/{post_id}")
     check("por sync nadie edita el post de otra persona", s == 200 and not b["processed_record_ids"]
           and p2["title"] == "Sync v2" and p2["author_user_id"] == ME, f"{b} {p2}")
+
+    s, post_before_coordination = call("GET", f"/api/v1/solidarity/{post_id}")
+    coordinate_payload = dict(post_before_coordination, status="EN_COORDINACION", updated_at=now())
+    s, b = call("POST", "/api/v1/sync/push", {
+        "client_sync_timestamp": now(),
+        "mutations": [{
+            "target_table": "solidarity_posts", "record_id": post_id,
+            "operation": "UPSERT", "payload": coordinate_payload,
+        }],
+    }, who=comerciante)
+    s2, coordinated_sync = call("GET", f"/api/v1/solidarity/{post_id}")
+    check("sync permite coordinar favor ajeno sin modificar otros campos",
+          s == 200 and b["processed_record_ids"] == [post_id]
+          and coordinated_sync["status"] == "EN_COORDINACION"
+          and all(coordinated_sync.get(field) == post_before_coordination.get(field) for field in (
+              "author_user_id", "flow_type", "modality", "title", "description",
+              "is_emergency_context", "lat", "lng", "is_deleted",
+          )), f"{s} {b} {coordinated_sync}")
+
+    tampered_coordination = dict(coordinate_payload, title="HACKEADO", updated_at=now(60))
+    s, b = call("POST", "/api/v1/sync/push", {
+        "client_sync_timestamp": now(),
+        "mutations": [{
+            "target_table": "solidarity_posts", "record_id": post_id,
+            "operation": "UPSERT", "payload": tampered_coordination,
+        }],
+    }, who=comerciante)
+    s2, p2 = call("GET", f"/api/v1/solidarity/{post_id}")
+    check("sync rechaza editar otros campos al coordinar",
+          s == 200 and not b["processed_record_ids"] and p2["title"] == "Sync v2", f"{s} {b} {p2}")
+
+    s, b = call("POST", "/api/v1/sync/push", {
+        "client_sync_timestamp": now(),
+        "mutations": [{
+            "target_table": "solidarity_posts", "record_id": post_id,
+            "operation": "DELETE",
+            "payload": dict(coordinate_payload, is_deleted=True, updated_at=now(60)),
+        }],
+    }, who=comerciante)
+    s2, p2 = call("GET", f"/api/v1/solidarity/{post_id}")
+    check("sync rechaza borrar un favor ajeno aunque esté coordinado",
+          s == 200 and not b["processed_record_ids"] and s2 == 200 and not p2["is_deleted"],
+          f"{s} {b} {s2} {p2}")
 
     s, b = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": t1, "mutations": batch[:1]},
                 who=ajeno, tenant=OTHER_TENANT)

@@ -105,6 +105,75 @@ def _client_time(value) -> datetime:
     return min(parsed, now + MAX_CLOCK_SKEW)
 
 
+def _payload_value_matches(key: str, payload_value, stored_value) -> bool:
+    if isinstance(stored_value, uuid.UUID):
+        if isinstance(payload_value, str):
+            try:
+                payload_value = uuid.UUID(payload_value)
+            except ValueError:
+                return False
+        return payload_value == stored_value
+    if isinstance(stored_value, datetime):
+        if not isinstance(payload_value, str):
+            return False
+        try:
+            parsed = datetime.fromisoformat(payload_value.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        stored = stored_value
+        if stored.tzinfo is None:
+            stored = stored.replace(tzinfo=timezone.utc)
+        return parsed == stored
+    return payload_value == stored_value
+
+
+async def _apply_solidarity_coordination(
+    rec_id: uuid.UUID,
+    tenant_uuid: uuid.UUID,
+    payload: dict,
+    operation: str,
+    principal_id: uuid.UUID,
+    db: AsyncSession,
+) -> None:
+    post = (await db.execute(
+        select(SolidarityPost).where(
+            SolidarityPost.id == rec_id,
+            SolidarityPost.tenant_id == tenant_uuid,
+            SolidarityPost.is_deleted.is_(False),
+        ).with_for_update()
+    )).scalar_one_or_none()
+    if post is None:
+        raise ValueError("publicación no encontrada en este barrio")
+    if post.author_user_id == principal_id:
+        raise ValueError("la coordinación solo está disponible para otra persona")
+    if operation != "UPSERT" or payload.get("status") != "EN_COORDINACION":
+        raise ValueError("solo puedes coordinar una publicación ajena")
+    if payload.get("author_user_id") is None or _coerce(
+        "author_user_id", payload["author_user_id"]
+    ) != post.author_user_id:
+        raise ValueError("no puedes cambiar la autoría de una publicación")
+    if post.status not in ("DISPONIBLE", "EN_COORDINACION"):
+        raise ValueError("esta publicación ya no está disponible para coordinar")
+
+    columns = {column.name for column in post.__table__.columns}
+    ignored_fields = {"status", "updated_at"}
+    for key, value in payload.items():
+        if key in ignored_fields:
+            continue
+        if key not in columns or not _payload_value_matches(key, value, getattr(post, key)):
+            raise ValueError(
+                f"solo puedes cambiar el estado a EN_COORDINACION: {key} no coincide"
+            )
+
+    post.status = "EN_COORDINACION"
+    stored_updated_at = post.updated_at
+    if stored_updated_at.tzinfo is None:
+        stored_updated_at = stored_updated_at.replace(tzinfo=timezone.utc)
+    post.updated_at = max(stored_updated_at, _client_time(payload.get("updated_at")))
+
+
 async def _apply_help_offer(
     rec_id: uuid.UUID,
     tenant_uuid: uuid.UUID,
@@ -174,6 +243,26 @@ async def process_sync_push(
             async with db.begin_nested():
                 validate_payload(table_name, payload)
                 owner_field = OWNER_FIELD.get(model_class)
+
+                if model_class is SolidarityPost:
+                    existing_post = await _find_existing(
+                        model_class, rec_id, tenant_uuid, payload, db
+                    )
+                    if (
+                        existing_post is not None
+                        and existing_post.author_user_id != principal_id
+                    ):
+                        await _apply_solidarity_coordination(
+                            rec_id,
+                            tenant_uuid,
+                            payload,
+                            item.operation,
+                            principal_id,
+                            db,
+                        )
+                        await db.flush()
+                        processed_ids.append(rec_id_str)
+                        continue
 
                 # Caso especial: un vecino ofrece ayuda en el SOS de OTRO vecino.
                 # Solo puede marcar VECINOS_EN_CAMINO y ponerse a sí mismo como helper.

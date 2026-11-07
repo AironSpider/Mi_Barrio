@@ -44,3 +44,21 @@ class NeighborEndorsementCreate(BaseModel):
     short_comment: Optional[str] = Field(None, max_length=255)
     # JPEG comprimido en base64 (~480 px): tope ~110 KB.
     photo_b64: Optional[str] = Field(None, max_length=110_000)
+
+
+class NeighborEndorsementResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    service_id: uuid.UUID
+    endorser_user_id: uuid.UUID
+    rating: Optional[int]
+    short_comment: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+class EndorsementPhotoResponse(BaseModel):
+    id: uuid.UUID
+    photo_b64: str
+    content_type: str = "image/jpeg"
