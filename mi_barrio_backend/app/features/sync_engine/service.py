@@ -71,11 +71,12 @@ async def process_sync_push(tenant_uuid: uuid.UUID, request: SyncPushRequest, db
             clean_payload = {
                 "id": rec_id, 
                 "tenant_id": tenant_uuid, 
-                "updated_at": client_updated_at
+                "updated_at": client_updated_at  # Mantiene el objeto datetime nativo
             }
             
             for key, val in payload.items():
-                if hasattr(model_class, key) and key not in ["id", "tenant_id"]:
+                # Evitar que 'updated_at' del payload (string) sobreescriba el datetime
+                if hasattr(model_class, key) and key not in ["id", "tenant_id", "updated_at"]:
                     if key.endswith("_id") and isinstance(val, str):
                         try:
                             val = uuid.UUID(val)
@@ -85,7 +86,7 @@ async def process_sync_push(tenant_uuid: uuid.UUID, request: SyncPushRequest, db
             
             new_record = model_class(**clean_payload)
             db.add(new_record)
-        
+            
         processed_ids.append(rec_id_str)
 
     # Confirmar todos los cambios en bloque para máxima velocidad (esencial en hackathons)
