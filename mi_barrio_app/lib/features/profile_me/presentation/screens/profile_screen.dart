@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/barrio_context/tenant_session.dart';
+import '../../../../core/sync_manager/pending_changes.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../../auth_barrio/presentation/providers/auth_provider.dart';
 import '../../data/profile_local_storage.dart';
@@ -105,6 +106,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  /// Si hay cambios sin sincronizar, pide confirmación antes de cerrar sesión.
+  Future<void> _logout() async {
+    final n = await PendingChanges.count(TenantSession.instance.tenantId);
+    final aviso = PendingChanges.logoutWarning(n);
+    if (aviso != null) {
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Cambios sin sincronizar'),
+          content: Text(aviso),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Seguir aquí'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Cerrar sesión'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    if (!mounted) return;
+    await ref.read(authProvider.notifier).logout();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -199,7 +231,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: () => ref.read(authProvider.notifier).logout(),
+          key: const ValueKey('logout_button'),
+          onPressed: () => unawaited(_logout()),
           icon: const Icon(Icons.logout_rounded),
           label: const Text('Cerrar sesión'),
         ),

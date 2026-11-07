@@ -1,0 +1,831 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../../core/barrio_context/tenant_session.dart';
+import '../../../../core/database_sqlite/sqlite_database.dart';
+import '../../../../core/database_sqlite/sync_outbox_dao.dart';
+import '../../../../core/sync_manager/sync_coordinator.dart';
+import '../../../../core/ui_kit/app_theme.dart';
+import '../../../../core/ui_kit/star_rating_display.dart';
+import '../../../../core/ui_kit/star_rating_input.dart';
+import '../../../../core/ui_kit/sync_status_chip.dart';
+import '../../data/datasources/endorsements_sqlite_ds.dart';
+import '../../data/datasources/services_remote_ds.dart';
+import '../../data/models/endorsement_model.dart';
+import '../../data/models/service_model.dart';
+
+/// Abre el detalle de un servicio en una hoja inferior.
+Future<void> showServiceDetailSheet(
+  BuildContext context, {
+  required LocalServiceModel service,
+  String? tenantId,
+  String? userId,
+  EndorsementsSqliteDatasource? endorsementsDatasource,
+  ServicesRemoteDatasource? remoteDatasource,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (_) => ServiceDetailSheet(
+      service: service,
+      tenantId: tenantId,
+      userId: userId,
+      endorsementsDatasource: endorsementsDatasource,
+      remoteDatasource: remoteDatasource,
+    ),
+  );
+}
+
+/// Detalle del servicio: mini mapa sin internet, contacto, calificaciones de
+/// vecinos y formulario "Califica este servicio" (estrellas + comentario).
+class ServiceDetailSheet extends StatefulWidget {
+  const ServiceDetailSheet({
+    super.key,
+    required this.service,
+    this.tenantId,
+    this.userId,
+    this.endorsementsDatasource,
+    this.remoteDatasource,
+    this.centerLat,
+    this.centerLng,
+    this.syncPhase,
+  });
+
+  final LocalServiceModel service;
+  final String? tenantId;
+  final String? userId;
+  final EndorsementsSqliteDatasource? endorsementsDatasource;
+
+  /// Calificaciones del servidor. Si es null se usa el real (salvo en tests).
+  final ServicesRemoteDatasource? remoteDatasource;
+
+  /// Centro del barrio para el mini mapa (por defecto, el de la sesión).
+  final double? centerLat;
+  final double? centerLng;
+
+  /// Solo para pruebas: reemplaza al estado global de sincronización.
+  final ValueListenable<SyncPhase>? syncPhase;
+
+  static const saveKey = ValueKey('service_rating_save');
+  static const commentKey = ValueKey('service_rating_comment');
+  static const mapKey = ValueKey('service_mini_map');
+  static const maxComment = 140;
+
+  @override
+  State<ServiceDetailSheet> createState() => _ServiceDetailSheetState();
+}
+
+class _Contact {
+  const _Contact({this.name, this.phone, this.whatsapp});
+
+  final String? name;
+  final String? phone;
+  final String? whatsapp;
+
+  bool get isEmpty =>
+      (phone == null || phone!.isEmpty) &&
+      (whatsapp == null || whatsapp!.isEmpty);
+}
+
+class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
+  static const _maxShownRatings = 30;
+
+  late final String _tenantId;
+  late final String _userId;
+  late final EndorsementsSqliteDatasource _ds;
+  late final ValueListenable<SyncPhase> _phase;
+  late final StreamSubscription<String> _queueSubscription;
+  final TextEditingController _comment = TextEditingController();
+
+  List<EndorsementModel> _endorsements = const [];
+  EndorsementModel? _mine;
+  _Contact? _contact;
+  int _stars = 0;
+  bool _touched = false;
+  bool _saving = false;
+  bool _loadingList = true;
+  String? _notice;
+  String? _error;
+  int _loadVersion = 0;
+
+  bool get _isOwn => widget.service.providerUserId == _userId;
+
+  bool get _hasChanges {
+    final savedStars = _mine?.rating ?? 0;
+    final savedComment = _mine?.shortComment ?? '';
+    return _stars != savedStars || _comment.text.trim() != savedComment;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _tenantId = widget.tenantId ?? TenantSession.instance.tenantId;
+    _userId = widget.userId ?? TenantSession.instance.userId;
+    _ds = widget.endorsementsDatasource ?? EndorsementsSqliteDatasource();
+    _phase = widget.syncPhase ?? SyncCoordinator.instance.phase;
+    _phase.addListener(_onSyncChanged);
+    _queueSubscription = SyncOutboxDao.onQueued.listen((tenantId) {
+      if (tenantId == _tenantId) unawaited(_load());
+    });
+    _comment.addListener(() {
+      if (mounted) setState(() {});
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_load(loadContact: true));
+      unawaited(_refreshFromServer());
+    });
+  }
+
+  @override
+  void dispose() {
+    _phase.removeListener(_onSyncChanged);
+    unawaited(_queueSubscription.cancel());
+    _comment.dispose();
+    super.dispose();
+  }
+
+  void _onSyncChanged() {
+    if (_phase.value == SyncPhase.idle || _phase.value == SyncPhase.error) {
+      unawaited(_load());
+    }
+  }
+
+  /// Pide las calificaciones al servidor (se guardan en SQLite) y recarga la
+  /// lista. Sin red o con error, se queda con lo guardado en el teléfono.
+  Future<void> _refreshFromServer() async {
+    try {
+      final remote = widget.remoteDatasource ??
+          (Platform.environment.containsKey('FLUTTER_TEST')
+              ? null
+              : ServicesRemoteDatasource());
+      if (remote == null) return;
+      await remote.fetchEndorsements(
+        tenantId: _tenantId,
+        serviceId: widget.service.id,
+      );
+      if (mounted) await _load();
+    } catch (_) {
+      // Sin red: la lista local ya está en pantalla.
+    }
+  }
+
+  Future<_Contact?> _loadContact() async {
+    try {
+      final db = await LocalDatabase.instance.database;
+      final rows = await db.query(
+        'users',
+        columns: ['full_name', 'phone', 'whatsapp'],
+        where: 'id = ? AND tenant_id = ? AND is_deleted = 0',
+        whereArgs: [widget.service.providerUserId, _tenantId],
+        limit: 1,
+      );
+      if (rows.isEmpty) return null;
+      final row = rows.first;
+      return _Contact(
+        name: row['full_name'] as String?,
+        phone: row['phone'] as String?,
+        whatsapp: row['whatsapp'] as String?,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _load({bool loadContact = false}) async {
+    final version = ++_loadVersion;
+    try {
+      final list = await _ds.listForService(_tenantId, widget.service.id);
+      final mine = await _ds.myRating(widget.service.id, _userId);
+      final contact = loadContact ? await _loadContact() : _contact;
+      if (!mounted || version != _loadVersion) return;
+      if (!_touched) {
+        final text = mine?.shortComment ?? '';
+        if (_comment.text != text) _comment.text = text;
+      }
+      setState(() {
+        _endorsements = list;
+        _mine = mine;
+        _contact = contact;
+        _loadingList = false;
+        if (!_touched) _stars = mine?.rating ?? 0;
+      });
+    } catch (error) {
+      if (!mounted || version != _loadVersion) return;
+      setState(() {
+        _loadingList = false;
+        _error = 'No se pudieron cargar las calificaciones.';
+      });
+    }
+  }
+
+  Future<void> _onStarTap(int value) async {
+    if (_saving) return;
+    // Tocar la misma estrella otra vez quita la calificación.
+    if (value == _stars) {
+      await _clearRating();
+      return;
+    }
+    setState(() {
+      _stars = value;
+      _touched = true;
+      _notice = null;
+      _error = null;
+    });
+  }
+
+  Future<void> _clearRating() async {
+    final hadSaved = _mine != null;
+    setState(() {
+      _saving = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      if (hadSaved) {
+        await _ds.removeEndorsement(
+          tenantId: _tenantId,
+          serviceId: widget.service.id,
+          endorserUserId: _userId,
+        );
+      }
+      _touched = false;
+      _stars = 0;
+      _comment.clear();
+      await _load();
+      if (!mounted) return;
+      setState(() {
+        _notice = hadSaved
+            ? 'Quitaste tu calificación. Se sincronizará en segundo plano.'
+            : null;
+      });
+    } on ArgumentError catch (error) {
+      if (!mounted) return;
+      setState(() => _error = '${error.message}');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudo quitar la calificación. Intenta de nuevo.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_saving || _stars == 0 || !_hasChanges) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+      _notice = null;
+    });
+    try {
+      await _ds.rateService(
+        tenantId: _tenantId,
+        serviceId: widget.service.id,
+        endorserUserId: _userId,
+        rating: _stars,
+        shortComment: _comment.text,
+      );
+      _touched = false;
+      await _load();
+      if (!mounted) return;
+      setState(() {
+        _notice =
+            'Calificación guardada en tu teléfono. Se sincronizará en segundo plano.';
+      });
+    } on ArgumentError catch (error) {
+      if (!mounted) return;
+      setState(() => _error = '${error.message}');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudo guardar. Intenta de nuevo.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final texto = Theme.of(context).textTheme;
+    final keyboard = MediaQuery.of(context).viewInsets.bottom;
+    final service = widget.service;
+    final publisher = service.publisherName?.trim();
+    final title = (publisher != null && publisher.isNotEmpty)
+        ? '$publisher, ${service.title}'
+        : service.title;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(context, title),
+            const SizedBox(height: 12),
+            StarRatingDisplay(
+              rating: service.ratingAvg ?? 0,
+              count: service.endorsementsCount,
+            ),
+            if (service.description.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(service.description, style: texto.bodyLarge),
+            ],
+            const SizedBox(height: 20),
+            Text('Dónde está', style: texto.titleMedium),
+            const SizedBox(height: 8),
+            _buildMap(context),
+            const SizedBox(height: 20),
+            Text('Contacto', style: texto.titleMedium),
+            const SizedBox(height: 8),
+            _buildContact(context),
+            const SizedBox(height: 20),
+            if (_isOwn)
+              Text(
+                'Este es tu servicio. Tus vecinos pueden calificarlo.',
+                style: texto.bodyLarge,
+              )
+            else
+              _buildRatingForm(context),
+            const SizedBox(height: 20),
+            _buildRatingsList(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, String title) {
+    final esquema = Theme.of(context).colorScheme;
+    final texto = Theme.of(context).textTheme;
+    final colores = MiBarrioColors.of(context);
+    final service = widget.service;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: esquema.primaryContainer,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            _categoryIcon(service.category),
+            size: 28,
+            color: esquema.onPrimaryContainer,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                ServiceCategory.labels[service.category] ?? service.category,
+                style: texto.labelLarge?.copyWith(
+                  color: esquema.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(title, style: texto.titleLarge),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  SyncStatusChip.fromPending(service.isPending),
+                  if (service.isAvailableInEmergency)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colores.urgencyHigh.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.health_and_safety,
+                            size: 20,
+                            color: colores.urgencyHigh,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'En emergencias',
+                            style: texto.labelLarge?.copyWith(
+                              color: colores.urgencyHigh,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'Cerrar',
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMap(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final texto = Theme.of(context).textTheme;
+    final colores = MiBarrioColors.of(context);
+    final centerLat = widget.centerLat ?? TenantSession.instance.centerLat;
+    final centerLng = widget.centerLng ?? TenantSession.instance.centerLng;
+    final meters = _distanceMeters(
+      centerLat,
+      centerLng,
+      widget.service.lat,
+      widget.service.lng,
+    );
+    final distance = _formatDistance(meters);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          label: 'Mapa del barrio. El servicio está a $distance del centro.',
+          image: true,
+          excludeSemantics: true,
+          child: SizedBox(
+            key: ServiceDetailSheet.mapKey,
+            height: 160,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _MiniMapPainter(
+                serviceLat: widget.service.lat,
+                serviceLng: widget.service.lng,
+                centerLat: centerLat,
+                centerLng: centerLng,
+                background: colores.accentSoft,
+                grid: esquema.outline.withValues(alpha: 0.35),
+                serviceColor: colores.brand,
+                centerColor: esquema.onSurfaceVariant,
+                ring: esquema.surface,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 16,
+          runSpacing: 4,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.place_rounded, size: 20, color: colores.brand),
+                const SizedBox(width: 4),
+                Text('Servicio', style: texto.bodyMedium),
+              ],
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.radio_button_unchecked_rounded,
+                  size: 20,
+                  color: esquema.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text('Centro del barrio', style: texto.bodyMedium),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text('A $distance del centro del barrio.', style: texto.bodyMedium),
+      ],
+    );
+  }
+
+  Widget _buildContact(BuildContext context) {
+    final texto = Theme.of(context).textTheme;
+    final contact = _contact;
+    if (contact == null || contact.isEmpty) {
+      return Text(
+        'Todavía no hay un número de contacto en tu teléfono para este vecino.',
+        style: texto.bodyLarge,
+      );
+    }
+    final lines = <(String, String)>[
+      if (contact.phone != null && contact.phone!.isNotEmpty)
+        ('Teléfono', contact.phone!),
+      if (contact.whatsapp != null && contact.whatsapp!.isNotEmpty)
+        ('WhatsApp', contact.whatsapp!),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (contact.name != null && contact.name!.isNotEmpty)
+          Text(contact.name!, style: texto.bodyLarge),
+        for (final (label, value) in lines)
+          Row(
+            children: [
+              Expanded(child: Text('$label: $value', style: texto.bodyLarge)),
+              TextButton.icon(
+                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  await Clipboard.setData(ClipboardData(text: value));
+                  messenger
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(content: Text('$label copiado.')),
+                    );
+                },
+                icon: const Icon(Icons.copy_rounded),
+                label: const Text('Copiar'),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRatingForm(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final texto = Theme.of(context).textTheme;
+    final canSave = !_saving && _stars > 0 && _hasChanges;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Califica este servicio', style: texto.titleMedium),
+        const SizedBox(height: 8),
+        Center(
+          child: StarRatingInput(
+            value: _stars,
+            onChanged: _saving ? null : (value) => unawaited(_onStarTap(value)),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Toca la misma estrella otra vez para quitar tu calificación.',
+          style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: ServiceDetailSheet.commentKey,
+          controller: _comment,
+          maxLength: ServiceDetailSheet.maxComment,
+          maxLines: 3,
+          minLines: 1,
+          textCapitalization: TextCapitalization.sentences,
+          onChanged: (_) => _touched = true,
+          style: texto.bodyLarge,
+          decoration: InputDecoration(
+            labelText: 'Comentario (opcional)',
+            hintText: 'Ej: Llegó a la hora y dejó todo limpio',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                key: ServiceDetailSheet.saveKey,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(56),
+                ),
+                onPressed: canSave ? () => unawaited(_save()) : null,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : const Icon(Icons.star_rounded),
+                label: const Text('Guardar calificación'),
+              ),
+            ),
+            if (_mine != null) ...[
+              const SizedBox(width: 12),
+              SyncStatusChip.fromPending(_mine!.isPending),
+            ],
+          ],
+        ),
+        if (_notice != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(_notice!, style: texto.bodyMedium),
+            ),
+          ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                _error!,
+                style: texto.bodyMedium?.copyWith(color: esquema.error),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRatingsList(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final texto = Theme.of(context).textTheme;
+    final shown = _endorsements.take(_maxShownRatings).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Calificaciones de vecinos', style: texto.titleMedium),
+        const SizedBox(height: 8),
+        if (_loadingList)
+          Text('Cargando calificaciones…', style: texto.bodyLarge)
+        else if (shown.isEmpty)
+          Text('Todavía nadie calificó este servicio.', style: texto.bodyLarge)
+        else
+          for (final item in shown)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        item.endorserUserId == _userId ? 'Tú' : 'Un vecino',
+                        style: texto.labelLarge,
+                      ),
+                      if (item.rating != null)
+                        StarRatingDisplay(
+                          rating: item.rating!.toDouble(),
+                          size: 20,
+                          showValue: false,
+                        )
+                      else
+                        Text('Visto bueno', style: texto.bodyMedium),
+                      if (item.endorserUserId == _userId)
+                        SyncStatusChip.fromPending(item.isPending),
+                    ],
+                  ),
+                  if (item.shortComment != null &&
+                      item.shortComment!.trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        item.shortComment!,
+                        style: texto.bodyLarge?.copyWith(
+                          color: esquema.onSurface,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        if (_endorsements.length > _maxShownRatings)
+          Text(
+            'Y ${_endorsements.length - _maxShownRatings} calificaciones más.',
+            style: texto.bodyMedium,
+          ),
+      ],
+    );
+  }
+}
+
+IconData _categoryIcon(String category) => switch (category) {
+  ServiceCategory.gasfiteria => Icons.plumbing_rounded,
+  ServiceCategory.carpinteria => Icons.carpenter_rounded,
+  ServiceCategory.electricidad => Icons.electrical_services_rounded,
+  ServiceCategory.clases => Icons.school_rounded,
+  ServiceCategory.paseadorMascotas => Icons.pets_rounded,
+  ServiceCategory.cerrajeria => Icons.key_rounded,
+  ServiceCategory.soporteEmergencia => Icons.health_and_safety_rounded,
+  _ => Icons.handyman_rounded,
+};
+
+/// Distancia aproximada en metros entre dos puntos (fórmula de haversine).
+double _distanceMeters(double lat1, double lng1, double lat2, double lng2) {
+  const earth = 6371000.0;
+  double rad(double deg) => deg * math.pi / 180;
+  final dLat = rad(lat2 - lat1);
+  final dLng = rad(lng2 - lng1);
+  final a =
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(rad(lat1)) *
+          math.cos(rad(lat2)) *
+          math.sin(dLng / 2) *
+          math.sin(dLng / 2);
+  return 2 * earth * math.asin(math.min(1, math.sqrt(a)));
+}
+
+String _formatDistance(double meters) {
+  if (meters < 1000) return '${meters.round()} m';
+  return '${(meters / 1000).toStringAsFixed(1)} km';
+}
+
+/// Mini mapa dibujado a mano: no necesita internet ni mapas externos.
+/// El centro del barrio queda en el medio y el servicio se ubica a escala.
+class _MiniMapPainter extends CustomPainter {
+  const _MiniMapPainter({
+    required this.serviceLat,
+    required this.serviceLng,
+    required this.centerLat,
+    required this.centerLng,
+    required this.background,
+    required this.grid,
+    required this.serviceColor,
+    required this.centerColor,
+    required this.ring,
+  });
+
+  final double serviceLat;
+  final double serviceLng;
+  final double centerLat;
+  final double centerLng;
+  final Color background;
+  final Color grid;
+  final Color serviceColor;
+  final Color centerColor;
+  final Color ring;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(14)),
+      Paint()..color = background,
+    );
+
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(rect, const Radius.circular(14)));
+    final gridPaint = Paint()
+      ..color = grid
+      ..strokeWidth = 1;
+    for (var i = 1; i < 4; i++) {
+      final x = size.width * i / 4;
+      final y = size.height * i / 4;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final midLat = (serviceLat + centerLat) / 2;
+    final dx = (serviceLng - centerLng) * math.cos(midLat * math.pi / 180);
+    final dy = serviceLat - centerLat;
+    final span = math.max(math.max(dx.abs(), dy.abs()) * 2.4, 0.0016);
+    final scale = math.min(size.width, size.height) / span;
+    final center = Offset(size.width / 2, size.height / 2);
+    final service = center + Offset(dx * scale, -dy * scale);
+
+    canvas.drawLine(
+      center,
+      service,
+      Paint()
+        ..color = centerColor.withValues(alpha: 0.6)
+        ..strokeWidth = 2,
+    );
+    canvas.drawCircle(
+      center,
+      8,
+      Paint()
+        ..color = centerColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+    canvas.drawCircle(service, 13, Paint()..color = ring);
+    canvas.drawCircle(service, 10, Paint()..color = serviceColor);
+    canvas.drawCircle(service, 4, Paint()..color = ring);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _MiniMapPainter old) =>
+      old.serviceLat != serviceLat ||
+      old.serviceLng != serviceLng ||
+      old.centerLat != centerLat ||
+      old.centerLng != centerLng ||
+      old.background != background ||
+      old.grid != grid ||
+      old.serviceColor != serviceColor ||
+      old.centerColor != centerColor ||
+      old.ring != ring;
+}
