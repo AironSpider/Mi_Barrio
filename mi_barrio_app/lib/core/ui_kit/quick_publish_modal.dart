@@ -18,12 +18,12 @@ class QuickPublishData {
 
 typedef QuickPublishCallback = Future<void> Function(QuickPublishData data);
 
-Future<void> showQuickPublishModal(
+Future<bool> showQuickPublishModal(
   BuildContext context, {
   required bool isEmergencyMode,
   required QuickPublishCallback onPublish,
 }) {
-  return showModalBottomSheet<void>(
+  return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
@@ -32,7 +32,7 @@ Future<void> showQuickPublishModal(
       isEmergencyMode: isEmergencyMode,
       onPublish: onPublish,
     ),
-  );
+  ).then((published) => published ?? false);
 }
 
 class _Categoria {
@@ -123,7 +123,7 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
         ),
       );
       if (!mounted) return;
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (_) {
       if (!mounted) return;
       setState(() {

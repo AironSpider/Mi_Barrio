@@ -177,6 +177,44 @@ void main() {
       );
     });
 
+    test(
+      'push: un rechazo del servidor queda pendiente y reporta el motivo',
+      () async {
+        final post = await publish();
+        final client = MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'success': true,
+              'processed_count': 0,
+              'server_timestamp': '2026-11-07T15:00:00Z',
+              'processed_record_ids': <String>[],
+              'rejected': [
+                {
+                  'record_id': post.id,
+                  'target_table': 'solidarity_posts',
+                  'reason': 'autor no registrado',
+                },
+              ],
+            }),
+            200,
+          ),
+        );
+
+        final result = await SyncWorker(
+          baseUrl: 'http://api',
+          client: client,
+        ).pushLocalChanges(tenant);
+
+        expect(result.success, isFalse);
+        expect(result.message, contains('autor no registrado'));
+        expect((await (await db()).query('sync_outbox')).length, 1);
+        expect(
+          (await (await db()).query('solidarity_posts')).single['sync_status'],
+          'PENDING',
+        );
+      },
+    );
+
     test('push: el perfil se sincroniza sin permitir asignar un rol', () async {
       final profile = await ProfileLocalStorage().saveProfile(
         userId: me,

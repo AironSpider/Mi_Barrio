@@ -8,8 +8,8 @@ import '../models/service_model.dart';
 /// Acceso offline al directorio de oficios. Funciona 100% sin internet.
 class ServicesSqliteDatasource {
   ServicesSqliteDatasource({LocalDatabase? database, SyncOutboxDao? outboxDao})
-      : _db = database ?? LocalDatabase.instance,
-        _outboxDao = outboxDao ?? SyncOutboxDao();
+    : _db = database ?? LocalDatabase.instance,
+      _outboxDao = outboxDao ?? SyncOutboxDao();
 
   final LocalDatabase _db;
   final SyncOutboxDao _outboxDao;
@@ -34,8 +34,11 @@ class ServicesSqliteDatasource {
     RecordValidation.uuid(providerUserId, 'providerUserId');
     RecordValidation.oneOf(category, ServiceCategory.values, 'category');
     RecordValidation.coordinates(lat, lng);
-    final cleanTitle = RecordValidation.requiredText(title, 'title',
-        maxLength: LocalServiceModel.maxTitleLength);
+    final cleanTitle = RecordValidation.requiredText(
+      title,
+      'title',
+      maxLength: LocalServiceModel.maxTitleLength,
+    );
 
     final service = LocalServiceModel(
       id: LocalId.generate(),
@@ -45,8 +48,12 @@ class ServicesSqliteDatasource {
       title: cleanTitle,
       description: description.trim(),
       isAvailableInEmergency: isAvailableInEmergency,
-      publisherType: publisherType?.trim().isEmpty ?? true ? null : publisherType!.trim(),
-      publisherName: publisherName?.trim().isEmpty ?? true ? null : publisherName!.trim(),
+      publisherType: publisherType?.trim().isEmpty ?? true
+          ? null
+          : publisherType!.trim(),
+      publisherName: publisherName?.trim().isEmpty ?? true
+          ? null
+          : publisherName!.trim(),
       lat: lat,
       lng: lng,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
@@ -68,7 +75,7 @@ class ServicesSqliteDatasource {
     return service;
   }
 
-  /// Oficios del barrio: mejor promedio de estrellas primero, luego más calificados.
+  /// Oficios locales del barrio, ordenados por cantidad de recomendaciones.
   Future<List<LocalServiceModel>> getServices(
     String tenantId, {
     String? category,
@@ -87,7 +94,7 @@ class ServicesSqliteDatasource {
       LocalServiceModel.table,
       where: where.toString(),
       whereArgs: args,
-      orderBy: 'COALESCE(rating_avg, 0) DESC, endorsements_count DESC, title ASC',
+      orderBy: 'endorsements_count DESC, COALESCE(rating_avg, 0) DESC, title COLLATE NOCASE ASC, id ASC',
     );
     return rows.map(LocalServiceModel.fromSqlite).toList();
   }

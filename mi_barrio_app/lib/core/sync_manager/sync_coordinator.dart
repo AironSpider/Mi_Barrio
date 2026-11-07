@@ -28,6 +28,7 @@ class SyncCoordinator {
 
   /// Fecha de la última sincronización exitosa (push + pull).
   final ValueNotifier<DateTime?> lastSuccess = ValueNotifier(null);
+  final ValueNotifier<String?> lastError = ValueNotifier(null);
 
   SyncWorker? _worker;
   bool Function() _isOnline = () => true;
@@ -53,18 +54,20 @@ class SyncCoordinator {
   }) async {
     await stop();
     _worker = worker ?? SyncWorker(baseUrl: ApiConfig.baseUrl);
-    _isOnline = isOnline ??
+    lastError.value = null;
+    _isOnline =
+        isOnline ??
         () => ConnectivityMonitor.instance.current == ConnectionStatus.online;
     if (tenantId != null) _tenantId = tenantId;
 
     _connectionSub = (connectionChanges ?? ConnectivityMonitor.instance.stream)
         .listen((status) {
-      if (status == ConnectionStatus.online) {
-        syncNow();
-      } else {
-        phase.value = SyncPhase.offline;
-      }
-    });
+          if (status == ConnectionStatus.online) {
+            syncNow();
+          } else {
+            phase.value = SyncPhase.offline;
+          }
+        });
 
     _queueSub = SyncOutboxDao.onQueued.listen((_) {
       _debounce?.cancel();
@@ -98,11 +101,15 @@ class SyncCoordinator {
         final pull = await worker.pullRemoteChanges(tenant);
         if (push.success && pull.success) {
           phase.value = SyncPhase.idle;
+          lastError.value = null;
           lastSuccess.value = DateTime.now();
         } else {
           phase.value = SyncPhase.error;
+          lastError.value = push.success ? pull.message : push.message;
           if (kDebugMode) {
-            debugPrint('[Sync] push: ${push.message ?? 'ok'} | pull: ${pull.message ?? 'ok'}');
+            debugPrint(
+              '[Sync] push: ${push.message ?? 'ok'} | pull: ${pull.message ?? 'ok'}',
+            );
           }
         }
       } while (_runAgain);

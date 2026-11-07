@@ -68,7 +68,7 @@ class MainNavigationShell extends StatefulWidget {
   });
 
   final bool isEmergencyMode;
-  final VoidCallback? onPublish;
+  final Future<bool> Function()? onPublish;
   final ValueChanged<bool>? onEmergencyPreviewChanged;
 
   static const emergencyBannerKey = ValueKey('emergency_banner');
@@ -81,10 +81,13 @@ class MainNavigationShell extends StatefulWidget {
 class _MainNavigationShellState extends State<MainNavigationShell> {
   int _index = 0;
 
-  void _handlePublish() {
+  Future<void> _handlePublish() async {
     final onPublish = widget.onPublish;
     if (onPublish != null) {
-      onPublish();
+      final published = await onPublish();
+      if (published && mounted && _index != 1) {
+        setState(() => _index = 1);
+      }
       return;
     }
     ScaffoldMessenger.of(context)

@@ -1,6 +1,8 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
+
 import '../database_sqlite/sqlite_database.dart';
 import '../database_sqlite/sync_outbox_dao.dart';
 
@@ -52,14 +54,36 @@ class SyncWorker {
   /// lo que falte queda en null / valor por defecto.
   static const _pullColumns = <String, List<String>>{
     'solidarity_posts': [
-      'id', 'tenant_id', 'author_user_id', 'flow_type', 'modality', 'title',
-      'description', 'is_emergency_context', 'status', 'lat', 'lng',
-      'is_deleted', 'updated_at',
+      'id',
+      'tenant_id',
+      'author_user_id',
+      'flow_type',
+      'modality',
+      'title',
+      'description',
+      'is_emergency_context',
+      'status',
+      'lat',
+      'lng',
+      'is_deleted',
+      'updated_at',
     ],
     'local_services': [
-      'id', 'tenant_id', 'provider_user_id', 'category', 'title', 'description',
-      'is_available_in_emergency', 'endorsements_count', 'rating_avg',
-      'publisher_type', 'publisher_name', 'lat', 'lng', 'is_deleted', 'updated_at',
+      'id',
+      'tenant_id',
+      'provider_user_id',
+      'category',
+      'title',
+      'description',
+      'is_available_in_emergency',
+      'endorsements_count',
+      'rating_avg',
+      'publisher_type',
+      'publisher_name',
+      'lat',
+      'lng',
+      'is_deleted',
+      'updated_at',
     ],
   };
 
@@ -71,7 +95,7 @@ class SyncWorker {
   };
 
   SyncWorker({required this.baseUrl, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   Future<void> synchronize(String tenantId) async {
     await pushLocalChanges(tenantId);
@@ -120,10 +144,17 @@ class SyncWorker {
       final confirmed = ((data['processed_record_ids'] as List?) ?? [])
           .map((e) => e.toString())
           .toSet();
+      final rejected = ((data['rejected'] as List?) ?? const [])
+          .whereType<Map>()
+          .map((item) => item['reason']?.toString())
+          .whereType<String>()
+          .where((reason) => reason.isNotEmpty)
+          .toList(growable: false);
 
       // Solo lo que el servidor confirmo.
-      final toClean =
-          pending.where((m) => confirmed.contains(m['record_id'])).toList();
+      final toClean = pending
+          .where((m) => confirmed.contains(m['record_id']))
+          .toList();
 
       final db = await LocalDatabase.instance.database;
       await db.transaction((txn) async {
@@ -157,9 +188,14 @@ class SyncWorker {
       });
 
       return PushResult(
-        success: true,
+        success: toClean.length == pending.length,
         sentCount: pending.length,
         processedCount: toClean.length,
+        message: toClean.length == pending.length
+            ? null
+            : rejected.isNotEmpty
+            ? 'El servidor rechazó ${pending.length - toClean.length} cambio(s): ${rejected.join('; ')}'
+            : 'El servidor no confirmó ${pending.length - toClean.length} cambio(s)',
       );
     } catch (e) {
       // Sin internet o timeout: los datos locales quedan intactos.
@@ -180,8 +216,9 @@ class SyncWorker {
         where: 'tenant_id = ?',
         whereArgs: [tenantId],
       );
-      final lastPulled =
-          state.isNotEmpty ? state.first['last_pulled_at'] as String? : null;
+      final lastPulled = state.isNotEmpty
+          ? state.first['last_pulled_at'] as String?
+          : null;
 
       final uri = Uri.parse('$baseUrl/api/v1/sync/pull').replace(
         queryParameters: lastPulled != null ? {'since': lastPulled} : null,
@@ -215,14 +252,13 @@ class SyncWorker {
             columns: ['id'],
             where: 'tenant_id = ? AND sync_status = ?',
             whereArgs: [tenantId, 'PENDING'],
-          ))
-              .map((r) => r['id'])
-              .toSet();
+          )).map((r) => r['id']).toSet();
 
           for (final raw in rows) {
             final record = raw as Map<String, dynamic>;
             // Seguridad multi-tenant: nunca guardar datos de otro barrio.
-            if (record['tenant_id'] != null && record['tenant_id'] != tenantId) {
+            if (record['tenant_id'] != null &&
+                record['tenant_id'] != tenantId) {
               continue;
             }
             if (pendingIds.contains(record['id'])) {
@@ -238,20 +274,26 @@ class SyncWorker {
                   : value;
             }
             row['sync_status'] = 'SYNCED';
-            await txn.insert(table, row,
-                conflictAlgorithm: ConflictAlgorithm.replace);
+            await txn.insert(
+              table,
+              row,
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
             saved++;
           }
         }
 
-        await txn.insert(
-          'sync_state',
-          {'tenant_id': tenantId, 'last_pulled_at': serverTimestamp},
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        await txn.insert('sync_state', {
+          'tenant_id': tenantId,
+          'last_pulled_at': serverTimestamp,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       });
 
-      return PullResult(success: true, savedCount: saved, skippedPendingCount: skipped);
+      return PullResult(
+        success: true,
+        savedCount: saved,
+        skippedPendingCount: skipped,
+      );
     } catch (e) {
       // Sin conexion: el usuario sigue usando sus datos locales sin error.
       return PullResult(success: false, message: e.toString());

@@ -112,7 +112,10 @@ void main() {
         theme: AppTheme.day(),
         home: MainNavigationShell(
           isEmergencyMode: false,
-          onPublish: () => calls++,
+          onPublish: () async {
+            calls++;
+            return true;
+          },
         ),
       ),
     );
@@ -120,6 +123,7 @@ void main() {
     await tester.tap(find.byKey(QuickPublishFab.fabKey));
     await tester.pump();
     expect(calls, 1);
+    expect(find.text('Muro solidario'), findsOneWidget);
   });
 
   for (final emergency in [false, true]) {
