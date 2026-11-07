@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, Float, Text
+from sqlalchemy import Boolean, String, Float, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
@@ -16,3 +16,17 @@ class VulnerableReport(Base, BarrioBaseMixin):
     lng: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="PENDIENTE_APOYO", nullable=False)
     helper_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+class SupportGroup(Base, BarrioBaseMixin):
+    """Grupo de apoyo del barrio (brigada, albergue, olla común...). Lo administra la junta."""
+    __tablename__ = "support_groups"
+
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    group_type: Mapped[str] = mapped_column(String(30), nullable=False)  # PRIMEROS_AUXILIOS, RESCATE, etc.
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    meeting_point: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coordinator_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

@@ -18,7 +18,7 @@ from app.features.auth_barrio.models import Tenant
 from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService
 from app.features.proximity_services.service import rating_avg_by_service
-from app.features.emergency_support.models import VulnerableReport
+from app.features.emergency_support.models import SupportGroup, VulnerableReport
 
 router = APIRouter(prefix="/api/v1/sync", tags=["Sync Engine"])
 
@@ -32,6 +32,8 @@ PULL_MODELS = {
     "solidarity_posts": SolidarityPost,
     "local_services": LocalService,
     "vulnerable_reports": VulnerableReport,
+    # Solo bajada: los grupos los registra la junta (POST /emergency/support-groups).
+    "support_groups": SupportGroup,
 }
 
 

@@ -7,7 +7,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from dotenv import load_dotenv
 from app.features.proximity_services.models import LocalService, NeighborEndorsement
-from app.features.emergency_support.models import VulnerableReport
+from app.features.emergency_support.models import SupportGroup, VulnerableReport
 
 from alembic import context
 

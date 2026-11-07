@@ -23,3 +23,6 @@ VulnerabilityType = Literal[
     "VIVIENDA_AFECTADA", "FALTA_SUMINISTROS",
 ]
 ReportStatus = Literal["PENDIENTE_APOYO", "VECINOS_EN_CAMINO", "ATENDIDO"]
+SupportGroupType = Literal[
+    "PRIMEROS_AUXILIOS", "RESCATE", "ALBERGUE", "ALIMENTOS", "LOGISTICA", "SALUD_MENTAL",
+]
