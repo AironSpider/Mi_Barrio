@@ -25,6 +25,13 @@ async def create_platform_admin() -> None:
         raise ValueError("Las contraseñas no coinciden")
 
     async with async_session_factory() as db:
+        existing_platform_admin = await db.scalar(
+            select(PlatformAdmin.id).limit(1)
+        )
+        if existing_platform_admin is not None:
+            raise ValueError(
+                "Ya existe un SUPER_ADMIN. El bootstrap inicial solo se ejecuta una vez."
+            )
         email_in_users = await db.scalar(select(User.id).where(User.email == email))
         email_in_admins = await db.scalar(
             select(PlatformAdmin.id).where(PlatformAdmin.email == email)

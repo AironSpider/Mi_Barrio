@@ -8,11 +8,21 @@ el repositorio: cambiarla invalida los tokens emitidos anteriormente.
 
 ```bash
 cd ../mi_barrio_backend
-export MI_BARRIO_JWT_SECRET='<clave local de al menos 32 caracteres>'
+# Solo si todavía no tienes .env:
+cp .env.example .env
+# Edita .env: reemplaza las credenciales de DATABASE_URL.
+openssl rand -hex 32
+# Pega el resultado en MI_BARRIO_JWT_SECRET dentro de .env.
 .venv/bin/alembic upgrade head
 .venv/bin/python -m app.features.auth_barrio.platform_admin_bootstrap
 .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
+
+El backend y Alembic leen `.env` al arrancar. Cada integrante del equipo crea
+su propio `.env` local; se comparte el `.env.example`, nunca las contraseñas ni
+la clave JWT. La base de datos también impone unicidad al código de invitación;
+si ocurre una colisión al generar uno, el backend lo regenera antes de guardar
+el barrio.
 
 El comando de bootstrap solicita nombre, correo y contraseña sin almacenarlos en
 el código. Ejecútalo manualmente una sola vez para crear el SUPER_ADMIN inicial.
@@ -39,6 +49,9 @@ define la URL de la computadora accesible desde el teléfono, por ejemplo:
 ```bash
 flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000
 ```
+
+`API_BASE_URL` es una variable de compilación de Flutter, no se carga desde el
+`.env` del backend.
 
 ## Pruebas
 

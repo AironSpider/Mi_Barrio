@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+from dotenv import load_dotenv
 from app.features.proximity_services.models import LocalService, NeighborEndorsement
 from app.features.emergency_support.models import VulnerableReport
 
@@ -16,6 +17,7 @@ from app.features.auth_barrio.models import Tenant, User
 from app.features.solidarity_network.models import SolidarityPost
 
 config = context.config
+load_dotenv()
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

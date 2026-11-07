@@ -188,6 +188,20 @@ def _new_join_code() -> str:
     return "MB-" + "".join(secrets.choice(alphabet) for _ in range(10))
 
 
+def _is_join_code_collision(error: IntegrityError) -> bool:
+    cause = error.orig
+    while cause is not None:
+        constraint_name = getattr(cause, "constraint_name", None)
+        if constraint_name is None:
+            constraint_name = getattr(
+                getattr(cause, "diag", None), "constraint_name", None
+            )
+        if constraint_name == "ix_tenants_join_code":
+            return True
+        cause = getattr(cause, "orig", None)
+    return False
+
+
 @platform_router.post(
     "/neighborhoods",
     response_model=NeighborhoodAdminCreated,
@@ -241,18 +255,32 @@ async def create_neighborhood(
                 status_code=422,
                 detail="Se requieren coordenadas para crear un barrio nuevo",
             )
-        join_code = _new_join_code()
-        while await db.scalar(select(Tenant.id).where(Tenant.join_code == join_code)):
-            join_code = _new_join_code()
-        tenant = Tenant(
-            id=uuid.uuid4(),
-            name=(payload.neighborhood_name or "").strip(),
-            join_code=join_code,
-            center_lat=payload.center_lat,
-            center_lng=payload.center_lng,
-            is_emergency_active=False,
-        )
-        db.add(tenant)
+        tenant = None
+        for _ in range(5):
+            tenant = Tenant(
+                id=uuid.uuid4(),
+                name=(payload.neighborhood_name or "").strip(),
+                join_code=_new_join_code(),
+                center_lat=payload.center_lat,
+                center_lng=payload.center_lng,
+                is_emergency_active=False,
+            )
+            db.add(tenant)
+            try:
+                await db.flush()
+                break
+            except IntegrityError as exc:
+                await db.rollback()
+                if not _is_join_code_collision(exc):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="No se pudo crear el barrio por un conflicto de datos",
+                    ) from exc
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail="No se pudo generar un código de barrio único; vuelve a intentar",
+            )
 
     neighborhood_admin = User(
         id=uuid.uuid4(),

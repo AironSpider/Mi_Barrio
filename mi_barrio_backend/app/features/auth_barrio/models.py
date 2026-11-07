@@ -20,6 +20,7 @@ class Tenant(Base):
 class User(Base, BarrioBaseMixin):
     __tablename__ = "users"
     __table_args__ = (
+        Index("ix_users_email_unique", "email", unique=True),
         Index(
             "uq_users_active_neighborhood_admin",
             "tenant_id",
@@ -38,7 +39,7 @@ class User(Base, BarrioBaseMixin):
     home_lng: Mapped[float] = mapped_column(Float, nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="VECINO", nullable=False)
     tutorial_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    email: Mapped[str | None] = mapped_column(String(254), unique=True, nullable=True)
+    email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
 
