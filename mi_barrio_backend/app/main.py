@@ -1,9 +1,17 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.exceptions import custom_http_exception_handler, validation_exception_handler
+from app.core.database import engine
+from app.core.exceptions import (
+    custom_http_exception_handler,
+    unhandled_exception_handler,
+    validation_exception_handler,
+)
 from app.core.tenant_middleware import TenantMiddleware
 
 from app.features.sync_engine.router import router as sync_router
@@ -29,20 +37,55 @@ app.add_middleware(TenantMiddleware)
 
 app.add_exception_handler(StarletteHTTPException, custom_http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(sync_router)
 app.include_router(solidarity_router)
 app.include_router(services_router)
 app.include_router(emergency_router)
 
+
+def _expected_migration() -> str | None:
+    """Última migración del repo (head de Alembic)."""
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        ini = Path(__file__).resolve().parent.parent / "alembic.ini"
+        return ScriptDirectory.from_config(Config(str(ini))).get_current_head()
+    except Exception:
+        return None
+
+
+EXPECTED_MIGRATION = _expected_migration()
+
+
 @app.get("/health", tags=["System"])
-def health_check():
+async def health_check():
+    """Comprueba de verdad la base de datos y si faltan migraciones."""
+    db_status, db_migration, hint = "ok", None, None
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+            db_migration = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar()
+    except Exception as exc:
+        db_status = f"error: {type(exc).__name__}: {exc}"[:200]
+        hint = "Revisa que PostgreSQL esté encendido y la variable DATABASE_URL (usuario y contraseña)."
+
+    migrations_ok = db_migration is not None and db_migration == EXPECTED_MIGRATION
+    if db_status == "ok" and not migrations_ok:
+        hint = "Faltan migraciones: ejecuta `alembic upgrade head`."
+
+    healthy = db_status == "ok" and migrations_ok
     return {
-        "success": True,
-        "error": None,
+        "success": healthy,
+        "error": None if healthy else hint,
         "data": {
             "status": "online",
             "system": "Mi Barrio API",
-            "db_connection": "active"
-        }
+            "db_connection": "active" if db_status == "ok" else db_status,
+            "db_migration": db_migration,
+            "expected_migration": EXPECTED_MIGRATION,
+            "migrations_up_to_date": migrations_ok,
+        },
     }

@@ -24,13 +24,14 @@ async def push_offline_mutations(
     except ValueError:
         raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
 
-    processed_ids = await process_sync_push(tenant_uuid, request, db)
+    processed_ids, rejected = await process_sync_push(tenant_uuid, request, db)
 
     return SyncPushResponse(
         success=True,
         processed_count=len(processed_ids),
         server_timestamp=datetime.now(timezone.utc),
         processed_record_ids=processed_ids,
+        rejected=rejected,
     )
 
 @router.get("/pull", response_model=SyncPullResponse)

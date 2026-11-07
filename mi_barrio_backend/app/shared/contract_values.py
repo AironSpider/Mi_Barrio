@@ -1,0 +1,25 @@
+"""Valores permitidos del contrato de datos (memoria técnica, sección 4.2).
+
+Se usan como `Literal` en los schemas de creación: Swagger los muestra como
+lista desplegable y su ejemplo por defecto ya es válido (antes guardaba "string").
+Los schemas de respuesta siguen aceptando `str` para no romper con datos viejos.
+"""
+from typing import Literal
+
+FlowType = Literal["SOLICITO_AYUDA", "OFREZCO_AYUDA"]
+Modality = Literal[
+    "PRESTAMO_HERRAMIENTA", "AYUDA_TEMPORAL", "DONACION_MATERIAL",
+    "INTERCAMBIO_HABILIDAD", "MOVILIDAD_SOLIDARIA", "RECURSO_CRITICO",
+]
+PostStatus = Literal["DISPONIBLE", "EN_COORDINACION", "COMPLETADO"]
+ServiceCategory = Literal[
+    "GASFITERIA", "CARPINTERIA", "ELECTRICIDAD", "PASEADOR_MASCOTAS",
+    "CLASES", "CERRAJERIA", "SOPORTE_EMERGENCIA",
+]
+PublisherType = Literal["PERSONA_NATURAL", "EMPRENDEDOR", "BODEGA", "MINI_EMPRESA", "EMPRESA"]
+UrgencyLevel = Literal["CRITICA", "ALTA", "MEDIA"]
+VulnerabilityType = Literal[
+    "ADULTO_MAYOR_SOLO", "MOVILIDAD_REDUCIDA", "ATENCION_MEDICA",
+    "VIVIENDA_AFECTADA", "FALTA_SUMINISTROS",
+]
+ReportStatus = Literal["PENDIENTE_APOYO", "VECINOS_EN_CAMINO", "ATENDIDO"]

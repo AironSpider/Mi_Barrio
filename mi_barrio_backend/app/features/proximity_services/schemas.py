@@ -3,6 +3,8 @@ from typing import Optional
 from datetime import datetime
 import uuid
 
+from app.shared.contract_values import PublisherType, ServiceCategory
+
 class LocalServiceBase(BaseModel):
     provider_user_id: uuid.UUID
     category: str = Field(..., max_length=50)
@@ -15,7 +17,12 @@ class LocalServiceBase(BaseModel):
     publisher_name: Optional[str] = Field(None, max_length=120)
 
 class LocalServiceCreate(LocalServiceBase):
-    pass
+    # Solo valores del contrato: Swagger los muestra como lista y rechaza "string".
+    category: ServiceCategory
+    title: str = Field(..., min_length=1, max_length=200, examples=["Don Pedro, gasfitero"])
+    publisher_type: Optional[PublisherType] = None
+    lat: float = Field(..., ge=-90, le=90, examples=[-5.1945])
+    lng: float = Field(..., ge=-180, le=180, examples=[-80.6328])
 
 class LocalServiceResponse(LocalServiceBase):
     model_config = ConfigDict(from_attributes=True)

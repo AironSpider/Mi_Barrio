@@ -63,14 +63,21 @@ async def _validate_endorsement(payload: dict, tenant_uuid: uuid.UUID, db: Async
     return service_id
 
 
-async def process_sync_push(tenant_uuid: uuid.UUID, request: SyncPushRequest, db: AsyncSession) -> list[str]:
+async def process_sync_push(
+    tenant_uuid: uuid.UUID, request: SyncPushRequest, db: AsyncSession
+) -> tuple[list[str], list[dict]]:
     """Procesa el lote del celular.
 
     Cada mutación va en su propio SAVEPOINT: si una falla (dato inválido, servicio
     inexistente, etc.) se descarta solo esa y el resto del lote se guarda igual.
-    La que falló no vuelve en processed_record_ids, así que queda en la cola del celular.
+    La que falló no vuelve en processed_record_ids, así que queda en la cola del celular;
+    el motivo se informa en `rejected`.
     """
     processed_ids = []
+    rejected: list[dict] = []
+
+    def reject(reason: str) -> None:
+        rejected.append({"record_id": item.record_id, "target_table": item.target_table, "reason": reason})
     touched_services: set[uuid.UUID] = set()
 
     for item in request.mutations:
@@ -81,10 +88,12 @@ async def process_sync_push(tenant_uuid: uuid.UUID, request: SyncPushRequest, db
         try:
             rec_id = uuid.UUID(rec_id_str)
         except ValueError:
+            reject("record_id no es un UUID válido")
             continue
 
         model_class = TABLE_MODEL_MAP.get(table_name)
         if not model_class:
+            reject(f"tabla '{table_name}' aún no se sincroniza (soportadas: {', '.join(TABLE_MODEL_MAP)})")
             continue
 
         try:
@@ -126,6 +135,7 @@ async def process_sync_push(tenant_uuid: uuid.UUID, request: SyncPushRequest, db
                 await db.flush()
         except Exception as exc:  # noqa: BLE001 - un ítem malo no debe tumbar el lote
             logger.warning("Sync: se descartó %s/%s: %s", table_name, rec_id_str, exc)
+            reject(f"{type(exc).__name__}: {exc}"[:200])
             continue
 
         processed_ids.append(rec_id_str)
@@ -135,4 +145,4 @@ async def process_sync_push(tenant_uuid: uuid.UUID, request: SyncPushRequest, db
         await recalculate_service_rating(db, service_id)
 
     await db.commit()
-    return processed_ids
+    return processed_ids, rejected
