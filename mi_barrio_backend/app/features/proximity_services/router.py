@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db_session
-from app.core.tenant_middleware import get_current_tenant_id
+from app.core.tenant_middleware import get_current_principal, get_current_tenant_id
 from app.features.proximity_services.models import LocalService, NeighborEndorsement
 from app.features.proximity_services.schemas import (
     LocalServiceCreate,
@@ -30,11 +30,17 @@ def _to_response(service: LocalService, rating_avg: float | None) -> dict:
 async def create_service(
     payload: LocalServiceCreate,
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    if principal["role"] != "COMERCIANTE":
+        raise HTTPException(status_code=403, detail="Solo un comerciante puede ofrecer servicios")
+    provider_id = uuid.UUID(principal["sub"])
+    if payload.provider_user_id != provider_id:
+        raise HTTPException(status_code=403, detail="No puedes publicar servicios a nombre de otro usuario")
     new_service = LocalService(
         tenant_id=tenant_uuid,
-        provider_user_id=payload.provider_user_id,
+        provider_user_id=provider_id,
         category=payload.category,
         title=payload.title,
         description=payload.description,
@@ -85,6 +91,7 @@ async def list_services(
 async def endorse_service(
     payload: NeighborEndorsementCreate,
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Registra un visto bueno y, opcionalmente, estrellas, comentario y foto.
@@ -99,12 +106,13 @@ async def endorse_service(
 
     if not service:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
-    if service.provider_user_id == payload.endorser_user_id:
+    endorser_id = uuid.UUID(principal["sub"])
+    if service.provider_user_id == endorser_id:
         raise HTTPException(status_code=400, detail="No puedes calificar tu propio servicio")
 
     stmt_endorsement = select(NeighborEndorsement).where(
         NeighborEndorsement.service_id == payload.service_id,
-        NeighborEndorsement.endorser_user_id == payload.endorser_user_id,
+        NeighborEndorsement.endorser_user_id == endorser_id,
     )
     endorsement = (await db.execute(stmt_endorsement)).scalar_one_or_none()
 
@@ -112,7 +120,7 @@ async def endorse_service(
         endorsement = NeighborEndorsement(
             tenant_id=tenant_uuid,
             service_id=payload.service_id,
-            endorser_user_id=payload.endorser_user_id,
+            endorser_user_id=endorser_id,
         )
         db.add(endorsement)
     endorsement.rating = payload.rating

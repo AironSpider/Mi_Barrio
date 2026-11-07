@@ -36,6 +36,8 @@ dependencies:
   http: ^1.2.2
   connectivity_plus: ^6.1.0
   geolocator: ^14.0.2
+  flutter_riverpod: ^2.6.1
+  shared_preferences: ^2.3.2
   cupertino_icons: ^1.0.8
   sqflite_common_ffi: ^2.4.5
   

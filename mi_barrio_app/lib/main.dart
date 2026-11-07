@@ -1,15 +1,23 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'core/barrio_context/emergency_mode_provider.dart';
+import 'core/barrio_context/tenant_session.dart';
 import 'core/network/connectivity_monitor.dart';
 import 'core/sync_manager/sync_coordinator.dart';
 import 'core/ui_kit/app_theme.dart';
 import 'core/ui_kit/main_navigation_shell.dart';
 import 'core/ui_kit/quick_publish_launcher.dart';
+import 'features/auth_barrio/presentation/providers/auth_provider.dart';
+import 'features/auth_barrio/domain/entities/user_entity.dart';
+import 'features/auth_barrio/presentation/screens/login_screen.dart';
+import 'features/auth_barrio/presentation/screens/neighborhood_admin_screen.dart';
+import 'features/auth_barrio/presentation/screens/platform_admin_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,8 +30,7 @@ Future<void> main() async {
   // Dev 2: estado de emergencia guardado + sincronización automática
   // (al abrir, al volver internet, tras cada publicación y cada 60 s).
   await EmergencyModeProvider.instance.load();
-  await SyncCoordinator.instance.start();
-  runApp(const MiBarrioApp());
+  runApp(const ProviderScope(child: MiBarrioApp()));
 }
 
 class MiBarrioApp extends StatefulWidget {
@@ -70,18 +77,69 @@ class _MiBarrioAppState extends State<MiBarrioApp> {
       title: 'Mi Barrio',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.of(isEmergency: _isEmergencyMode),
-      home: Builder(
-        builder: (context) => MainNavigationShell(
-          isEmergencyMode: _isEmergencyMode,
-          onPublish: () => QuickPublishLauncher.open(
-            context,
-            isEmergencyMode: _isEmergencyMode,
-          ),
-          onEmergencyPreviewChanged: kDebugMode
-              ? (value) => setState(() => _isEmergencyMode = value)
-              : null,
-        ),
+      home: _AuthGate(
+        isEmergencyMode: _isEmergencyMode,
+        onEmergencyPreviewChanged: kDebugMode
+            ? (value) => setState(() => _isEmergencyMode = value)
+            : null,
       ),
+    );
+  }
+}
+
+class _AuthGate extends ConsumerWidget {
+  const _AuthGate({
+    required this.isEmergencyMode,
+    required this.onEmergencyPreviewChanged,
+  });
+
+  final bool isEmergencyMode;
+  final ValueChanged<bool>? onEmergencyPreviewChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(authProvider, (previous, next) {
+      final user = next.user;
+      if (user != null) {
+        if (user.role != UserRole.superAdmin && user.tenantId != null) {
+          TenantSession.instance.applyAuthenticatedUser(
+            authenticatedTenantId: user.tenantId!,
+            authenticatedUserId: user.id,
+            authenticatedTenantName: user.tenantName ?? '',
+            authenticatedRole: user.role.apiValue,
+            authenticatedCenterLat: user.centerLat ?? 0,
+            authenticatedCenterLng: user.centerLng ?? 0,
+          );
+        }
+        if (user.role == UserRole.vecino || user.role == UserRole.comerciante) {
+          unawaited(SyncCoordinator.instance.start(syncImmediately: true));
+        } else {
+          unawaited(SyncCoordinator.instance.stop());
+        }
+      } else if (next.status == AuthStatus.unauthenticated ||
+          next.status == AuthStatus.error) {
+        TenantSession.instance.clearAuthenticatedUser();
+        unawaited(SyncCoordinator.instance.stop());
+      }
+    });
+
+    final auth = ref.watch(authProvider);
+    if (auth.status == AuthStatus.loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (auth.user == null) return const LoginScreen();
+    if (auth.user!.role == UserRole.superAdmin) {
+      return PlatformAdminScreen(user: auth.user!);
+    }
+    if (auth.user!.role == UserRole.adminBarrio) {
+      return NeighborhoodAdminScreen(user: auth.user!);
+    }
+
+    return MainNavigationShell(
+      isEmergencyMode: isEmergencyMode,
+      onPublish: () =>
+          QuickPublishLauncher.open(context, isEmergencyMode: isEmergencyMode),
+      onEmergencyPreviewChanged: onEmergencyPreviewChanged,
     );
   }
 }

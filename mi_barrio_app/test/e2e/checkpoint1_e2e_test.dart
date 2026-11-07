@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:mi_barrio_app/core/barrio_context/tenant_session.dart';
+import 'package:mi_barrio_app/core/auth/auth_session_store.dart';
 import 'package:mi_barrio_app/core/database_sqlite/sqlite_database.dart';
 import 'package:mi_barrio_app/core/network/connectivity_monitor.dart';
 import 'package:mi_barrio_app/core/sync_manager/sync_coordinator.dart';
@@ -15,13 +16,15 @@ import 'package:mi_barrio_app/features/proximity_services/data/models/service_mo
 import 'package:mi_barrio_app/features/solidarity_network/data/datasources/solidarity_sqlite_ds.dart';
 import 'package:mi_barrio_app/features/solidarity_network/data/models/solidarity_post_model.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 /// Checkpoint 1 de punta a punta contra el backend REAL (FastAPI + PostgreSQL):
 /// publicar sin red → PENDING → vuelve internet → la fila está en PostgreSQL
 /// con el mismo UUID.
 ///
-/// Requiere el backend levantado. Si no responde, la prueba se salta.
+/// Requiere backend, migraciones y secreto JWT configurados. Si faltan,
+/// la prueba de integración se salta.
 ///   flutter test test/e2e --dart-define=API_BASE_URL=http://localhost:8000
 void main() {
   const baseUrl = String.fromEnvironment(
@@ -29,19 +32,71 @@ void main() {
     defaultValue: 'http://localhost:8000',
   );
   const tenant = TenantSession.demoTenantId;
-  const me = TenantSession.demoUserId;
 
   final local = LocalDatabase.instance;
-  var backendUp = false;
+  var backendReady = false;
+  var backendReadinessMessage = 'Backend no disponible';
+  var neighborId = '';
+  var neighborToken = '';
+  var merchantId = '';
+  var merchantToken = '';
+  var providerId = '';
+  var providerToken = '';
+
+  Future<Map<String, String>?> registerUser(String role) async {
+    final email = 'e2e-${const Uuid().v4()}@example.test';
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/v1/auth/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'full_name': 'Usuario E2E',
+        'email': email,
+        'password': 'MiBarrio-e2e-123',
+        'role': role,
+        'join_code': 'BARRIO-01',
+      }),
+    );
+    if (response.statusCode != 201) {
+      backendReadinessMessage =
+          'Autenticación no disponible (HTTP ${response.statusCode})';
+      return null;
+    }
+    final auth = jsonDecode(response.body) as Map<String, dynamic>;
+    final user = auth['user'] as Map<String, dynamic>;
+    return {
+      'id': user['id'] as String,
+      'token': auth['access_token'] as String,
+    };
+  }
 
   setUpAll(() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+    SharedPreferences.setMockInitialValues({});
     try {
       final r = await http
           .get(Uri.parse('$baseUrl/health'))
           .timeout(const Duration(seconds: 3));
-      backendUp = r.statusCode == 200;
+      if (r.statusCode == 200) {
+        final health = jsonDecode(r.body) as Map<String, dynamic>;
+        final healthData = health['data'] as Map<String, dynamic>?;
+        if (healthData?['migrations_up_to_date'] == true) {
+          final neighbor = await registerUser('VECINO');
+          final merchant = await registerUser('COMERCIANTE');
+          final provider = await registerUser('COMERCIANTE');
+          if (neighbor != null && merchant != null && provider != null) {
+            neighborId = neighbor['id']!;
+            neighborToken = neighbor['token']!;
+            merchantId = merchant['id']!;
+            merchantToken = merchant['token']!;
+            providerId = provider['id']!;
+            providerToken = provider['token']!;
+            backendReady = true;
+          }
+        } else {
+          backendReadinessMessage = 'Faltan migraciones de base de datos';
+        }
+      }
     } catch (_) {}
   });
   setUp(() => local.resetForTesting(path: inMemoryDatabasePath));
@@ -51,10 +106,11 @@ void main() {
   });
 
   test('publicar sin red y reconectar sube la fila a PostgreSQL', () async {
-    if (!backendUp) {
-      markTestSkipped('Backend no disponible en $baseUrl');
+    if (!backendReady) {
+      markTestSkipped('$backendReadinessMessage en $baseUrl');
       return;
     }
+    await AuthSessionStore.instance.save({'token': neighborToken});
 
     final connection = StreamController<ConnectionStatus>.broadcast();
     var online = false;
@@ -70,7 +126,7 @@ void main() {
     // 1. Sin red: se guarda en el teléfono como PENDING.
     final post = await SolidaritySqliteDatasource().publishInThreeClicks(
       tenantId: tenant,
-      authorUserId: me,
+      authorUserId: neighborId,
       modality: SolidarityModality.prestamoHerramienta,
       title: 'Checkpoint 1 ${DateTime.now().toUtc().toIso8601String()}',
       lat: TenantSession.demoCenterLat,
@@ -100,7 +156,10 @@ void main() {
     // 3. El servidor la devuelve desde PostgreSQL con el mismo UUID.
     final r = await http.get(
       Uri.parse('$baseUrl/api/v1/sync/pull'),
-      headers: {'X-Tenant-ID': tenant},
+      headers: {
+        'X-Tenant-ID': tenant,
+        'Authorization': 'Bearer $neighborToken',
+      },
     );
     expect(r.statusCode, 200);
     final remote = (jsonDecode(r.body)['delta']['solidarity_posts'] as List)
@@ -119,20 +178,28 @@ void main() {
   });
 
   test('servicios, calificación y perfil offline suben; el pull trae el promedio', () async {
-    if (!backendUp) {
-      markTestSkipped('Backend no disponible en $baseUrl');
+    if (!backendReady) {
+      markTestSkipped('$backendReadinessMessage en $baseUrl');
       return;
     }
-    final headers = {'Content-Type': 'application/json', 'X-Tenant-ID': tenant};
+    await AuthSessionStore.instance.save({'token': merchantToken});
+    final headers = {
+      'Content-Type': 'application/json',
+      'X-Tenant-ID': tenant,
+      'Authorization': 'Bearer $merchantToken',
+    };
     final stamp = DateTime.now().toUtc().toIso8601String();
 
     // Otro vecino (otro teléfono) publica un oficio que llega al servidor.
-    final otherProvider = const Uuid().v4();
+    final providerHeaders = {
+      ...headers,
+      'Authorization': 'Bearer $providerToken',
+    };
     final created = await http.post(
       Uri.parse('$baseUrl/api/v1/services'),
-      headers: headers,
+      headers: providerHeaders,
       body: jsonEncode({
-        'provider_user_id': otherProvider,
+        'provider_user_id': providerId,
         'category': ServiceCategory.electricidad,
         'title': 'E2E Electricista $stamp',
         'description': 'Creado por otro teléfono',
@@ -172,7 +239,7 @@ void main() {
     // 1. Sin red: publico mi oficio, califico el del vecino y guardo mi perfil.
     final mine = await ServicesSqliteDatasource().insertService(
       tenantId: tenant,
-      providerUserId: me,
+      providerUserId: merchantId,
       category: ServiceCategory.gasfiteria,
       title: 'E2E Gasfitero $stamp',
       lat: TenantSession.demoCenterLat,
@@ -183,16 +250,11 @@ void main() {
     final rating = await EndorsementsSqliteDatasource().rateService(
       tenantId: tenant,
       serviceId: otherServiceId,
-      endorserUserId: me,
+      endorserUserId: merchantId,
       rating: 4,
       shortComment: 'Llegó rápido',
     );
-    final simpleEndorsement = await EndorsementsSqliteDatasource().rateService(
-      tenantId: tenant,
-      serviceId: otherServiceId,
-      endorserUserId: const Uuid().v4(),
-    );
-    final profileUserId = const Uuid().v4();
+    final profileUserId = merchantId;
     await ProfileLocalStorage().saveProfile(
       userId: profileUserId,
       tenantId: tenant,
@@ -212,10 +274,6 @@ void main() {
             as String?;
     expect(await status('local_services', mine.id), 'PENDING');
     expect(await status('neighbor_endorsements', rating.id), 'PENDING');
-    expect(
-      await status('neighbor_endorsements', simpleEndorsement.id),
-      'PENDING',
-    );
     expect(await status('users', profileUserId), 'PENDING');
 
     // 2. Vuelve internet.
@@ -232,10 +290,6 @@ void main() {
     );
     expect(await status('local_services', mine.id), 'SYNCED');
     expect(await status('neighbor_endorsements', rating.id), 'SYNCED');
-    expect(
-      await status('neighbor_endorsements', simpleEndorsement.id),
-      'SYNCED',
-    );
     expect(await status('users', profileUserId), 'SYNCED');
 
     // 3. El servidor tiene mi oficio y recalculó la calificación del vecino.
@@ -249,7 +303,7 @@ void main() {
     expect(remoteMine['publisher_name'], 'Gasfitería E2E');
     final remoteOther = services.firstWhere((s) => s['id'] == otherServiceId);
     expect(remoteOther['rating_avg'], 4.0);
-    expect(remoteOther['endorsements_count'], 2);
+    expect(remoteOther['endorsements_count'], 1);
 
     // 4. El pull dejó en el teléfono el oficio del vecino con su promedio.
     final localOther = await db.query(
@@ -259,12 +313,31 @@ void main() {
     );
     expect(localOther, hasLength(1));
     expect(localOther.first['rating_avg'], 4.0);
-    expect(localOther.first['endorsements_count'], 2);
+    expect(localOther.first['endorsements_count'], 1);
     expect(localOther.first['sync_status'], 'SYNCED');
+
+    // 5. Retirar un visto bueno también se sincroniza y recalcula el contador.
+    await EndorsementsSqliteDatasource().removeEndorsement(
+      tenantId: tenant,
+      serviceId: otherServiceId,
+      endorserUserId: merchantId,
+    );
+    await SyncCoordinator.instance.syncNow();
+    final afterRemoval = await http.get(
+      Uri.parse('$baseUrl/api/v1/services'),
+      headers: headers,
+    );
+    final servicesAfterRemoval = (jsonDecode(afterRemoval.body) as List)
+        .cast<Map<String, dynamic>>();
+    final remoteAfterRemoval = servicesAfterRemoval.firstWhere(
+      (s) => s['id'] == otherServiceId,
+    );
+    expect(remoteAfterRemoval['endorsements_count'], 0);
+    expect(remoteAfterRemoval['rating_avg'], isNull);
 
     // ignore: avoid_print
     print(
-      'Servicios/calificación/perfil OK: ${mine.id}, $otherServiceId, $profileUserId',
+      'Servicios/vistos buenos/perfil OK: ${mine.id}, $otherServiceId, $profileUserId',
     );
     await connection.close();
   });

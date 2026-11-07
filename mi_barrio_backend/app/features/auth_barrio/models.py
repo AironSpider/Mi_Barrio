@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy import String, Float, Boolean
+from datetime import datetime, timezone
+from sqlalchemy import String, Float, Boolean, DateTime, Index, func, text, true
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
@@ -18,6 +19,16 @@ class Tenant(Base):
 
 class User(Base, BarrioBaseMixin):
     __tablename__ = "users"
+    __table_args__ = (
+        Index(
+            "uq_users_active_neighborhood_admin",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text(
+                "role = 'ADMIN_BARRIO' AND is_deleted = false"
+            ),
+        ),
+    )
     
     # Hereda id, tenant_id, created_at, updated_at e is_deleted de BarrioBaseMixin
     full_name: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -27,3 +38,27 @@ class User(Base, BarrioBaseMixin):
     home_lng: Mapped[float] = mapped_column(Float, nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="VECINO", nullable=False)
     tutorial_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    email: Mapped[str | None] = mapped_column(String(254), unique=True, nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
+
+class PlatformAdmin(Base):
+    """Cuenta global, fuera de cualquier barrio."""
+
+    __tablename__ = "platform_admins"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    full_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    email: Mapped[str] = mapped_column(String(254), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(256), nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )

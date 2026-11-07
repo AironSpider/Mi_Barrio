@@ -31,6 +31,8 @@ PROTECTED_FIELDS = {
     "rating_avg",
     "role",
     "server_updated_at",
+    "email",
+    "password_hash",
 }
 
 
@@ -75,7 +77,12 @@ async def _validate_endorsement(payload: dict, tenant_uuid: uuid.UUID, db: Async
 
 
 async def process_sync_push(
-    tenant_uuid: uuid.UUID, request: SyncPushRequest, db: AsyncSession
+    tenant_uuid: uuid.UUID,
+    request: SyncPushRequest,
+    db: AsyncSession,
+    *,
+    principal_id: uuid.UUID,
+    principal_role: str,
 ) -> tuple[list[str], list[dict]]:
     """Procesa el lote del celular.
 
@@ -109,6 +116,18 @@ async def process_sync_push(
 
         try:
             async with db.begin_nested():
+                owner_field = {
+                    SolidarityPost: "author_user_id",
+                    LocalService: "provider_user_id",
+                    NeighborEndorsement: "endorser_user_id",
+                    VulnerableReport: "reporter_user_id",
+                }.get(model_class)
+                if owner_field and _coerce(owner_field, payload.get(owner_field)) != principal_id:
+                    raise ValueError("la mutación no pertenece al usuario autenticado")
+                if model_class is User and rec_id != principal_id:
+                    raise ValueError("no puedes sincronizar el perfil de otro usuario")
+                if model_class is LocalService and principal_role != "COMERCIANTE":
+                    raise ValueError("solo un comerciante puede sincronizar servicios")
                 if model_class is NeighborEndorsement:
                     touched_services.add(await _validate_endorsement(payload, tenant_uuid, db))
 

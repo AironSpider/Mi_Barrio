@@ -10,8 +10,9 @@ Cubre:
 - `GET /api/v1/tenants/current` y `PATCH /api/v1/tenants/emergency-toggle`.
 - El celular no puede escribir `server_updated_at`.
 
-Los datos de prueba van a un barrio aleatorio, salvo el toggle, que usa el barrio
-demo y lo deja como estaba.
+Requiere migraciones aplicadas y MI_BARRIO_JWT_SECRET configurada. Crea una cuenta
+y datos de prueba en el barrio demo; úsalo únicamente con una base de desarrollo.
+El toggle de emergencia se restaura al estado original.
 """
 import json
 import sys
@@ -27,17 +28,27 @@ if hasattr(sys.stdout, "reconfigure"):
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
 DEMO = "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d"
-T = str(uuid.uuid4())  # barrio aislado para las pruebas
-ME = str(uuid.uuid4())
+T = DEMO
+ME = ""
+ACCESS_TOKEN = ""
 LAT, LNG = -5.1945, -80.6328
 
 results: list[tuple[bool, str, str]] = []
 
 
-def call(method: str, path: str, body=None, tenant: str | None = T):
+def call(
+    method: str,
+    path: str,
+    body=None,
+    tenant: str | None = T,
+    *,
+    authenticated: bool = True,
+):
     headers = {"Content-Type": "application/json"}
     if tenant:
         headers["X-Tenant-ID"] = tenant
+    if authenticated and ACCESS_TOKEN:
+        headers["Authorization"] = "Bearer " + ACCESS_TOKEN
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(BASE + path, data=data, method=method, headers=headers)
     try:
@@ -82,11 +93,51 @@ def push(*mutations) -> tuple[int, dict]:
 
 
 def main() -> int:
+    global ACCESS_TOKEN, ME
     s, h = call("GET", "/health", tenant=None)
     if s != 200:
         print(f"Backend no disponible en {BASE} (HTTP {s}). Levanta uvicorn primero.")
         return 2
     check("health: migraciones al día", h["data"].get("migrations_up_to_date") is True, h)
+
+    email = f"auth-test-{uuid.uuid4()}@example.test"
+    password = "MiBarrio-test-123"
+    s, registered = call(
+        "POST",
+        "/api/v1/auth/register",
+        {
+            "full_name": "Usuario de prueba",
+            "email": email,
+            "password": password,
+            "role": "VECINO",
+            "join_code": "BARRIO-01",
+        },
+        tenant=None,
+        authenticated=False,
+    )
+    check("registro devuelve usuario, barrio y token", s == 201 and registered.get("access_token"), registered)
+    if s != 201 or not registered.get("access_token"):
+        print("No se pudo crear la cuenta de prueba; revisa migraciones, secreto y código del barrio.")
+        return 2
+    ACCESS_TOKEN = registered["access_token"]
+    ME = registered["user"]["id"]
+
+    s, logged_in = call(
+        "POST",
+        "/api/v1/auth/login",
+        {"email": email, "password": password},
+        tenant=None,
+        authenticated=False,
+    )
+    check("login devuelve token Bearer", s == 200 and logged_in.get("access_token"), logged_in)
+    s, current = call("GET", "/api/v1/auth/me", tenant=None)
+    check("GET /auth/me valida la sesión", s == 200 and current.get("id") == ME, current)
+    s, unauthenticated = call(
+        "GET", "/api/v1/sync/pull", tenant=T, authenticated=False
+    )
+    check("API protegida rechaza solicitudes sin token", s == 401, unauthenticated)
+    s, wrong_tenant = call("GET", "/api/v1/sync/pull", tenant=str(uuid.uuid4()))
+    check("el token no permite acceder a otro barrio", s == 403, wrong_tenant)
 
     # ── 1. Escenario de la demo con 2 celulares ──
     # Celular B sincroniza (cursor C1).
@@ -132,8 +183,7 @@ def main() -> int:
     rep_ids = [x["id"] for x in pull_r["delta"].get("vulnerable_reports", [])] if s == 200 else []
     check("pull trae vulnerable_reports nuevos", rep.get("id") in rep_ids, pull_r)
     s, other = call("GET", "/api/v1/sync/pull", tenant=str(uuid.uuid4()))
-    check("otro barrio no recibe esos reportes",
-          s == 200 and not other["delta"]["vulnerable_reports"], other)
+    check("el token bloquea el pull de otro barrio", s == 403, other)
     s, att = call("PATCH", f"/api/v1/emergency/{rep.get('id')}/attend?helper_user_id={ME}")
     s, pull_a = call("GET", f"/api/v1/sync/pull?since={pull_r['server_timestamp']}")
     attended = [x for x in pull_a["delta"]["vulnerable_reports"] if x["id"] == rep.get("id")]
@@ -141,21 +191,13 @@ def main() -> int:
           attended and attended[0]["status"] == "VECINOS_EN_CAMINO", pull_a)
 
     # ── 3. Barrio y Modo Emergencia ──
-    s, unknown = call("GET", "/api/v1/sync/pull")
-    check("pull de barrio no registrado: tenant.registered = false",
-          s == 200 and unknown["tenant"]["registered"] is False
-          and unknown["tenant"]["is_emergency_active"] is False, unknown.get("tenant"))
-    s, r = call("GET", "/api/v1/tenants/current")
-    check("GET /tenants/current de barrio no registrado → 404", s == 404, r)
-    s, r = call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": True})
-    check("toggle en barrio no registrado → 404", s == 404, r)
+    s, demo, = call("GET", "/api/v1/tenants/current")
+    check("GET /tenants/current del barrio autenticado", s == 200 and demo["join_code"] == "BARRIO-01", demo)
     s, r = call("PATCH", "/api/v1/tenants/emergency-toggle", {}, tenant=DEMO)
     check("toggle sin cuerpo → 422", s == 422, r)
     s, r = call("GET", "/api/v1/tenants/current", tenant=None)
     check("tenants sin X-Tenant-ID → 400", s == 400, r)
 
-    s, demo = call("GET", "/api/v1/tenants/current", tenant=DEMO)
-    check("GET /tenants/current del barrio demo", s == 200 and demo["join_code"] == "BARRIO-01", demo)
     original = demo.get("is_emergency_active", False) if s == 200 else False
     try:
         s, on = call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": True}, tenant=DEMO)

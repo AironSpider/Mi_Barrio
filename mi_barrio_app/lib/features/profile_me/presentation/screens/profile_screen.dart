@@ -1,22 +1,24 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
+import '../../../auth_barrio/presentation/providers/auth_provider.dart';
 import '../../data/profile_local_storage.dart';
 import '../../data/user_profile_model.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key, this.storage});
 
   final ProfileLocalStorage? storage;
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   late final ProfileLocalStorage _storage;
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -105,6 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final user = ref.watch(authProvider).user;
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -112,6 +115,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
       children: [
         Text('Mi perfil', style: theme.textTheme.headlineSmall),
+        if (user != null) ...[
+          const SizedBox(height: 8),
+          Text('${user.fullName} · ${user.role.label}'),
+          Text(user.tenantName ?? ''),
+        ],
         const SizedBox(height: 4),
         Text(
           'Tus datos personales se guardan en este teléfono y se sincronizan cuando hay conexión.',
@@ -175,6 +183,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 )
               : const Icon(Icons.save_rounded),
           label: const Text('Guardar perfil'),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => ref.read(authProvider.notifier).logout(),
+          icon: const Icon(Icons.logout_rounded),
+          label: const Text('Cerrar sesión'),
         ),
       ],
     );

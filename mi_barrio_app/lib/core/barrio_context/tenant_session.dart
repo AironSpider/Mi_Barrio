@@ -22,4 +22,29 @@ class TenantSession {
   String role = 'VECINO';
 
   bool get isLeader => role == 'LIDER_VECINAL';
+
+  void applyAuthenticatedUser({
+    required String authenticatedTenantId,
+    required String authenticatedUserId,
+    required String authenticatedTenantName,
+    required String authenticatedRole,
+    required double authenticatedCenterLat,
+    required double authenticatedCenterLng,
+  }) {
+    tenantId = authenticatedTenantId;
+    userId = authenticatedUserId;
+    tenantName = authenticatedTenantName;
+    role = authenticatedRole;
+    centerLat = authenticatedCenterLat;
+    centerLng = authenticatedCenterLng;
+  }
+
+  void clearAuthenticatedUser() {
+    tenantId = demoTenantId;
+    userId = demoUserId;
+    tenantName = demoTenantName;
+    role = 'VECINO';
+    centerLat = demoCenterLat;
+    centerLng = demoCenterLng;
+  }
 }

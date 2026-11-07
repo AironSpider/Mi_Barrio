@@ -133,6 +133,9 @@ class SyncCoordinator {
     _queueSub = null;
     _periodic = null;
     _debounce = null;
+    while (_running) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
     _worker = null;
   }
 }

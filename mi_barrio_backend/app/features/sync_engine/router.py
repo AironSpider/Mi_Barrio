@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import uuid
 
 from app.core.database import get_db_session
+from app.core.tenant_middleware import get_current_principal
 from app.features.sync_engine.schemas import (
     SyncPullResponse,
     SyncPushRequest,
@@ -57,11 +58,18 @@ def _serialize(record) -> dict:
 async def push_offline_mutations(
     request: SyncPushRequest,
     x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+    principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
     tenant_uuid = _parse_tenant(x_tenant_id)
 
-    processed_ids, rejected = await process_sync_push(tenant_uuid, request, db)
+    processed_ids, rejected = await process_sync_push(
+        tenant_uuid,
+        request,
+        db,
+        principal_id=uuid.UUID(principal["sub"]),
+        principal_role=principal["role"],
+    )
 
     return SyncPushResponse(
         success=True,

@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.database import get_db_session
 # AQUÍ ESTÁ EL IMPORT QUE FALTABA
-from app.core.tenant_middleware import get_current_tenant_id
+from app.core.tenant_middleware import get_current_principal, get_current_tenant_id
 
 from app.features.emergency_support.models import VulnerableReport
 from app.features.emergency_support.schemas import (
@@ -20,11 +20,15 @@ router = APIRouter(prefix="/api/v1/emergency", tags=["Emergency Support"])
 async def report_vulnerability(
     payload: VulnerableReportCreate,
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    reporter_id = uuid.UUID(principal["sub"])
+    if payload.reporter_user_id != reporter_id:
+        raise HTTPException(status_code=403, detail="No puedes registrar un reporte a nombre de otro usuario")
     new_report = VulnerableReport(
         tenant_id=tenant_uuid,
-        reporter_user_id=payload.reporter_user_id,
+        reporter_user_id=reporter_id,
         urgency_level=payload.urgency_level,
         vulnerability_type=payload.vulnerability_type,
         description=payload.description,
@@ -61,8 +65,8 @@ async def list_emergency_board(
 @router.patch("/{report_id}/attend", response_model=VulnerableReportResponse)
 async def attend_emergency_report(
     report_id: uuid.UUID,
-    helper_user_id: uuid.UUID = Query(...),
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
     stmt = select(VulnerableReport).where(
@@ -77,7 +81,7 @@ async def attend_emergency_report(
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
 
     report.status = "VECINOS_EN_CAMINO"
-    report.helper_user_id = helper_user_id
+    report.helper_user_id = uuid.UUID(principal["sub"])
     report.updated_at = datetime.now(timezone.utc)
     
     await db.commit()

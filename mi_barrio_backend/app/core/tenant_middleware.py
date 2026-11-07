@@ -4,6 +4,8 @@ from fastapi.security import APIKeyHeader
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from app.core.auth_security import decode_access_token
+
 tenant_header_scheme = APIKeyHeader(name="X-Tenant-ID", auto_error=False)
 
 EXEMPT_PATHS = {
@@ -12,6 +14,7 @@ EXEMPT_PATHS = {
     "/redoc",
     "/openapi.json",
 }
+PLATFORM_ADMIN_PREFIX = "/api/v1/platform/"
 
 class TenantMiddleware(BaseHTTPMiddleware):
     """
@@ -23,6 +26,52 @@ class TenantMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if request.url.path.startswith("/api/v1/"):
+            is_public_auth = request.url.path in {
+                "/api/v1/auth/login",
+                "/api/v1/auth/register",
+            }
+            if not is_public_auth:
+                authorization = request.headers.get("Authorization", "")
+                scheme, _, token = authorization.partition(" ")
+                if scheme.lower() != "bearer" or not token:
+                    return JSONResponse(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        headers={"WWW-Authenticate": "Bearer"},
+                        content={
+                            "success": False,
+                            "error": "Se requiere un token Bearer válido",
+                            "data": None,
+                        },
+                    )
+                try:
+                    request.state.auth_claims = decode_access_token(token)
+                except HTTPException as exc:
+                    return JSONResponse(
+                        status_code=exc.status_code,
+                        headers=exc.headers,
+                        content={
+                            "success": False,
+                            "error": exc.detail,
+                            "data": None,
+                        },
+                    )
+
+            if request.url.path.startswith("/api/v1/auth/"):
+                return await call_next(request)
+
+            claims = getattr(request.state, "auth_claims", None)
+            if request.url.path.startswith(PLATFORM_ADMIN_PREFIX):
+                if claims is None or claims.get("role") != "SUPER_ADMIN":
+                    return JSONResponse(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        content={
+                            "success": False,
+                            "error": "Solo el superadministrador puede gestionar barrios",
+                            "data": None,
+                        },
+                    )
+                return await call_next(request)
+
             tenant_id = request.headers.get("X-Tenant-ID")
             if not tenant_id:
                 return JSONResponse(
@@ -41,6 +90,24 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     content={
                         "success": False,
                         "error": "Header 'X-Tenant-ID' debe ser un UUID válido",
+                        "data": None,
+                    },
+                )
+            if claims is not None and claims.get("role") == "SUPER_ADMIN":
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={
+                        "success": False,
+                        "error": "El superadministrador no opera dentro de un barrio",
+                        "data": None,
+                    },
+                )
+            if claims is not None and claims["tenant_id"] != str(request.state.tenant_id):
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={
+                        "success": False,
+                        "error": "El token no pertenece al barrio solicitado",
                         "data": None,
                     },
                 )
@@ -72,3 +139,14 @@ def get_current_tenant_id(
                 detail="Header 'X-Tenant-ID' inválido",
             )
     return tenant_id
+
+
+def get_current_principal(request: Request) -> dict:
+    claims = getattr(request.state, "auth_claims", None)
+    if claims is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Se requiere una sesión Bearer",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return claims

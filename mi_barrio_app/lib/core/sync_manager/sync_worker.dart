@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
 
+import '../auth/auth_session_store.dart';
 import '../database_sqlite/sqlite_database.dart';
 import '../database_sqlite/sync_outbox_dao.dart';
 
@@ -124,6 +125,8 @@ class SyncWorker {
             headers: {
               'Content-Type': 'application/json',
               'X-Tenant-ID': tenantId,
+              if (AuthSessionStore.instance.token case final token?)
+                'Authorization': 'Bearer $token',
             },
             body: jsonEncode({
               'client_sync_timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -225,7 +228,14 @@ class SyncWorker {
       );
 
       final response = await _client
-          .get(uri, headers: {'X-Tenant-ID': tenantId})
+          .get(
+            uri,
+            headers: {
+              'X-Tenant-ID': tenantId,
+              if (AuthSessionStore.instance.token case final token?)
+                'Authorization': 'Bearer $token',
+            },
+          )
           .timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {

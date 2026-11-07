@@ -1,17 +1,52 @@
-# mi_barrio_app
+# Mi Barrio
 
-A new Flutter project.
+## Backend y autenticación
 
-## Getting Started
+Antes de iniciar FastAPI, define una clave JWT estable de al menos 32 caracteres
+y aplica las migraciones. No regeneres la clave en cada inicio ni la guardes en
+el repositorio: cambiarla invalida los tokens emitidos anteriormente.
 
-This project is a starting point for a Flutter application.
+```bash
+cd ../mi_barrio_backend
+export MI_BARRIO_JWT_SECRET='<clave local de al menos 32 caracteres>'
+.venv/bin/alembic upgrade head
+.venv/bin/python -m app.features.auth_barrio.platform_admin_bootstrap
+.venv/bin/uvicorn app.main:app --reload --port 8000
+```
 
-A few resources to get you started if this is your first Flutter project:
+El comando de bootstrap solicita nombre, correo y contraseña sin almacenarlos en
+el código. Ejecútalo manualmente una sola vez para crear el SUPER_ADMIN inicial.
+Desde su pantalla de administración se crean barrios y cuentas ADMIN_BARRIO; el
+sistema genera el código que el administrador comparte con los vecinos y
+comerciantes. El barrio de demostración existente mantiene el código
+`BARRIO-01`; el SUPER_ADMIN también puede asignarle una cuenta administradora
+ingresando ese código.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+La sesión y el token se conservan en el dispositivo. Al cerrar sesión se detiene
+la sincronización autenticada. SQLite en el teléfono guarda los datos offline;
+la creación de barrios, cuentas y códigos vive en PostgreSQL.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Ejecutar Flutter
+
+```bash
+flutter pub get
+flutter run
+```
+
+En Linux/Windows el backend local usa `http://localhost:8000`. Para Android,
+define la URL de la computadora accesible desde el teléfono, por ejemplo:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000
+```
+
+## Pruebas
+
+```bash
+flutter analyze
+flutter test
+```
+
+Las pruebas de `test/e2e` requieren el backend levantado, las migraciones
+actualizadas y `MI_BARRIO_JWT_SECRET` configurada; se omiten cuando esos
+requisitos no están disponibles.
