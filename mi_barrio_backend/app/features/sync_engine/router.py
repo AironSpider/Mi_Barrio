@@ -13,6 +13,7 @@ from app.features.sync_engine.schemas import (
     TenantInfo,
 )
 from app.features.sync_engine.service import process_sync_push
+from app.features.sync_engine.validation import MAX_BATCH
 from app.features.auth_barrio.models import Tenant
 from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService
@@ -62,6 +63,11 @@ async def push_offline_mutations(
     db: AsyncSession = Depends(get_db_session),
 ):
     tenant_uuid = _parse_tenant(x_tenant_id)
+    if len(request.mutations) > MAX_BATCH:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Máximo {MAX_BATCH} cambios por envío; el celular debe enviarlos en partes",
+        )
 
     processed_ids, rejected = await process_sync_push(
         tenant_uuid,

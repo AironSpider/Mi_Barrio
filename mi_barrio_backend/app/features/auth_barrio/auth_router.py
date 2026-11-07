@@ -2,10 +2,12 @@ import uuid
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
+from app.core import rate_limit
 from app.core.auth_security import create_access_token, hash_password, verify_password
 from app.core.database import get_db_session
 from app.features.auth_barrio.models import PlatformAdmin, Tenant, User
@@ -21,6 +23,38 @@ from app.features.auth_barrio.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
+
+# Hash ficticio: se verifica contra él cuando el correo no existe, para que el tiempo
+# de respuesta no revele qué correos están registrados.
+_DUMMY_HASH: str | None = None
+
+
+async def _hash(password: str) -> str:
+    # PBKDF2 (310 000 iteraciones) en un hilo aparte: no congela al resto de pedidos.
+    return await run_in_threadpool(hash_password, password)
+
+
+async def _verify(password: str, stored_hash: str | None) -> bool:
+    global _DUMMY_HASH
+    if stored_hash is None:
+        if _DUMMY_HASH is None:
+            _DUMMY_HASH = await _hash("contrasena-ficticia-para-tiempo-constante")
+        await run_in_threadpool(verify_password, password, _DUMMY_HASH)
+        return False
+    return await run_in_threadpool(verify_password, password, stored_hash)
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "desconocida"
+
+
+def _too_many_attempts(seconds: int) -> HTTPException:
+    minutes = max(1, round(seconds / 60))
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=f"Demasiados intentos fallidos. Vuelve a intentar en {minutes} min.",
+        headers={"Retry-After": str(seconds)},
+    )
 
 
 def _auth_response(
@@ -66,7 +100,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
         tenant_id=tenant.id,
         full_name=payload.full_name.strip(),
         email=email,
-        password_hash=hash_password(payload.password),
+        password_hash=await _hash(payload.password),
         role=payload.role,
         phone="",
         home_lat=tenant.center_lat,
@@ -92,8 +126,16 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db_session)):
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
     email = payload.email.strip().lower()
+    ip = _client_ip(request)
+    wait = rate_limit.retry_after(email, ip)
+    if wait:
+        raise _too_many_attempts(wait)
     platform_admin = await db.scalar(
         select(PlatformAdmin).where(
             PlatformAdmin.email == email,
@@ -101,12 +143,14 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db_session
         )
     )
     if platform_admin is not None:
-        if not verify_password(payload.password, platform_admin.password_hash):
+        if not await _verify(payload.password, platform_admin.password_hash):
+            rate_limit.register_failure(email, ip)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Correo o contraseña incorrectos",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        rate_limit.register_success(email, ip)
         return AuthResponse(
             access_token=create_access_token(
                 user_id=platform_admin.id,
@@ -123,7 +167,8 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db_session
     user = await db.scalar(
         select(User).where(User.email == email, User.is_deleted.is_(False))
     )
-    if user is None or not verify_password(payload.password, user.password_hash):
+    if not await _verify(payload.password, user.password_hash if user else None):
+        rate_limit.register_failure(email, ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo o contraseña incorrectos",
@@ -132,6 +177,7 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db_session
     tenant = await db.get(Tenant, user.tenant_id)
     if tenant is None:
         raise HTTPException(status_code=403, detail="La cuenta ya no pertenece a un barrio activo")
+    rate_limit.register_success(email, ip)
     return _auth_response(user, tenant)
 
 
@@ -287,7 +333,7 @@ async def create_neighborhood(
         tenant_id=tenant.id,
         full_name=payload.admin_full_name.strip(),
         email=email,
-        password_hash=hash_password(payload.admin_password),
+        password_hash=await _hash(payload.admin_password),
         role="ADMIN_BARRIO",
         phone="",
         home_lat=tenant.center_lat,

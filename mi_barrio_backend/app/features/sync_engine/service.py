@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -10,6 +10,7 @@ from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService, NeighborEndorsement
 from app.features.proximity_services.service import recalculate_service_rating
 from app.features.emergency_support.models import VulnerableReport
+from app.features.sync_engine.validation import validate_payload
 
 logger = logging.getLogger("mi_barrio.sync")
 
@@ -34,6 +35,20 @@ PROTECTED_FIELDS = {
     "email",
     "password_hash",
 }
+
+# Dueño de cada tabla: solo él puede crear o modificar sus registros.
+OWNER_FIELD = {
+    SolidarityPost: "author_user_id",
+    LocalService: "provider_user_id",
+    NeighborEndorsement: "endorser_user_id",
+    VulnerableReport: "reporter_user_id",
+}
+
+# Campos que no cambian después de crear el registro (autoría y relación).
+IMMUTABLE_ON_UPDATE = {"author_user_id", "provider_user_id", "endorser_user_id", "reporter_user_id", "service_id"}
+
+# Un celular con la fecha mal configurada (ej. 2099) no puede "congelar" registros.
+MAX_CLOCK_SKEW = timedelta(minutes=5)
 
 
 def _coerce(key: str, val):
@@ -76,6 +91,47 @@ async def _validate_endorsement(payload: dict, tenant_uuid: uuid.UUID, db: Async
     return service_id
 
 
+
+def _client_time(value) -> datetime:
+    """Hora del celular para Last-Write-Wins, nunca más allá de ahora + 5 minutos."""
+    now = datetime.now(timezone.utc)
+    if not value:
+        return now
+    if not isinstance(value, str):
+        raise ValueError("updated_at debe ser una fecha ISO-8601")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return min(parsed, now + MAX_CLOCK_SKEW)
+
+
+async def _apply_help_offer(
+    rec_id: uuid.UUID,
+    tenant_uuid: uuid.UUID,
+    payload: dict,
+    principal_id: uuid.UUID,
+    db: AsyncSession,
+) -> None:
+    """Un vecino que NO es el autor del SOS solo puede decir "voy en camino"."""
+    report = (await db.execute(
+        select(VulnerableReport).where(
+            VulnerableReport.id == rec_id,
+            VulnerableReport.tenant_id == tenant_uuid,
+            VulnerableReport.is_deleted.is_(False),
+        )
+    )).scalar_one_or_none()
+    if report is None:
+        raise ValueError("no puedes crear un pedido de ayuda a nombre de otro vecino")
+    helper = _coerce("helper_user_id", payload.get("helper_user_id"))
+    if payload.get("status") != "VECINOS_EN_CAMINO" or helper != principal_id:
+        raise ValueError("solo puedes marcar que vas en camino a ayudar")
+    if report.status == "ATENDIDO":
+        raise ValueError("este pedido ya fue atendido")
+    report.status = "VECINOS_EN_CAMINO"
+    report.helper_user_id = principal_id
+    report.updated_at = max(report.updated_at, _client_time(payload.get("updated_at")))
+
+
 async def process_sync_push(
     tenant_uuid: uuid.UUID,
     request: SyncPushRequest,
@@ -116,12 +172,20 @@ async def process_sync_push(
 
         try:
             async with db.begin_nested():
-                owner_field = {
-                    SolidarityPost: "author_user_id",
-                    LocalService: "provider_user_id",
-                    NeighborEndorsement: "endorser_user_id",
-                    VulnerableReport: "reporter_user_id",
-                }.get(model_class)
+                validate_payload(table_name, payload)
+                owner_field = OWNER_FIELD.get(model_class)
+
+                # Caso especial: un vecino ofrece ayuda en el SOS de OTRO vecino.
+                # Solo puede marcar VECINOS_EN_CAMINO y ponerse a sí mismo como helper.
+                if (
+                    model_class is VulnerableReport
+                    and _coerce(owner_field, payload.get(owner_field)) != principal_id
+                ):
+                    await _apply_help_offer(rec_id, tenant_uuid, payload, principal_id, db)
+                    await db.flush()
+                    processed_ids.append(rec_id_str)
+                    continue
+
                 if owner_field and _coerce(owner_field, payload.get(owner_field)) != principal_id:
                     raise ValueError("la mutación no pertenece al usuario autenticado")
                 if model_class is User and rec_id != principal_id:
@@ -132,17 +196,21 @@ async def process_sync_push(
                     touched_services.add(await _validate_endorsement(payload, tenant_uuid, db))
 
                 existing_record = await _find_existing(model_class, rec_id, tenant_uuid, payload, db)
+                # El dueño se verifica también en el registro GUARDADO, no solo en el payload:
+                # así nadie edita ni borra lo de otro diciendo "el autor soy yo".
+                if (
+                    existing_record is not None
+                    and owner_field
+                    and getattr(existing_record, owner_field) != principal_id
+                ):
+                    raise ValueError("no puedes modificar un registro de otro usuario")
                 if existing_record is None and model_class is not NeighborEndorsement:
                     # El id ya existe en OTRO barrio: nunca se sobrescribe (aislamiento multi-tenant).
                     taken = await db.scalar(select(model_class.id).where(model_class.id == rec_id))
                     if taken is not None:
                         raise ValueError("este id ya pertenece a otro barrio; genera un UUID nuevo")
 
-                client_updated_str = payload.get("updated_at")
-                if client_updated_str:
-                    client_updated_at = datetime.fromisoformat(client_updated_str.replace("Z", "+00:00"))
-                else:
-                    client_updated_at = datetime.now(timezone.utc)
+                client_updated_at = _client_time(payload.get("updated_at"))
 
                 if existing_record:
                     db_updated_at = existing_record.updated_at
@@ -152,7 +220,11 @@ async def process_sync_push(
                     # Last-Write-Wins: solo sobreescribimos si el celular tiene un dato más nuevo
                     if db_updated_at <= client_updated_at:
                         for key, val in payload.items():
-                            if hasattr(existing_record, key) and key not in PROTECTED_FIELDS:
+                            if (
+                                hasattr(existing_record, key)
+                                and key not in PROTECTED_FIELDS
+                                and key not in IMMUTABLE_ON_UPDATE
+                            ):
                                 setattr(existing_record, key, _coerce(key, val))
                         existing_record.updated_at = client_updated_at
                 else:

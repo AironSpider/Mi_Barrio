@@ -1,10 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
-from app.core.tenant_middleware import get_current_tenant_id
+from app.core.tenant_middleware import get_current_principal, get_current_tenant_id
 from app.features.auth_barrio.schemas import EmergencyToggleRequest, TenantResponse
 from app.features.auth_barrio.service import get_tenant_or_404, set_emergency
 
@@ -24,12 +24,17 @@ async def get_current_tenant(
 async def toggle_emergency(
     payload: EmergencyToggleRequest,
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Activa o desactiva el Modo Emergencia para TODO el barrio.
 
     Los celulares lo reciben en el siguiente pull (`tenant.is_emergency_active`).
-    Limitación conocida: sin login todavía no se puede verificar que quien llama
-    sea LIDER_VECINAL; la app solo muestra este control al líder.
+    Solo el administrador del barrio (ADMIN_BARRIO) puede hacerlo.
     """
+    if principal.get("role") != "ADMIN_BARRIO":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo el administrador del barrio puede activar o desactivar la emergencia",
+        )
     return await set_emergency(db, tenant_uuid, payload.is_emergency_active)

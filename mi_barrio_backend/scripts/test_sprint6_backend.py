@@ -27,8 +27,9 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
-DEMO = "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d"
-T = DEMO
+T = ""  # barrio de prueba propio (se crea en main)
+ADMIN_TOKEN = ""
+JOIN_CODE = ""
 ME = ""
 ACCESS_TOKEN = ""
 LAT, LNG = -5.1945, -80.6328
@@ -40,11 +41,13 @@ def call(
     method: str,
     path: str,
     body=None,
-    tenant: str | None = T,
+    tenant: str | None = "",
     *,
     authenticated: bool = True,
 ):
     headers = {"Content-Type": "application/json"}
+    if tenant == "":
+        tenant = T
     if tenant:
         headers["X-Tenant-ID"] = tenant
     if authenticated and ACCESS_TOKEN:
@@ -93,12 +96,18 @@ def push(*mutations) -> tuple[int, dict]:
 
 
 def main() -> int:
-    global ACCESS_TOKEN, ME
+    global ACCESS_TOKEN, ME, T, ADMIN_TOKEN, JOIN_CODE
     s, h = call("GET", "/health", tenant=None)
     if s != 200:
         print(f"Backend no disponible en {BASE} (HTTP {s}). Levanta uvicorn primero.")
         return 2
     check("health: migraciones al día", h["data"].get("migrations_up_to_date") is True, h)
+
+    # Barrio propio para la prueba: nunca se toca el barrio demo BARRIO-01.
+    from _test_env import isolated_neighborhood
+
+    hood = isolated_neighborhood(BASE, "Prueba Sprint 6")
+    T, ADMIN_TOKEN, JOIN_CODE = hood["tenant_id"], hood["admin_token"], hood["join_code"]
 
     email = f"auth-test-{uuid.uuid4()}@example.test"
     password = "MiBarrio-test-123"
@@ -110,7 +119,7 @@ def main() -> int:
             "email": email,
             "password": password,
             "role": "VECINO",
-            "join_code": "BARRIO-01",
+            "join_code": JOIN_CODE,
         },
         tenant=None,
         authenticated=False,
@@ -192,26 +201,35 @@ def main() -> int:
 
     # ── 3. Barrio y Modo Emergencia ──
     s, demo, = call("GET", "/api/v1/tenants/current")
-    check("GET /tenants/current del barrio autenticado", s == 200 and demo["join_code"] == "BARRIO-01", demo)
-    s, r = call("PATCH", "/api/v1/tenants/emergency-toggle", {}, tenant=DEMO)
+    check("GET /tenants/current del barrio autenticado", s == 200 and demo["join_code"] == JOIN_CODE, demo)
+    s, r = call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": True})
+    check("un VECINO no puede activar la emergencia → 403", s == 403, r)
+    vecino_token = ACCESS_TOKEN
+    ACCESS_TOKEN = ADMIN_TOKEN  # desde aquí actúa el administrador del barrio
+    s, r = call("PATCH", "/api/v1/tenants/emergency-toggle", {})
     check("toggle sin cuerpo → 422", s == 422, r)
     s, r = call("GET", "/api/v1/tenants/current", tenant=None)
     check("tenants sin X-Tenant-ID → 400", s == 400, r)
 
     original = demo.get("is_emergency_active", False) if s == 200 else False
     try:
-        s, on = call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": True}, tenant=DEMO)
-        check("activar emergencia del barrio demo", s == 200 and on["is_emergency_active"] is True, on)
-        s, p = call("GET", "/api/v1/sync/pull?since=2999-01-01T00:00:00Z", tenant=DEMO)
+        s, on = call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": True})
+        check("ADMIN_BARRIO activa la emergencia del barrio", s == 200 and on["is_emergency_active"] is True, on)
+        ACCESS_TOKEN = vecino_token
+        s, p = call("GET", "/api/v1/sync/pull?since=2999-01-01T00:00:00Z")
+        ACCESS_TOKEN = ADMIN_TOKEN
         check("el pull siguiente trae tenant.is_emergency_active = true",
               s == 200 and p["tenant"]["is_emergency_active"] is True and p["tenant"]["registered"], p.get("tenant"))
-        s, off = call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": False}, tenant=DEMO)
+        s, off = call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": False})
         check("desactivar emergencia", s == 200 and off["is_emergency_active"] is False, off)
-        s, p = call("GET", "/api/v1/sync/pull?since=2999-01-01T00:00:00Z", tenant=DEMO)
+        ACCESS_TOKEN = vecino_token
+        s, p = call("GET", "/api/v1/sync/pull?since=2999-01-01T00:00:00Z")
+        ACCESS_TOKEN = ADMIN_TOKEN
         check("el pull siguiente trae tenant.is_emergency_active = false",
               s == 200 and p["tenant"]["is_emergency_active"] is False, p.get("tenant"))
     finally:
-        call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": original}, tenant=DEMO)
+        ACCESS_TOKEN = ADMIN_TOKEN
+        call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": original})
 
     # ── Resumen ──
     print()
