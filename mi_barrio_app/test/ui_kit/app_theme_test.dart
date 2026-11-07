@@ -55,6 +55,32 @@ void main() {
         }
       });
 
+      test('texto legible sobre el fondo del lienzo (no solo sobre tarjetas)', () {
+        final bg = theme.scaffoldBackgroundColor;
+        final c = theme.extension<MiBarrioColors>()!;
+        expect(contrastRatio(s.onSurface, bg), greaterThanOrEqualTo(wcagAA));
+        expect(contrastRatio(s.onSurfaceVariant, bg), greaterThanOrEqualTo(wcagAA));
+        expect(contrastRatio(c.accentText, bg), greaterThanOrEqualTo(wcagAA));
+        expect(contrastRatio(c.accentText, c.accentSoft), greaterThanOrEqualTo(wcagAA));
+        expect(contrastRatio(s.onSurfaceVariant, c.hover), greaterThanOrEqualTo(wcagAA));
+      });
+
+      test('píldoras y chips de estado legibles', () {
+        final c = theme.extension<MiBarrioColors>()!;
+        expect(contrastRatio(c.onPill, c.pill), greaterThanOrEqualTo(wcagAA));
+        expect(contrastRatio(c.syncPending, c.pendingBackground), greaterThanOrEqualTo(wcagAA));
+        expect(contrastRatio(c.syncSynced, c.syncedBackground), greaterThanOrEqualTo(wcagAA));
+        expect(contrastRatio(c.syncFailed, c.failedBackground), greaterThanOrEqualTo(wcagAA));
+        expect(contrastRatio(c.emergencyText, c.emergencySoft), greaterThanOrEqualTo(wcagAA));
+      });
+
+      test('íconos y bordes de marca visibles (mínimo 3:1 para no-texto)', () {
+        final c = theme.extension<MiBarrioColors>()!;
+        for (final color in [c.brand, c.emergencyStripe, c.starFilled, c.starEmpty]) {
+          expect(contrastRatio(color, Colors.white), greaterThanOrEqualTo(3.0));
+        }
+      });
+
       test('texto de cuerpo mínimo 16sp', () {
         expect(theme.textTheme.bodyMedium!.fontSize, greaterThanOrEqualTo(16));
         expect(theme.textTheme.bodyLarge!.fontSize, greaterThanOrEqualTo(16));
@@ -69,5 +95,20 @@ void main() {
         AppTheme.emergency().extension<MiBarrioColors>()!.isEmergency, isTrue);
     expect(AppTheme.of(isEmergency: true).colorScheme.primary,
         AppPalette.emergencyPrimary);
+  });
+
+  test('respeta la paleta del equipo como identidad de cada modo', () {
+    final day = AppTheme.day();
+    final emergency = AppTheme.emergency();
+    expect(day.extension<MiBarrioColors>()!.brand, AppPalette.brandGreen);
+    expect(emergency.extension<MiBarrioColors>()!.brand, AppPalette.brandOrange);
+    expect(day.extension<MiBarrioColors>()!.pill, const Color(0xFF21BCFF));
+    expect(day.extension<MiBarrioColors>()!.onPill, const Color(0xFF0F172A));
+    expect(day.scaffoldBackgroundColor, const Color(0xFFF3F4F6));
+    expect(day.cardTheme.color, const Color(0xFFFFFFFF));
+    expect(day.colorScheme.onSurface, const Color(0xFF1E293B));
+    // Botones: mismo tono que la marca, más oscuro para texto blanco legible.
+    expect(contrastRatio(day.colorScheme.primary, Colors.white), greaterThanOrEqualTo(4.5));
+    expect(contrastRatio(emergency.colorScheme.primary, Colors.white), greaterThanOrEqualTo(4.5));
   });
 }

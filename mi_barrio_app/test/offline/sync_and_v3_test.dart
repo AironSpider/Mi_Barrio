@@ -82,7 +82,7 @@ void main() {
         names,
         containsAll(['neighbor_endorsements', 'users', 'app_settings']),
       );
-      expect(await (await db()).getVersion(), 3);
+      expect(await (await db()).getVersion(), SqliteTables.schemaVersion);
     });
 
     test('un teléfono en v2 sube a v3 sin perder sus oficios', () async {

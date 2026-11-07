@@ -34,8 +34,8 @@ class SyncStatusChip extends StatelessWidget {
       SyncChipStatus.synced => (
         Icons.check_circle_rounded,
         'Sincronizado',
-        AppPalette.orangeText,
-        AppPalette.softBackground,
+        AppPalette.syncSynced,
+        AppPalette.syncedBackground,
       ),
       SyncChipStatus.failed => (
         Icons.error_outline_rounded,

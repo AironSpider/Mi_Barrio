@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/neighborhood_emergency_card.dart';
 
 class NeighborhoodAdminScreen extends ConsumerWidget {
   const NeighborhoodAdminScreen({super.key, required this.user});
@@ -34,6 +35,10 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
           const SizedBox(height: 8),
           Text('Barrio: ${user.tenantName ?? 'Sin barrio'}'),
           const SizedBox(height: 24),
+          if (user.tenantId != null) ...[
+            NeighborhoodEmergencyCard(tenantId: user.tenantId!),
+            const SizedBox(height: 16),
+          ],
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),

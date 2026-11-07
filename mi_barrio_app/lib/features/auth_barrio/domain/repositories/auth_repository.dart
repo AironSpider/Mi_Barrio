@@ -29,4 +29,14 @@ abstract interface class AuthRepository {
     required String tenantId,
     required String userId,
   });
+
+  /// Sesión vencida (401): se conservan los cambios hechos sin internet.
+  Future<void> keepPendingDataFor({
+    required String tenantId,
+    required String userId,
+  });
+
+  /// Tras iniciar sesión: si los pendientes son de otra persona se borran;
+  /// si son de la misma, se conservan para subirlos.
+  Future<void> reconcilePendingData(UserEntity user);
 }

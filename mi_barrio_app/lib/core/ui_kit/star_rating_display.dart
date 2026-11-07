@@ -46,8 +46,8 @@ class StarRatingDisplay extends StatelessWidget {
               _icono(valor, i),
               size: size,
               color: valor >= i - 0.5
-                  ? AppPalette.starFilled
-                  : AppPalette.starEmpty,
+                  ? MiBarrioColors.of(context).starFilled
+                  : MiBarrioColors.of(context).starEmpty,
             ),
           if (showValue) ...[
             const SizedBox(width: 6),

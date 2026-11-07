@@ -84,6 +84,40 @@ class SyncOutboxDao {
     );
   }
 
+  static const _ownerKey = 'pending_outbox_owner';
+
+  /// Recuerda de quién son los cambios pendientes cuando la sesión vence sin
+  /// cerrar sesión a propósito: si vuelve a entrar la MISMA persona, se suben.
+  Future<void> rememberPendingOwner({
+    required String tenantId,
+    required String userId,
+  }) async {
+    final db = await _dbProvider.database;
+    await db.insert('app_settings', {
+      'key': _ownerKey,
+      'value': '$tenantId|$userId',
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<({String tenantId, String userId})?> readPendingOwner() async {
+    final db = await _dbProvider.database;
+    final rows = await db.query(
+      'app_settings',
+      where: 'key = ?',
+      whereArgs: [_ownerKey],
+      limit: 1,
+    );
+    final value = rows.isEmpty ? null : rows.first['value'] as String?;
+    final parts = value?.split('|');
+    if (parts == null || parts.length != 2) return null;
+    return (tenantId: parts[0], userId: parts[1]);
+  }
+
+  Future<void> forgetPendingOwner() async {
+    final db = await _dbProvider.database;
+    await db.delete('app_settings', where: 'key = ?', whereArgs: [_ownerKey]);
+  }
+
   /// Removes only the cached rows and queued mutations owned by this account.
   Future<void> clearUserData({
     required String tenantId,

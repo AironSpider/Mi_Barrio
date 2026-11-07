@@ -134,4 +134,13 @@ class _FakeAuthRepository implements AuthRepository {
     required String tenantId,
     required String userId,
   }) async {}
+
+  @override
+  Future<void> keepPendingDataFor({
+    required String tenantId,
+    required String userId,
+  }) async {}
+
+  @override
+  Future<void> reconcilePendingData(UserEntity user) async {}
 }

@@ -13,7 +13,7 @@ class SqliteTables {
 
   /// Versión actual del esquema. Súbela al agregar tablas o columnas
   /// y añade el paso correspondiente en [migrations].
-  static const int schemaVersion = 3;
+  static const int schemaVersion = 4;
 
   // ── Valores permitidos (idénticos al contrato del backend) ──
   static const syncPending = 'PENDING';
@@ -152,6 +152,30 @@ class SqliteTables {
         'ON sync_outbox (tenant_id, outbox_id)',
   ];
 
+  /// Pedidos de ayuda (SOS). Se guardan al instante sin red (Sprint 8).
+  static const createVulnerableReports = '''
+    CREATE TABLE IF NOT EXISTS vulnerable_reports (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      reporter_user_id TEXT NOT NULL,
+      urgency_level TEXT NOT NULL,
+      vulnerability_type TEXT NOT NULL,
+      description TEXT NOT NULL,
+      lat REAL NOT NULL,
+      lng REAL NOT NULL,
+      status TEXT NOT NULL DEFAULT 'PENDIENTE_APOYO',
+      helper_user_id TEXT,
+      is_deleted INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      sync_status TEXT NOT NULL DEFAULT 'SYNCED'
+    )
+  ''';
+
+  static const indexesV4 = [
+    'CREATE INDEX IF NOT EXISTS idx_reports_tenant '
+        'ON vulnerable_reports (tenant_id, is_deleted, status)',
+  ];
+
   static const indexesV3 = [
     'CREATE INDEX IF NOT EXISTS idx_endorsements_service '
         'ON neighbor_endorsements (tenant_id, service_id, is_deleted)',
@@ -167,17 +191,21 @@ class SqliteTables {
     createSyncOutbox,
     createSyncState,
     createAppSettings,
+    createVulnerableReports,
     ...indexes,
     ...indexesV3,
+    ...indexesV4,
   ];
 
   /// Pasos de actualización: clave = versión destino.
   /// v1 (Sprint 1): solidarity_posts, sync_outbox, sync_state.
   /// v2 (Sprint 2): + local_services + índices.
   /// v3 (Sprint 5): + neighbor_endorsements, users, app_settings.
+  /// v4 (Sprint 8): + vulnerable_reports (SOS sin red).
   static const Map<int, List<String>> migrations = {
     2: [createLocalServices, ...indexes],
     3: [createNeighborEndorsements, createUsers, createAppSettings, ...indexesV3],
+    4: [createVulnerableReports, ...indexesV4],
   };
 
   /// Columnas nuevas en tablas existentes, por versión destino.

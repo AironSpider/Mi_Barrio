@@ -23,12 +23,10 @@ class EmergencyToggle extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         decoration: BoxDecoration(
-          color: value ? AppPalette.emergencyBackground : Colors.white,
+          color: value ? AppPalette.emergencyBackground : AppPalette.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: value
-                ? AppPalette.emergencyStripe
-                : esquema.outline.withValues(alpha: 0.4),
+            color: value ? AppPalette.emergencyStripe : esquema.outlineVariant,
             width: value ? 2 : 1,
           ),
         ),
@@ -45,7 +43,7 @@ class EmergencyToggle extends StatelessWidget {
                     Icons.warning_amber_rounded,
                     size: 28,
                     color: value
-                        ? AppPalette.orangeText
+                        ? AppPalette.emergencyOnPrimaryContainer
                         : esquema.onSurfaceVariant,
                   ),
                   const SizedBox(width: 12),

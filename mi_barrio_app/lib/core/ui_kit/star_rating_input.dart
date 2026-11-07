@@ -59,7 +59,7 @@ class StarRatingInput extends StatelessWidget {
             style: texto.titleMedium?.copyWith(
               color: actual == 0
                   ? esquema.onSurfaceVariant
-                  : AppPalette.orangeText,
+                  : MiBarrioColors.of(context).accentText,
             ),
           ),
         ),
@@ -101,7 +101,9 @@ class _Estrella extends StatelessWidget {
           child: Icon(
             activa ? Icons.star_rounded : Icons.star_outline_rounded,
             size: size,
-            color: activa ? AppPalette.starFilled : AppPalette.starEmpty,
+            color: activa
+                ? MiBarrioColors.of(context).starFilled
+                : MiBarrioColors.of(context).starEmpty,
           ),
         ),
       ),

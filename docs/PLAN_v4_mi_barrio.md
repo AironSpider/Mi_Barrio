@@ -1,41 +1,58 @@
 # PLAN v4 — Mi Barrio (unifica el plan de Adrian + la v3)
 
-**Corte:** sábado 7, 08:30 → **Hora 13.5 de 48**. Entrega: **domingo 8, 19:00**.
-**Regla de equipo:** todos trabajamos en el **mismo sprint**. Nadie avanza al siguiente hasta cerrar el checkpoint del actual. Si alguien termina antes, ayuda o prueba, no adelanta pantallas.
+**Corte:** sábado 7, 15:45 → **Hora 20.7 de 48**. Entrega: **domingo 8, 19:00**.
+**Regla de equipo:** todos trabajamos en el **mismo sprint**. Si alguien termina antes, ayuda o prueba; no adelanta pantallas.
 
 ---
 
-## 🚦 Sprint 6 en curso — Backend (Dev 1) ✅ terminado (sáb 12:30)
+## 🚦 Estado actual (sáb 15:45) — Sprint 8 casi cerrado → luego **Sprint 9**
 
-| Entregable | Estado |
+| Sprint 8 | Estado |
 |---|---|
-| `server_updated_at` (reloj del servidor) en las 5 tablas sincronizadas + migración `b4e8d2c6f913` | ✅ El pull filtra por este campo: **un post creado offline horas antes ahora sí llega a los demás celulares.** `updated_at` sigue siendo del celular y se usa para LWW. |
-| Pull devuelve `tenant` y `vulnerable_reports` | ✅ `"tenant": {"id", "name", "is_emergency_active", "registered"}` + `delta.vulnerable_reports` |
-| `GET /api/v1/tenants/current` y `PATCH /api/v1/tenants/emergency-toggle` (body `{"is_emergency_active": true}`) | ✅ |
-| Barrio demo `BARRIO-01` creado por la migración | ✅ |
-| Pruebas | ✅ `scripts/test_sprint6_backend.py` 22/22 · `smoke_test_api.py` 34/34 · app 60/60 |
+| **Dev 3** (estilo de emergencia, SOS en 3 clics, Mapa por cercanía, tablero humanitario) | ✅ Hecho y probado (capturas en `docs/preview_sprint8/`) |
+| **Dev 2** (tabla local `vulnerable_reports`, SOS sin red, bandera del barrio en el pull, sync 15 s / 60 s) | ✅ Hecho: el SOS se guarda en SQLite + outbox y se sincroniza; la emergencia de la junta llega sola a todos los celulares |
+| **Dev 1** (sync completo de `vulnerable_reports`) | ✅ (ya estaba desde el Sprint 6) |
+| **Dev 1** (`GET /api/v1/emergency/support-groups`) | ❌ **Falta** → única tarea pendiente del Sprint 8 |
 
-**Para Dev 2 (Sprint 8):** en `sync_worker.pullRemoteChanges`, leer `data['tenant']['is_emergency_active']` → `EmergencyModeProvider.instance.setTenantFlag(...)`, y agregar `vulnerable_reports` a `_pullColumns`. La app actual ignora estos campos, así que no se rompe nada.
-**Pendiente Sprint 6:** Dev 2 (`emergency_ranking.dart` + tests, `gps_service.dart`) y Dev 3 (directorio con SQLite, toggle y podio).
+**✅ Checkpoint 2:** el ADMIN_BARRIO activa la emergencia desde su pantalla ("Emergencia del barrio") → en ≤ 60 s todos los vecinos ven la franja naranja, el chip "Emergencia", el botón **Pedir ayuda** y el tablero. En emergencia la app sincroniza cada 15 s.
 
-## ✅ SPRINT 5 CERRADO (sáb 11:30, H16.5) → todos pasamos al **Sprint 6**
+### 🔐 Seguridad (auditoría ofensiva: de 12 a 25 defensas)
+Corregido y probado contra PostgreSQL real:
+- **Sync:** el dueño se valida también en el registro guardado (nadie edita ni borra posts, servicios ni SOS ajenos). Otro vecino solo puede marcar "Voy en camino" en un SOS.
+- **Sync:** mismas validaciones que REST (valores del contrato, lat/lng, largos, foto ≤ 110 KB), máximo **200 cambios por envío** (413) y `updated_at` del celular limitado a **ahora + 5 min**.
+- **Emergencia del barrio:** solo `ADMIN_BARRIO` (403 para vecinos y comerciantes).
+- **Login:** el hash ya no congela el servidor; **máximo 5 intentos fallidos** por correo+IP en 5 min (429); el tiempo de respuesta no revela si un correo existe.
+- **Cuentas borradas o con rol cambiado** dejan de funcionar al instante (antes: 24 h).
+- **App:** si el token vence, **se conservan los cambios hechos sin internet** y se suben al volver a entrar la misma persona; si entra otra persona, se descartan.
+- `.env` fuera del repositorio.
 
-Verificado en la PC de Dandy contra PostgreSQL real: **13 endpoints (40/40 pruebas)**, calificaciones (15/15), sincronización de `users`, y **59/59 tests de la app**, incluido el e2e del Checkpoint 1. Dev 3: card con texto grande corregido y tests actualizados (Adrian). Backend: `main.py` reparado tras el último merge, y `/health` ahora revisa la base de datos y las migraciones.
+⚠️ **Cada uno debe generar su propia `MI_BARRIO_JWT_SECRET`**: la clave vieja quedó en el historial de Git (`de73af9`) y ya no es secreta.
 
-**Antes de empezar el Sprint 6, todos:** `git pull` → `alembic upgrade head` → abrir `http://localhost:8000/health` (debe decir `migrations_up_to_date: true`) → `flutter test`.
-
-## 🚦 Estado del Sprint 5 (actualizado sáb 09:40, H14.7)
-
-| Parte | Estado |
+### 🧪 Cómo verificar (todo en verde al corte)
+| Prueba | Resultado |
 |---|---|
-| **Checkpoint 1** | ✅ **APROBADO contra el backend real:** post creado sin red → `PENDING` → reconexión → fila en PostgreSQL con el mismo UUID (test `test/e2e/checkpoint1_e2e_test.dart` de SoyJust). |
-| **Dev 2** | ✅ Sync automático, pull seguro, SQLite v3, estrellas (UUID v5), perfil, distancia, estado de emergencia. |
-| **Dev 1** (lo cubrió Dandy mientras Adrian descansa) | ✅ Swagger con `X-Tenant-ID` en todas las rutas · migración `a7c3e91f5b20` (`rating`, `photo_b64`, `publisher_type`, `publisher_name`) · `/sync/push` acepta `neighbor_endorsements`, recalcula el contador y **un ítem inválido ya no tumba el lote** · `/sync/pull` y `GET /services` devuelven `rating_avg` · `/services/endorse` hace upsert con estrellas (200). 15 pruebas contra PostgreSQL real en verde. |
-| **Dev 3** | ⏳ **Falta:** paleta naranja, 4 pestañas fijas, kit (`sync_status_chip`, estrellas, `emergency_toggle`, filtros) y actualizar los tests del Sprint 1. |
+| `scripts/smoke_test_api.py` (crea su propio barrio de prueba) | **46/46** |
+| `scripts/test_sprint6_backend.py` (barrio propio) | **25/25** |
+| `flutter analyze` | sin problemas |
+| `flutter test --concurrency=1` | **108/108** (2 e2e se saltan si no hay `E2E_SUPER_ADMIN_*`) |
 
-**Adrian, al despertar:** `git pull` y luego `alembic upgrade head` (hay 1 migración nueva). Archivos tuyos modificados: `core/tenant_middleware.py` (el tenant como `Header`), `proximity_services/{models,schemas,router,service}.py` y `sync_engine/{service,router}.py`. La lógica LWW es la tuya; se agregó un SAVEPOINT por ítem y la búsqueda de calificaciones por (servicio, vecino). Tu siguiente tarea es la del **Sprint 6**.
+El barrio demo `BARRIO-01` quedó **limpio** (`scripts/limpiar_datos_prueba.py --aplicar` ocultó 60 registros de pruebas viejas).
 
-**Cuando Dev 3 termine el kit → todos pasamos juntos al Sprint 6.**
+### 📌 Deuda de sprints anteriores (NO está hecho)
+| Pendiente | Sprint | Rol | Impacto en la demo |
+|---|---|---|---|
+| **Podio "Prioridad 1-3" + toggle en Servicios y Apoyo** | 6 | Dev 3 | 🔴 Está en la **ruta crítica de la demo** |
+| `shared/emergency_ranking.dart` (`rankServices`, `rankPosts`) + tests | 6 | Dev 2 | 🔴 Lo necesita el podio |
+| **`scripts/seed_demo.py`** (barrio de Piura con oficios, favores y SOS) | 7 | Dev 1 | 🔴 Hoy el barrio demo está vacío |
+| `service_detail_sheet` (calificar con estrellas) y `favor_detail_sheet` ("Coordinar") | 7 | Dev 3 | 🟠 |
+| Cambio de estado de favores + `history_dao.dart` | 7 | Dev 2 | 🟡 |
+| `GET /api/v1/emergency/support-groups` | 8 | Dev 1 | 🟡 |
+| Botón **"Cerrar sesión"** para vecinos (hoy solo lo tienen los admins) con aviso de cambios pendientes | 9 | Dev 2 + Dev 3 | 🟠 |
+
+**Recomendación:** antes de abrir el Sprint 9, cerrar los 3 🔴 (podio, ranking, seed), porque sin ellos no se puede mostrar la ruta crítica.
+
+### ▶️ Antes de seguir, todos
+`git pull` → generar tu propia clave JWT → `alembic upgrade head` → `uvicorn` → `/health` (`migrations_up_to_date: true`) → `flutter test --concurrency=1`.
 
 ---
 
@@ -43,67 +60,51 @@ Verificado en la PC de Dandy contra PostgreSQL real: **13 endpoints (40/40 prueb
 
 | Tema | Plan de Adrian | v3 | **v4 (decisión)** |
 |---|---|---|---|
-| Recomendaciones | "Visto Bueno" (contador) | Estrellas 1 a 5 con comentario y foto | **Estrellas 1 a 5.** La foto es lo primero que se recorta si falta tiempo. |
-| Paleta | Verde | Naranja | **Naranja**, con las reglas de contraste de la sección 4. |
+| Recomendaciones | "Visto Bueno" (contador) | Estrellas 1 a 5 con comentario y foto | **Estrellas 1 a 5** + "Visto bueno" sin estrellas. La foto es lo primero que se recorta. |
+| Paleta | Verde | Naranja | **Paleta v2 por psicología del color** (sección 3): verde = economía local, naranja = emergencia, cian = etiquetas. |
 | Pestañas | Cambian con la emergencia | 4 fijas | **4 fijas:** Servicios, Apoyo, Mapa, Tú. |
-| Toggle de emergencia | Switch de prueba en la AppBar | En Servicios y Apoyo, con podio | **Toggle en Servicios y Apoyo + podio "Prioridad 1-3".** |
-| Módulo Tú | No existía | Perfil + historial | **Sí, pero después del Checkpoint 2.** Es lo primero que se recorta. |
-| Sincronización | Sprint 4 | Sprint 4 | **Prioridad absoluta ahora (Checkpoint 1 atrasado).** |
+| Toggle de emergencia | Switch de prueba en la AppBar | En Servicios y Apoyo, con podio | **La junta la activa para todos** (pantalla del ADMIN_BARRIO); el podio en Servicios/Apoyo sigue pendiente. |
+| Módulo Tú | No existía | Perfil + historial | **Sí, Sprint 9–10.** Es lo primero que se recorta. |
+| Login | No había | — | **JWT por vecino** (VECINO, COMERCIANTE, ADMIN_BARRIO, SUPER_ADMIN). |
 
 ---
 
-## 2. Estado real del proyecto (revisado en el código, H13.5)
+## 2. Decisiones técnicas obligatorias (evitan bugs ya detectados)
 
-### ✅ Hecho
-| Área | Qué funciona |
-|---|---|
-| **Backend** | Tablas `tenants`, `users`, `solidarity_posts`, `local_services`, `neighbor_endorsements` (con UNIQUE), `vulnerable_reports` y migraciones Alembic. Middleware `X-Tenant-ID`. `/sync/push` genérico (3 tablas, LWW). `/sync/pull` (posts y servicios). CRUD de solidaridad, servicios + endorse (sin duplicados), emergencia (SOS, board, attend). `/health`. |
-| **App, núcleo offline** | SQLite v2 (`solidarity_posts`, `local_services`, `sync_outbox`, `sync_state`), migración sin perder datos, UUID v4 local, inserción `PENDING` + outbox en una transacción, validaciones. `ConnectivityMonitor`. `SyncWorker.pushLocalChanges` (solo limpia lo confirmado). |
-| **App, UI** | Tema accesible, navegación, botón (+), modal de 3 clics conectado a SQLite ("Guardado en el teléfono"), `service_card`, `visto_bueno_badge`, directorio con datos demo. |
-| **Calidad** | 36 tests automáticos (contraste, accesibilidad, SQLite offline, navegación). |
-
-### ❌ Falta (ordenado por impacto en la demo)
-1. **Sync automático:** nadie llama al `SyncWorker` al recuperar internet → **Checkpoint 1 no pasa todavía.**
-2. El pull no guarda `local_services` en el teléfono, y además pisa cambios locales pendientes.
-3. Android: falta el permiso `INTERNET` y `usesCleartextTraffic` en el manifest principal (el sync por `http://` falla fuera del modo debug).
-4. El muro (Apoyo) y el mapa siguen siendo pantallas provisionales; el directorio usa datos fijos.
-5. Swagger no muestra `X-Tenant-ID` en `/services` y `/emergency` (desde `/docs` siempre dan 400).
-6. Todo lo nuevo de la v3: estrellas, paleta naranja, toggle con podio, módulo Tú.
+1. **Calificación con id determinístico:** `id = UUID v5(service_id + endorser_user_id)`; el servidor además busca por (servicio, vecino).
+2. **Promedio de estrellas:** lo calcula el servidor y viaja como `rating_avg`. **El pull no trae fotos.**
+3. **Seguridad en el servidor, no en la app:** el tenant y la persona salen del token; el dueño se valida en el registro guardado; las mismas reglas aplican a REST y al sync.
+4. **Pull por `server_updated_at`** (reloj del servidor) con margen de 30 s; **LWW por `updated_at`** (reloj del celular, máximo ahora + 5 min).
+5. **Coordenadas del demo: Piura.** Centro: `-5.1945, -80.6328`. Código del barrio demo: `BARRIO-01`.
+6. **URL del backend:** `--dart-define=API_BASE_URL=...`. Por defecto: emulador `http://10.0.2.2:8000`, Windows `http://localhost:8000`; celular físico: IP de la PC y `uvicorn --host 0.0.0.0`.
+7. **Booleanos:** `0/1` en SQLite y `true/false` en JSON.
+8. **Las pruebas nunca escriben en el barrio demo:** usan `scripts/_test_env.py` (barrio de prueba propio).
 
 ---
 
-## 3. Decisiones técnicas obligatorias (evitan bugs ya detectados)
+## 3. Paleta v2 (psicología del color) con contraste verificado (WCAG AA)
 
-1. **Calificación con id determinístico:** `id = UUID v5(service_id + endorser_user_id)`. La misma persona siempre genera el mismo id → el upsert funciona y el `UNIQUE` del backend nunca rompe el lote del push.
-2. **Promedio de estrellas:** lo calcula el servidor (`AVG(rating)`) y viaja en el pull de `local_services` como `rating_avg`. En SQLite es una columna local de solo lectura. **El pull no trae fotos**; la foto se pide solo al abrir el detalle.
-3. **Sin login todavía:** el backend solo conoce el barrio (`X-Tenant-ID`), no a la persona. "403 si no es tu fila" y "solo LIDER_VECINAL activa la emergencia" **no se pueden validar en el servidor** → se controlan en la app y se presentan como limitación conocida (respuesta para el jurado: "el siguiente paso es JWT por vecino").
-4. **Sin dependencias nuevas salvo acuerdo:** el estado de emergencia se guarda en SQLite (no `shared_preferences`) y el ícono es `Icons.warning_amber_rounded` (no Font Awesome). `image_picker` solo si llegamos a la foto.
-5. **Coordenadas del demo: Piura** (como el launcher actual y el seed). Centro: `-5.1945, -80.6328`.
-6. **Barrio demo fijo** hasta el Sprint 9: `tenant_id = a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d`, usuario `5f3a2c1b-1234-4abc-9def-0123456789ab`.
-7. **URL del backend:** `--dart-define=API_BASE_URL=...`. Por defecto: emulador Android `http://10.0.2.2:8000`, Windows `http://localhost:8000`. Para un celular físico se usa la IP de la PC en la red.
-8. **Booleanos:** `0/1` en SQLite y `true/false` en JSON (ya resuelto en los modelos).
+La paleta del equipo es la **identidad**. Donde un color no alcanza el contraste con texto, se usa **el mismo tono más oscuro** (los tests del repo fallan si alguien usa un color ilegible).
 
----
+| Rol | Color del equipo | Dónde se usa tal cual | Para texto / botones | Contraste |
+|---|---|---|---|---|
+| **Modo normal** (economía local) | `#2AA63E` | Íconos, Visto Bueno, indicadores | **`#1E7A2E`** con texto blanco | 5.4:1 ✅ (el original da 3.17 ❌ con texto) |
+| **Modo emergencia** (máxima prioridad) | `#F54927` | Franja superior, bordes, selección del SOS | **`#C2381B`** con texto blanco | 5.4:1 ✅ (el original da 3.58 ❌) |
+| **Etiquetas / píldoras** | `#21BCFF` | Fondo de píldora seleccionada | Texto **`#0F172A`** | 8.2:1 ✅ (tal como se propuso) |
+| Fondo general | `#F3F4F6` | Lienzo de la app | — | — |
+| Fondo en emergencia | `#FFF1EC` | Lienzo en emergencia | — | — |
+| Tarjetas y modales | `#FFFFFF` | Muro, perfiles, hojas | — | — |
+| Hover / selección | `#F8FAFC` | Al tocar tarjetas | — | — |
+| Texto principal | `#1E293B` | Títulos, nombres | — | 13.3:1 ✅ |
+| Texto secundario | `#64748B` → **`#606F85`** | Descripciones, horas | — | 4.6:1 ✅ (el original da 4.32 ❌ sobre `#F3F4F6`) |
 
-## 4. Paleta naranja con contraste verificado (WCAG AA)
+**Estados (siempre ícono + texto, nunca solo color):** Pendiente `#8A5300` sobre `#FFF3DC` · Sincronizado `#166534` sobre `#E7F6EA` · Sin enviar `#B3261E` sobre `#FDECEA` · Urgencia Crítica `#B3261E`, Alta `#8A5300`, Media `#0369A1` · Estrellas `#C46A00` / `#7B8798`.
 
-| Uso | Color | Contraste | Regla |
-|---|---|---|---|
-| Botón relleno (texto blanco) | `#D63A15` | 4.69:1 ✅ | Todos los botones |
-| Texto / íconos naranja | `#A82B0C` | 6.96:1 ✅ | Sobre blanco, `#FDEBE6` y `#FFF1EC` |
-| Fondo suave | `#FDEBE6` | — | Tarjetas seleccionadas |
-| Pendiente | `#8A5300` sobre `#FFF3DC` | 5.76:1 ✅ | Ícono `schedule` + "Pendiente" |
-| Sincronizado | `#A82B0C` | ✅ | Ícono `check_circle` + "Sincronizado" |
-| Estrella llena / vacía | `#C46A00` / `#857A75` | 3.88 / 4.17 ✅ | Mínimo 3:1 para íconos |
-| Etiquetas | `#27509D` sobre `#E6EEFB` | 6.61:1 ✅ | Chips de categoría |
-| Acento `#F54927` | — | **3.58:1 ❌ con texto** | **Solo bordes, franjas y decoración** |
-| Emergencia `#E3501B` | — | **3.87:1 ❌ con texto** | **Solo franja superior y bordes del podio** |
-
-Los tests de contraste del repo fallan si un color no cumple: **actualizarlos junto con la paleta, no borrarlos.**
+**En código:** `AppPalette` (valores) y `MiBarrioColors.of(context)` (colores según el modo: `brand`, `accentText`, `pill`, `onPill`...). Los componentes del kit ya cambian solos entre verde y naranja.
 
 ---
 
-## 5. Sprints desde ahora (todos alineados)
+## 4. Sprints desde ahora (todos alineados)
 
 > Formato: **Sprint N (horas, horario aproximado)**. Al final de cada sprint: `git pull`, `flutter test`, push y aviso en el grupo.
 
@@ -119,7 +120,7 @@ Los tests de contraste del repo fallan si un color no cumple: **actualizarlos ju
   - SQLite v3: `neighbor_endorsements` (rating, comentario, foto, id UUID v5), `users` (perfil + redes), `publisher_*` y `rating_avg` en `local_services`.
   - `shared/local_distance.dart` (haversine + tests) y `emergency_mode_provider.dart` (persistido en SQLite).
 - **Dev 3:**
-  - Paleta naranja (sección 4) y 4 pestañas fijas: Servicios, Apoyo, Mapa, Tú. Actualizar los tests del Sprint 1.
+  - Paleta naranja (sección 3) y 4 pestañas fijas: Servicios, Apoyo, Mapa, Tú. Actualizar los tests del Sprint 1.
   - Kit en `ui_kit/`: `sync_status_chip`, `star_rating_display`, `star_rating_input`, `emergency_toggle`, `filter_pill`, `app_select_field`, `filters_bottom_sheet`.
 - ✅ **Checkpoint 1:** publicar en modo avión → reconectar → la fila aparece en PostgreSQL con el mismo UUID.
 
@@ -164,10 +165,10 @@ Los tests de contraste del repo fallan si un color no cumple: **actualizarlos ju
 
 ---
 
-## 6. Ruta crítica de la demo (no se recorta)
+## 5. Ruta crítica de la demo (no se recorta)
 Publicar en 3 clics en modo avión → chip "Pendiente" → toggle de emergencia con podio → reconectar → "Sincronizado" → fila en PostgreSQL.
 
-## 7. Si hay retraso, se recorta en este orden
+## 6. Si hay retraso, se recorta en este orden
 1. Foto en calificación y perfil.
 2. Historial (queda solo "Mis Favores").
 3. Mapa para reubicar la casa (queda el GPS).
@@ -175,7 +176,7 @@ Publicar en 3 clics en modo avión → chip "Pendiente" → toggle de emergencia
 5. Módulo Tú completo (queda la cabecera con el barrio).
 6. Animaciones de pulido.
 
-## 8. Reglas de Git (para no pisarnos)
+## 7. Reglas de Git (para no pisarnos)
 - Antes de empezar: `git pull`. Antes de subir: `flutter test` en verde.
 - Cada quien toca **solo los archivos de su rol**. Si necesitas cambiar un archivo de otro, avisa en el grupo primero.
 - Commits cortos y claros. No subir `venv/`, `.env`, `build/`, `hs_err_pid*.log`.

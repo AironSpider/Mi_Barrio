@@ -58,6 +58,11 @@ class ApiClient {
           .post(uri(path), headers: _headers(tenantId), body: jsonEncode(body))
           .timeout(ApiConfig.timeout);
 
+  Future<http.Response> patch(String path, String tenantId, Object body) =>
+      _client
+          .patch(uri(path), headers: _headers(tenantId), body: jsonEncode(body))
+          .timeout(ApiConfig.timeout);
+
   /// true si el backend responde a /health (útil porque "tener Wi-Fi"
   /// no garantiza que el servidor sea alcanzable).
   Future<bool> isServerReachable() async {

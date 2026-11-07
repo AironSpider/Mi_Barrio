@@ -57,19 +57,37 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository _repository;
   late final StreamSubscription<void> _sessionExpiredSubscription;
 
-  Future<void> _endCurrentSession(UserEntity? user) async {
+  /// [keepPendingData] = true cuando la sesión VENCE (401): los cambios hechos
+  /// sin internet se conservan para subirlos al volver a entrar.
+  /// En un cierre de sesión manual se borran los datos locales de la cuenta.
+  Future<void> _endCurrentSession(
+    UserEntity? user, {
+    bool keepPendingData = false,
+  }) async {
     await SyncCoordinator.instance.stop();
     try {
       final tenantId = user?.tenantId;
       if (user != null && tenantId != null) {
-        await _repository.purgeLocalUserData(
-          tenantId: tenantId,
-          userId: user.id,
-        );
+        if (keepPendingData) {
+          await _repository.keepPendingDataFor(
+            tenantId: tenantId,
+            userId: user.id,
+          );
+        } else {
+          await _repository.purgeLocalUserData(
+            tenantId: tenantId,
+            userId: user.id,
+          );
+        }
       }
     } finally {
       await _repository.logout();
     }
+  }
+
+  Future<UserEntity> _afterSignIn(UserEntity user) async {
+    await _repository.reconcilePendingData(user);
+    return user;
   }
 
   String _message(Object error) {
@@ -97,7 +115,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       await _endCurrentSession(previousUser);
       state = AuthState.authenticated(
-        await _repository.login(email: email, password: password),
+        await _afterSignIn(
+          await _repository.login(email: email, password: password),
+        ),
       );
     } catch (error) {
       state = AuthState(status: AuthStatus.error, message: _message(error));
@@ -116,12 +136,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       await _endCurrentSession(previousUser);
       state = AuthState.authenticated(
-        await _repository.register(
-          fullName: fullName,
-          email: email,
-          password: password,
-          role: role,
-          joinCode: joinCode,
+        await _afterSignIn(
+          await _repository.register(
+            fullName: fullName,
+            email: email,
+            password: password,
+            role: role,
+            joinCode: joinCode,
+          ),
         ),
       );
     } catch (error) {
@@ -148,7 +170,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final currentUser = state.user;
     state = const AuthState.loading();
     try {
-      await _endCurrentSession(currentUser);
+      await _endCurrentSession(currentUser, keepPendingData: true);
       state = const AuthState.unauthenticated();
     } catch (error) {
       state = AuthState(

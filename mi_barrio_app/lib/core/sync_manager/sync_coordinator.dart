@@ -130,6 +130,7 @@ class SyncCoordinator {
 
   /// Ajusta la frecuencia (Sprint 8: 15 s en emergencia, 60 s en modo normal).
   void setInterval(Duration interval) {
+    if (_worker == null) return; // detenido: start() fija el intervalo
     _periodic?.cancel();
     _periodic = Timer.periodic(interval, (_) => syncNow());
   }

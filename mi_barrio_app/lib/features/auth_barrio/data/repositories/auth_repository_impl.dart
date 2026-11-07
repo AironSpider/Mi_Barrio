@@ -72,13 +72,12 @@ class AuthRepositoryImpl implements AuthRepository {
       return verified;
     } on AuthException catch (error) {
       if (error.statusCode == 401 || error.statusCode == 403) {
+        // Sesión vencida: NO se borran los cambios hechos sin internet. Si la
+        // misma persona vuelve a entrar, se suben; si entra otra, se descartan.
         try {
           final tenantId = cachedUser.tenantId;
           if (tenantId != null) {
-            await SyncOutboxDao().clearUserData(
-              tenantId: tenantId,
-              userId: cachedUser.id,
-            );
+            await keepPendingDataFor(tenantId: tenantId, userId: cachedUser.id);
           }
         } finally {
           await _sessionStore.clear();
@@ -118,6 +117,23 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> logout() => _sessionStore.clear();
+
+  @override
+  Future<void> keepPendingDataFor({
+    required String tenantId,
+    required String userId,
+  }) => SyncOutboxDao().rememberPendingOwner(tenantId: tenantId, userId: userId);
+
+  @override
+  Future<void> reconcilePendingData(UserEntity user) async {
+    final dao = SyncOutboxDao();
+    final owner = await dao.readPendingOwner();
+    if (owner == null) return;
+    if (owner.userId != user.id || owner.tenantId != user.tenantId) {
+      await dao.clearUserData(tenantId: owner.tenantId, userId: owner.userId);
+    }
+    await dao.forgetPendingOwner();
+  }
 
   @override
   Future<void> purgeLocalUserData({

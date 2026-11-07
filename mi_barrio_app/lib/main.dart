@@ -18,6 +18,9 @@ import 'features/auth_barrio/domain/entities/user_entity.dart';
 import 'features/auth_barrio/presentation/screens/login_screen.dart';
 import 'features/auth_barrio/presentation/screens/neighborhood_admin_screen.dart';
 import 'features/auth_barrio/presentation/screens/platform_admin_screen.dart';
+import 'features/emergency_support/data/repositories/emergency_repository_impl.dart';
+import 'features/emergency_support/presentation/providers/emergency_provider.dart';
+import 'features/emergency_support/presentation/widgets/sos_sheet.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,8 +33,18 @@ Future<void> main() async {
   // Dev 2: estado de emergencia guardado + sincronización automática
   // (al abrir, al volver internet, tras cada publicación y cada 60 s).
   await EmergencyModeProvider.instance.load();
+  // SOS guardados en SQLite + sync (antes: solo en memoria).
+  EmergencyReports.use(EmergencyRepositoryImpl());
+  // En emergencia se sincroniza cada 15 s; en modo normal, cada 60 s.
+  EmergencyModeProvider.instance.isActive.addListener(() {
+    SyncCoordinator.instance.setInterval(_syncInterval());
+  });
   runApp(const ProviderScope(child: MiBarrioApp()));
 }
+
+Duration _syncInterval() => EmergencyModeProvider.instance.isActive.value
+    ? const Duration(seconds: 15)
+    : const Duration(seconds: 60);
 
 class MiBarrioApp extends StatefulWidget {
   const MiBarrioApp({super.key, this.initialEmergencyMode = false});
@@ -112,7 +125,12 @@ class _AuthGate extends ConsumerWidget {
           );
         }
         if (user.role == UserRole.vecino || user.role == UserRole.comerciante) {
-          unawaited(SyncCoordinator.instance.start(syncImmediately: true));
+          unawaited(
+            SyncCoordinator.instance.start(
+              syncImmediately: true,
+              interval: _syncInterval(),
+            ),
+          );
         } else {
           unawaited(SyncCoordinator.instance.stop());
         }
@@ -137,8 +155,10 @@ class _AuthGate extends ConsumerWidget {
 
     return MainNavigationShell(
       isEmergencyMode: isEmergencyMode,
-      onPublish: () =>
-          QuickPublishLauncher.open(context, isEmergencyMode: isEmergencyMode),
+      // En emergencia el botón principal es "Pedir ayuda" (SOS en 3 clics).
+      onPublish: () => isEmergencyMode
+          ? showSosSheet(context)
+          : QuickPublishLauncher.open(context, isEmergencyMode: isEmergencyMode),
       onEmergencyPreviewChanged: onEmergencyPreviewChanged,
     );
   }

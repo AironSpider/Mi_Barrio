@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart';
 
 import '../auth/auth_session_store.dart';
+import '../barrio_context/emergency_mode_provider.dart';
 import '../database_sqlite/sqlite_database.dart';
 import '../database_sqlite/sync_outbox_dao.dart';
 
@@ -52,6 +53,7 @@ class SyncWorker {
     'local_services',
     'neighbor_endorsements',
     'users',
+    'vulnerable_reports',
   };
 
   /// Columnas que se guardan en SQLite por tabla al hacer pull.
@@ -87,6 +89,20 @@ class SyncWorker {
       'publisher_name',
       'lat',
       'lng',
+      'is_deleted',
+      'updated_at',
+    ],
+    'vulnerable_reports': [
+      'id',
+      'tenant_id',
+      'reporter_user_id',
+      'urgency_level',
+      'vulnerability_type',
+      'description',
+      'lat',
+      'lng',
+      'status',
+      'helper_user_id',
       'is_deleted',
       'updated_at',
     ],
@@ -322,6 +338,14 @@ class SyncWorker {
           'last_pulled_at': serverTimestamp,
         }, conflictAlgorithm: ConflictAlgorithm.replace);
       });
+
+      // Modo Emergencia decidido por la junta vecinal (llega en cada pull).
+      final tenant = data['tenant'];
+      if (tenant is Map && tenant['is_emergency_active'] is bool) {
+        EmergencyModeProvider.instance.setTenantFlag(
+          tenant['is_emergency_active'] as bool,
+        );
+      }
 
       return PullResult(
         success: true,

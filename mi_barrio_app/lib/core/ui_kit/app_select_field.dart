@@ -79,7 +79,7 @@ class AppSelectField<T> extends StatelessWidget {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
             prefixIcon: seleccionada?.icon == null
                 ? null
-                : Icon(seleccionada!.icon, color: AppPalette.orangeText),
+                : Icon(seleccionada!.icon, color: MiBarrioColors.of(context).accentText),
             suffixIcon: const Icon(Icons.expand_more_rounded),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -138,14 +138,14 @@ class _SelectSheet<T> extends StatelessWidget {
                   leading: opcion.icon == null ? null : Icon(opcion.icon),
                   title: Text(opcion.label, style: texto.bodyLarge),
                   trailing: opcion.value == value
-                      ? const Icon(
+                      ? Icon(
                           Icons.check_rounded,
-                          color: AppPalette.orangeText,
+                          color: MiBarrioColors.of(context).accentText,
                         )
                       : null,
                   selected: opcion.value == value,
-                  selectedColor: AppPalette.orangeText,
-                  selectedTileColor: AppPalette.softBackground,
+                  selectedColor: MiBarrioColors.of(context).accentText,
+                  selectedTileColor: MiBarrioColors.of(context).accentSoft,
                   onTap: () =>
                       Navigator.of(context).pop(_SelectResult<T>(opcion.value)),
                 ),
