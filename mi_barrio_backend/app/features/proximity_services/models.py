@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime
 from sqlalchemy import (
     String, Float, Boolean, Text, Integer, SmallInteger, ForeignKey,
-    UniqueConstraint, CheckConstraint,
+    UniqueConstraint, CheckConstraint, DateTime,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -33,6 +34,8 @@ class NeighborEndorsement(Base, BarrioBaseMixin):
     # Estrellas 1 a 5 (null = sin estrellas) y foto opcional (v3, aditivo).
     rating: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     photo_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_reply: Mapped[str | None] = mapped_column(Text, nullable=True)
+    replied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # FIX: Evitar vistos buenos duplicados
     __table_args__ = (

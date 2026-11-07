@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import '../../features/emergency_support/presentation/screens/emergency_map_screen.dart';
 import '../../features/profile_me/presentation/screens/profile_screen.dart';
 import '../../features/proximity_services/presentation/screens/services_directory_screen.dart';
+import '../../features/proximity_services/presentation/screens/merchant_business_screen.dart';
 import '../../features/solidarity_network/presentation/screens/collaborative_wall_screen.dart';
 import 'app_theme.dart';
 import 'quick_publish_fab.dart';
+import '../barrio_context/tenant_session.dart';
 
 class ShellTab {
   const ShellTab({
@@ -57,6 +59,24 @@ class ShellTabs {
       builder: (_) => const ProfileScreen(),
     ),
   ];
+
+  static List<ShellTab> forCurrentRole() {
+    if (!TenantSession.instance.isComerciante) return all;
+    return [
+      ...all.take(3),
+      const ShellTab(
+        id: 'negocio',
+        label: 'Mi negocio',
+        icon: Icons.storefront_outlined,
+        selectedIcon: Icons.storefront_rounded,
+        builder: _merchantBusiness,
+      ),
+      all.last,
+    ];
+  }
+
+  static Widget _merchantBusiness(BuildContext context) =>
+      const MerchantBusinessScreen();
 }
 
 class MainNavigationShell extends StatefulWidget {
@@ -111,7 +131,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
 
   @override
   Widget build(BuildContext context) {
-    final tabs = ShellTabs.all;
+    final tabs = ShellTabs.forCurrentRole();
     final previewChanged = widget.onEmergencyPreviewChanged;
 
     return Scaffold(
@@ -127,7 +147,11 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
             ),
             const SizedBox(width: 8),
             const Flexible(
-              child: Text('Mi Barrio', maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(
+                'Mi Barrio',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             if (widget.isEmergencyMode) ...[
               const SizedBox(width: 8),
@@ -199,7 +223,6 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     );
   }
 }
-
 
 /// Chip "Emergencia" en la barra superior: el estado no se comunica solo con color.
 class _EmergencyChip extends StatelessWidget {

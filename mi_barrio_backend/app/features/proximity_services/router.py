@@ -1,10 +1,16 @@
 import uuid
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db_session
-from app.core.tenant_middleware import get_current_principal, get_current_tenant_id
+from app.core.tenant_middleware import (
+    get_current_principal,
+    get_current_tenant_id,
+    require_role,
+)
+from app.features.auth_barrio.models import User
 from app.features.proximity_services.models import LocalService, NeighborEndorsement
 from app.features.proximity_services.schemas import (
     LocalServiceCreate,
@@ -12,6 +18,7 @@ from app.features.proximity_services.schemas import (
     NeighborEndorsementCreate,
     NeighborEndorsementResponse,
     EndorsementPhotoResponse,
+    EndorsementReplyRequest,
 )
 from app.features.proximity_services.service import (
     rating_avg_by_service,
@@ -41,6 +48,14 @@ async def create_service(
     provider_id = uuid.UUID(principal["sub"])
     if payload.provider_user_id != provider_id:
         raise HTTPException(status_code=403, detail="No puedes publicar servicios a nombre de otro usuario")
+    provider = await db.get(User, provider_id)
+    if provider is None or provider.is_deleted:
+        raise HTTPException(status_code=401, detail="La cuenta ya no está activa")
+    if not provider.is_approved:
+        raise HTTPException(
+            status_code=403,
+            detail="Tu cuenta de comerciante está pendiente de aprobación del administrador del barrio",
+        )
     new_service = LocalService(
         tenant_id=tenant_uuid,
         provider_user_id=provider_id,
@@ -89,6 +104,24 @@ async def list_services(
     )
     result = await db.execute(stmt)
     return [_to_response(service, rating) for service, rating in result.all()]
+
+
+@router.get("/mine", response_model=list[LocalServiceResponse])
+async def list_my_services(
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(require_role(["COMERCIANTE"])),
+    db: AsyncSession = Depends(get_db_session),
+):
+    services = (await db.execute(
+        select(LocalService).where(
+            LocalService.tenant_id == tenant_uuid,
+            LocalService.provider_user_id == uuid.UUID(principal["sub"]),
+            LocalService.is_deleted.is_(False),
+        ).order_by(LocalService.created_at.desc())
+    )).scalars().all()
+    averages = await rating_avg_by_service(db, tenant_uuid)
+    return [_to_response(service, averages.get(service.id)) for service in services]
+
 
 @router.post("/endorse", status_code=status.HTTP_200_OK)
 async def endorse_service(
@@ -172,6 +205,39 @@ async def list_service_endorsements(
         ).order_by(NeighborEndorsement.created_at.desc())
     )).scalars().all()
     return endorsements
+
+
+@router.post("/{service_id}/recommendations/{rec_id}/reply", response_model=NeighborEndorsementResponse)
+async def reply_to_recommendation(
+    service_id: uuid.UUID,
+    rec_id: uuid.UUID,
+    payload: EndorsementReplyRequest,
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(require_role(["COMERCIANTE"])),
+    db: AsyncSession = Depends(get_db_session),
+):
+    service = await db.scalar(select(LocalService).where(
+        LocalService.id == service_id,
+        LocalService.tenant_id == tenant_uuid,
+        LocalService.provider_user_id == uuid.UUID(principal["sub"]),
+        LocalService.is_deleted.is_(False),
+    ))
+    if service is None:
+        raise HTTPException(status_code=404, detail="Servicio propio no encontrado")
+    endorsement = await db.scalar(select(NeighborEndorsement).where(
+        NeighborEndorsement.id == rec_id,
+        NeighborEndorsement.service_id == service_id,
+        NeighborEndorsement.tenant_id == tenant_uuid,
+        NeighborEndorsement.is_deleted.is_(False),
+    ))
+    if endorsement is None:
+        raise HTTPException(status_code=404, detail="Recomendación no encontrada")
+    endorsement.provider_reply = payload.reply.strip()
+    endorsement.replied_at = datetime.now(timezone.utc)
+    endorsement.updated_at = endorsement.replied_at
+    await db.commit()
+    await db.refresh(endorsement)
+    return endorsement
 
 
 @endorsement_router.get("/{endorsement_id}/photo", response_model=EndorsementPhotoResponse)

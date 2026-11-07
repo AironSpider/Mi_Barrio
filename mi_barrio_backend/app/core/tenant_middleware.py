@@ -1,5 +1,7 @@
 import uuid
+from collections.abc import Sequence
 from fastapi import Header, Request, HTTPException, status
+from fastapi import Depends
 from fastapi.security import APIKeyHeader
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -183,3 +185,47 @@ def get_current_principal(request: Request) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
     return claims
+
+
+_CANONICAL_ROLES = {
+    "SUPER_ADMIN",
+    "ADMIN_BARRIO",
+    "COMERCIANTE",
+    "VECINO",
+}
+_ROLE_ALIASES = {
+    "SUPERADMIN": "SUPER_ADMIN",
+    "ADMIN": "ADMIN_BARRIO",
+}
+
+
+def _normalize_role(role: str) -> str:
+    normalized = role.strip().upper()
+    return _ROLE_ALIASES.get(normalized, normalized)
+
+
+def require_role(allowed_roles: Sequence[str]):
+    """Construye una dependencia que permite solo los roles indicados.
+
+    Acepta los nombres de dominio históricos de la API (SUPER_ADMIN y
+    ADMIN_BARRIO) y sus alias de UX (superadmin y admin).
+    """
+    roles = frozenset(_normalize_role(role) for role in allowed_roles)
+    if not roles:
+        raise ValueError("require_role necesita al menos un rol")
+    unknown_roles = roles - _CANONICAL_ROLES
+    if unknown_roles:
+        raise ValueError(f"Roles no soportados: {', '.join(sorted(unknown_roles))}")
+
+    async def role_dependency(
+        principal: dict = Depends(get_current_principal),
+    ) -> dict:
+        principal_role = _normalize_role(str(principal.get("role", "")))
+        if principal_role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permisos para realizar esta acción",
+            )
+        return principal
+
+    return role_dependency

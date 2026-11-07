@@ -6,7 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import lookup_limit
 from app.core.database import get_db_session
-from app.core.tenant_middleware import get_current_principal, get_current_tenant_id
+from app.core.tenant_middleware import (
+    get_current_principal,
+    get_current_tenant_id,
+    require_role,
+)
 from app.features.auth_barrio.models import Tenant
 from app.features.auth_barrio.schemas import (
     EmergencyToggleRequest,
@@ -44,11 +48,21 @@ async def get_current_tenant(
     return await get_tenant_or_404(db, tenant_uuid)
 
 
+@router.get("/invite-code")
+async def get_invite_code(
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    principal: dict = Depends(require_role(["ADMIN_BARRIO"])),
+    db: AsyncSession = Depends(get_db_session),
+):
+    tenant = await get_tenant_or_404(db, tenant_uuid)
+    return {"tenant_id": str(tenant.id), "invite_code": tenant.join_code}
+
+
 @router.patch("/emergency-toggle", response_model=TenantResponse)
 async def toggle_emergency(
     payload: EmergencyToggleRequest,
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
-    principal: dict = Depends(get_current_principal),
+    principal: dict = Depends(require_role(["ADMIN_BARRIO"])),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Activa o desactiva el Modo Emergencia para TODO el barrio.
@@ -56,9 +70,4 @@ async def toggle_emergency(
     Los celulares lo reciben en el siguiente pull (`tenant.is_emergency_active`).
     Solo el administrador del barrio (ADMIN_BARRIO) puede hacerlo.
     """
-    if principal.get("role") != "ADMIN_BARRIO":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo el administrador del barrio puede activar o desactivar la emergencia",
-        )
     return await set_emergency(db, tenant_uuid, payload.is_emergency_active)

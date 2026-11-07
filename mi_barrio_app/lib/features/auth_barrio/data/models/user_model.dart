@@ -7,6 +7,7 @@ class UserModel extends UserEntity {
     required super.fullName,
     required super.role,
     required super.token,
+    super.isApproved,
     required super.tenantName,
     required super.joinCode,
     required super.centerLat,
@@ -33,6 +34,9 @@ class UserModel extends UserEntity {
       fullName: json['full_name']?.toString() ?? '',
       role: role,
       token: token,
+      isApproved: json['is_approved'] is bool
+          ? json['is_approved'] as bool
+          : true,
       tenantName: tenant['name']?.toString(),
       joinCode: tenant['join_code']?.toString(),
       centerLat: _doubleValue(tenant['center_lat']),
@@ -49,6 +53,7 @@ class UserModel extends UserEntity {
     'full_name': fullName,
     'role': role.apiValue,
     'token': token,
+    'is_approved': isApproved,
     'tenant': tenantId == null
         ? null
         : {

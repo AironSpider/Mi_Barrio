@@ -44,6 +44,9 @@ def main():
     vecino = register(BASE, hood["join_code"], "VECINO", "Vecina smoke")
     vecino2 = register(BASE, hood["join_code"], "VECINO", "Vecino smoke dos")
     comerciante = register(BASE, hood["join_code"], "COMERCIANTE", "Comerciante smoke")
+    comerciante_rechazado = register(
+        BASE, hood["join_code"], "COMERCIANTE", "Comerciante rechazado smoke"
+    )
     ajeno = register(BASE, other["join_code"], "VECINO", "Vecino de otro barrio")
     ME, PROVIDER = vecino["id"], comerciante["id"]
 
@@ -71,14 +74,82 @@ def main():
         "provider_user_id": ME, "category": "GASFITERIA", "title": "Vecina intenta ofrecer",
         "description": "x", "lat": LAT, "lng": LNG})
     check("un VECINO no puede publicar servicios -> 403", s == 403, f"{s} {b}")
+    check("comerciante nuevo espera aprobación del admin",
+          comerciante["is_approved"] is False)
+    s, b = call("POST", "/api/v1/services", {
+        "provider_user_id": PROVIDER, "category": "GASFITERIA",
+        "title": "Gasfitero 24h", "description": "Prueba de humo",
+        "is_available_in_emergency": True, "lat": LAT, "lng": LNG,
+        "publisher_type": "EMPRENDEDOR", "publisher_name": "Gasfitería Smoke",
+    }, who=comerciante)
+    check("comerciante pendiente no puede publicar servicio -> 403",
+          s == 403 and "pendiente" in str(b).lower(), f"{s} {b}")
+    pending_sync_service_id = str(uuid.uuid4())
+    s, pending_sync = call(
+        "POST",
+        "/api/v1/sync/push",
+        {
+            "client_sync_timestamp": now(),
+            "mutations": [{
+                "target_table": "local_services",
+                "record_id": pending_sync_service_id,
+                "operation": "UPSERT",
+                "payload": {
+                    "id": pending_sync_service_id,
+                    "provider_user_id": PROVIDER,
+                    "category": "GASFITERIA",
+                    "title": "Servicio antes de aprobación",
+                    "description": "Debe ser rechazado",
+                    "lat": LAT,
+                    "lng": LNG,
+                    "updated_at": now(),
+                },
+            }],
+        },
+        who=comerciante,
+    )
+    check("sync tampoco permite publicar servicios antes de aprobación",
+          s == 200 and not pending_sync["processed_record_ids"]
+          and "pendiente de aprobación" in pending_sync["rejected"][0]["reason"],
+          f"{s} {pending_sync}")
+    s, pending_post = call("POST", "/api/v1/solidarity", {
+        "author_user_id": PROVIDER, "flow_type": "OFREZCO_AYUDA",
+        "modality": "AYUDA_TEMPORAL", "title": "Comerciante ofrece ayuda",
+        "lat": LAT, "lng": LNG,
+    }, who=comerciante)
+    check("comerciante pendiente conserva funciones de vecino",
+          s == 201 and pending_post.get("author_user_id") == PROVIDER, f"{s} {pending_post}")
+    s, pending_merchants = call(
+        "GET", "/api/v1/users/pending-merchants", who=hood["admin_token"]
+    )
+    check("GET /users/pending-merchants solo admin lista comerciantes pendientes",
+          s == 200 and any(m["id"] == PROVIDER for m in pending_merchants), f"{s} {pending_merchants}")
+    s, b = call("GET", "/api/v1/users/pending-merchants")
+    check("vecino no puede listar comerciantes pendientes -> 403", s == 403, f"{s} {b}")
+    s, b = call("PATCH", f"/api/v1/users/{PROVIDER}/approve-merchant")
+    check("vecino no puede aprobar comerciantes -> 403", s == 403, f"{s} {b}")
+    s, approval = call(
+        "PATCH", f"/api/v1/users/{PROVIDER}/approve-merchant",
+        who=hood["admin_token"],
+    )
+    check("admin aprueba comerciante", s == 200 and approval.get("is_approved") is True, f"{s} {approval}")
+    s, b = call(
+        "PATCH", f"/api/v1/users/{comerciante_rechazado['id']}/reject-merchant",
+        who=hood["admin_token"],
+    )
+    check("admin puede rechazar comerciante", s == 200 and b.get("is_deleted") is True, f"{s} {b}")
+
     s, svc = call("POST", "/api/v1/services", {
         "provider_user_id": PROVIDER, "category": "GASFITERIA",
         "title": "Gasfitero 24h", "description": "Prueba de humo",
         "is_available_in_emergency": True, "lat": LAT, "lng": LNG,
         "publisher_type": "EMPRENDEDOR", "publisher_name": "Gasfitería Smoke",
     }, who=comerciante)
-    check("POST /services (comerciante)", s == 201 and svc.get("publisher_type") == "EMPRENDEDOR", f"{s} {svc}")
+    check("comerciante aprobado puede publicar servicio", s == 201 and svc.get("publisher_type") == "EMPRENDEDOR", f"{s} {svc}")
     sid = svc.get("id") if isinstance(svc, dict) else None
+
+    s, my_services = call("GET", "/api/v1/services/mine", who=comerciante)
+    check("comerciante lista sus servicios propios", s == 200 and any(x["id"] == sid for x in my_services), f"{s} {my_services}")
 
     s, b = call("GET", "/api/v1/services")
     check("GET /services", s == 200 and any(x["id"] == sid for x in b), f"{s} {str(b)[:200]}")
@@ -115,6 +186,28 @@ def main():
     s, b = call("POST", "/api/v1/services/endorse", {
         "service_id": sid, "endorser_user_id": vecino2["id"], "rating": 4}, who=vecino2)
     check("vecino puede dejar una calificación sin foto", s == 200, f"{s} {b}")
+    s, endorsement_rows = call("GET", f"/api/v1/services/{sid}/endorsements")
+    endorsement_for_reply = next(
+        (row for row in endorsement_rows if row["endorser_user_id"] == vecino2["id"]),
+        {},
+    ) if s == 200 else {}
+    recommendation_id = endorsement_for_reply.get("id")
+    s, reply = call(
+        "POST",
+        f"/api/v1/services/{sid}/recommendations/{recommendation_id}/reply",
+        {"reply": "Gracias por tu recomendación."},
+        who=comerciante,
+    )
+    check("comerciante responde recomendación propia",
+          s == 200 and reply.get("provider_reply") == "Gracias por tu recomendación."
+          and reply.get("replied_at") is not None, f"{s} {reply}")
+    s, b = call(
+        "POST",
+        f"/api/v1/services/{sid}/recommendations/{recommendation_id}/reply",
+        {"reply": "Respuesta no autorizada"},
+        who=vecino2,
+    )
+    check("vecino no puede responder reseñas -> 403", s == 403, f"{s} {b}")
     s, endorsements = call("GET", f"/api/v1/services/{sid}/endorsements")
     without_photo = next(
         (item for item in endorsements if item["endorser_user_id"] == vecino2["id"]),

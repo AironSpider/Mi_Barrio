@@ -54,6 +54,8 @@ class NeighborEndorsementResponse(BaseModel):
     endorser_user_id: uuid.UUID
     rating: Optional[int]
     short_comment: Optional[str]
+    provider_reply: Optional[str] = None
+    replied_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -62,3 +64,7 @@ class EndorsementPhotoResponse(BaseModel):
     id: uuid.UUID
     photo_b64: str
     content_type: str = "image/jpeg"
+
+
+class EndorsementReplyRequest(BaseModel):
+    reply: str = Field(..., min_length=1, max_length=1000)

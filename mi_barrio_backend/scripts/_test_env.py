@@ -90,4 +90,10 @@ def register(base: str, join_code: str, role: str, name: str = "Vecino de prueba
         "role": role, "join_code": join_code})
     if s != 201:
         raise RuntimeError(f"No se pudo registrar {role}: {s} {r}")
-    return {"token": r["access_token"], "id": r["user"]["id"], "email": email, "password": password}
+    return {
+        "token": r["access_token"],
+        "id": r["user"]["id"],
+        "email": email,
+        "password": password,
+        "is_approved": r["user"].get("is_approved", True),
+    }
