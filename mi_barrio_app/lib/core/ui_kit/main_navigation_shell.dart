@@ -7,8 +7,10 @@ import '../../features/proximity_services/presentation/screens/services_director
 import '../../features/proximity_services/presentation/screens/merchant_business_screen.dart';
 import '../../features/solidarity_network/presentation/screens/collaborative_wall_screen.dart';
 import 'app_theme.dart';
+import 'global_sync_status_bar.dart';
 import 'quick_publish_fab.dart';
 import '../barrio_context/tenant_session.dart';
+import '../sync_manager/sync_coordinator.dart';
 
 class ShellTab {
   const ShellTab({
@@ -85,9 +87,13 @@ class MainNavigationShell extends StatefulWidget {
     required this.isEmergencyMode,
     this.onPublish,
     this.onEmergencyPreviewChanged,
+    this.syncPhase,
   });
 
   final bool isEmergencyMode;
+
+  /// Estado de sync para la barra global (por defecto, el del SyncCoordinator).
+  final ValueListenable<SyncPhase>? syncPhase;
   final Future<bool> Function()? onPublish;
   final ValueChanged<bool>? onEmergencyPreviewChanged;
 
@@ -189,6 +195,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
               liveRegion: true,
               child: Container(height: 4, color: AppPalette.emergencyStripe),
             ),
+          GlobalSyncStatusBar(phase: widget.syncPhase),
           Expanded(
             child: IndexedStack(
               index: _index,
