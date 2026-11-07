@@ -32,8 +32,6 @@ async def push_offline_mutations(
         processed_record_ids=processed_ids,
     )
 
-# ... importaciones existentes ...
-
 @router.get("/pull", response_model=SyncPullResponse)
 async def pull_delta(
     since: str | None = Query(default=None, description="Timestamp ISO-8601 UTC"),
@@ -50,7 +48,7 @@ async def pull_delta(
 
     if since:
         try:
-            # FIX: Parsear directamente y usarlo en la consulta sin alterar el timezone
+            # FIX: Mantener el timezone para que asyncpg lo compare correctamente
             parsed_since = datetime.fromisoformat(since.replace("Z", "+00:00"))
             posts_stmt = posts_stmt.where(SolidarityPost.updated_at > parsed_since)
             services_stmt = services_stmt.where(LocalService.updated_at > parsed_since)

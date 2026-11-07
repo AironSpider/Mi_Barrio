@@ -65,20 +65,13 @@ async def list_emergency_board(
     result = await db.execute(stmt)
     return result.scalars().all()
 
-# ... código existente ...
-
-@router.patch("/{report_id}/attend", response_model=VulnerableReportResponse)
+#@router.patch("/{report_id}/attend", response_model=VulnerableReportResponse)
 async def attend_emergency_report(
     report_id: uuid.UUID,
     helper_user_id: uuid.UUID = Query(...),
-    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db_session),
 ):
-    try:
-        tenant_uuid = uuid.UUID(x_tenant_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
-
     stmt = select(VulnerableReport).where(
         VulnerableReport.id == report_id,
         VulnerableReport.tenant_id == tenant_uuid,
@@ -90,7 +83,7 @@ async def attend_emergency_report(
     if not report:
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
 
-    # FIX: Ajustado al estado definido en el contrato de la Hackathon
+    # FIX: Estado corregido según el contrato
     report.status = "VECINOS_EN_CAMINO"
     report.helper_user_id = helper_user_id
     report.updated_at = datetime.now(timezone.utc)

@@ -4,6 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.exceptions import custom_http_exception_handler, validation_exception_handler
+# Importar el middleware que acabas de crear
 from app.core.tenant_middleware import TenantMiddleware
 
 from app.features.sync_engine.router import router as sync_router
@@ -17,7 +18,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# 1. CORS
+# Configuración CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,14 +27,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 2. Multi-Tenancy Middleware
+# ----------------------------------------------------
+# AÑADIR EL MIDDLEWARE DE TENANT AQUÍ
+# ----------------------------------------------------
 app.add_middleware(TenantMiddleware)
 
-# 3. Manejadores de errores globales
+
+# Registro de manejadores de errores estándar
 app.add_exception_handler(StarletteHTTPException, custom_http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
-# 4. Routers
+# Registro de routers (Módulos de Negocio)
 app.include_router(sync_router)
 app.include_router(solidarity_router)
 app.include_router(services_router)

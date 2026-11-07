@@ -1,9 +1,9 @@
+__pycache__/
+*.py[cod]
+*$py.class
 .env
 .venv/
 venv/
 env/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+ENV/
 .pytest_cache/
