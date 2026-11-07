@@ -1,43 +1,48 @@
 import 'package:flutter/material.dart';
 
-/// Paletas accesibles de Mi Barrio.
-///
-/// Todas las combinaciones texto/fondo cumplen WCAG 2.1 AA (contraste >= 4.5:1).
-/// Ver `test/ui_kit/app_theme_test.dart`, que lo verifica automáticamente.
 class AppPalette {
   AppPalette._();
 
-  // ── Modo Día a Día: verde comunidad / confianza ──
-  static const Color dayPrimary = Color(0xFF0B6E4F);
+  static const Color dayPrimary = Color(0xFFD63A15);
   static const Color dayOnPrimary = Colors.white;
-  static const Color dayPrimaryContainer = Color(0xFFCDEFE0);
-  static const Color dayOnPrimaryContainer = Color(0xFF002116);
-  static const Color daySecondary = Color(0xFF8A5100); // ámbar oscuro (acentos)
-  static const Color daySurface = Color(0xFFF7FAF8);
-  static const Color dayOnSurface = Color(0xFF1A1C1B);
-  static const Color dayOnSurfaceVariant = Color(0xFF404944);
+  static const Color dayPrimaryContainer = Color(0xFFFDEBE6);
+  static const Color dayOnPrimaryContainer = Color(0xFFA82B0C);
+  static const Color daySecondary = Color(0xFF27509D);
+  static const Color daySurface = Color(0xFFFFFCFA);
+  static const Color dayOnSurface = Color(0xFF1F1A18);
+  static const Color dayOnSurfaceVariant = Color(0xFF4F4541);
 
-  // ── Modo Emergencia: rojo alerta, alto contraste ──
-  static const Color emergencyPrimary = Color(0xFFB3261E);
+  static const Color emergencyPrimary = Color(0xFFB8320F);
   static const Color emergencyOnPrimary = Colors.white;
-  static const Color emergencyPrimaryContainer = Color(0xFFFFDAD6);
-  static const Color emergencyOnPrimaryContainer = Color(0xFF410002);
-  static const Color emergencySecondary = Color(0xFF7A4F00);
-  static const Color emergencySurface = Color(0xFFFFF8F7);
-  static const Color emergencyOnSurface = Color(0xFF201A19);
-  static const Color emergencyOnSurfaceVariant = Color(0xFF534341);
+  static const Color emergencyPrimaryContainer = Color(0xFFFDEBE6);
+  static const Color emergencyOnPrimaryContainer = Color(0xFFA82B0C);
+  static const Color emergencySecondary = Color(0xFF27509D);
+  static const Color emergencySurface = Color(0xFFFFF1EC);
+  static const Color emergencyOnSurface = Color(0xFF1F1A18);
+  static const Color emergencyOnSurfaceVariant = Color(0xFF4F4541);
 
-  // ── Semánticos compartidos ──
-  static const Color urgencyCritical = Color(0xFFB3261E); // Crítica = rojo
-  static const Color urgencyHigh = Color(0xFF8A5100); // Alta = ámbar oscuro
-  static const Color urgencyMedium = Color(0xFF1F5FA8); // Media = azul
-  static const Color syncPending = Color(0xFF8A5100); // reloj naranja
-  static const Color syncSynced = Color(0xFF146C2E); // check verde
+  static const Color urgencyCritical = Color(0xFFB3261E);
+  static const Color urgencyHigh = Color(0xFF8A5300);
+  static const Color urgencyMedium = Color(0xFF27509D);
+  static const Color syncPending = Color(0xFF8A5300);
+  static const Color syncSynced = Color(0xFFA82B0C);
   static const Color syncFailed = Color(0xFFB3261E);
+
+  static const Color accent = Color(0xFFF54927);
+  static const Color emergencyStripe = Color(0xFFE3501B);
+  static const Color orangeText = Color(0xFFA82B0C);
+  static const Color softBackground = Color(0xFFFDEBE6);
+  static const Color emergencyBackground = Color(0xFFFFF1EC);
+  static const Color pendingText = Color(0xFF8A5300);
+  static const Color pendingBackground = Color(0xFFFFF3DC);
+  static const Color failedBackground = Color(0xFFFDECEA);
+  static const Color starFilled = Color(0xFFC46A00);
+  static const Color starEmpty = Color(0xFF857A75);
+  static const Color tagText = Color(0xFF27509D);
+  static const Color tagBackground = Color(0xFFE6EEFB);
+  static const Color pillBackground = Color(0xFFF4F1EF);
 }
 
-/// Colores semánticos accesibles desde cualquier widget:
-/// `Theme.of(context).extension<MiBarrioColors>()!`
 @immutable
 class MiBarrioColors extends ThemeExtension<MiBarrioColors> {
   const MiBarrioColors({
@@ -97,58 +102,51 @@ class MiBarrioColors extends ThemeExtension<MiBarrioColors> {
   }
 }
 
-/// Temas de la app. Uso: `AppTheme.of(isEmergency: estado)`.
-///
-/// Reglas de accesibilidad aplicadas (Sprint 12 ya las cumple desde el inicio):
-/// - Texto de cuerpo mínimo 16sp (adultos mayores).
-/// - Áreas táctiles mínimas de 48x48 dp.
-/// - Contraste WCAG AA en todas las combinaciones principales.
 class AppTheme {
   AppTheme._();
 
-  /// Tamaño táctil mínimo recomendado (Material / WCAG).
   static const double minTouchTarget = 48;
 
   static ThemeData of({required bool isEmergency}) =>
       isEmergency ? emergency() : day();
 
   static ThemeData day() => _build(
-        isEmergency: false,
-        scheme: const ColorScheme(
-          brightness: Brightness.light,
-          primary: AppPalette.dayPrimary,
-          onPrimary: AppPalette.dayOnPrimary,
-          primaryContainer: AppPalette.dayPrimaryContainer,
-          onPrimaryContainer: AppPalette.dayOnPrimaryContainer,
-          secondary: AppPalette.daySecondary,
-          onSecondary: Colors.white,
-          error: AppPalette.urgencyCritical,
-          onError: Colors.white,
-          surface: AppPalette.daySurface,
-          onSurface: AppPalette.dayOnSurface,
-          onSurfaceVariant: AppPalette.dayOnSurfaceVariant,
-          outline: Color(0xFF707973),
-        ),
-      );
+    isEmergency: false,
+    scheme: const ColorScheme(
+      brightness: Brightness.light,
+      primary: AppPalette.dayPrimary,
+      onPrimary: AppPalette.dayOnPrimary,
+      primaryContainer: AppPalette.dayPrimaryContainer,
+      onPrimaryContainer: AppPalette.dayOnPrimaryContainer,
+      secondary: AppPalette.daySecondary,
+      onSecondary: Colors.white,
+      error: AppPalette.urgencyCritical,
+      onError: Colors.white,
+      surface: AppPalette.daySurface,
+      onSurface: AppPalette.dayOnSurface,
+      onSurfaceVariant: AppPalette.dayOnSurfaceVariant,
+      outline: Color(0xFF857A75),
+    ),
+  );
 
   static ThemeData emergency() => _build(
-        isEmergency: true,
-        scheme: const ColorScheme(
-          brightness: Brightness.light,
-          primary: AppPalette.emergencyPrimary,
-          onPrimary: AppPalette.emergencyOnPrimary,
-          primaryContainer: AppPalette.emergencyPrimaryContainer,
-          onPrimaryContainer: AppPalette.emergencyOnPrimaryContainer,
-          secondary: AppPalette.emergencySecondary,
-          onSecondary: Colors.white,
-          error: AppPalette.urgencyCritical,
-          onError: Colors.white,
-          surface: AppPalette.emergencySurface,
-          onSurface: AppPalette.emergencyOnSurface,
-          onSurfaceVariant: AppPalette.emergencyOnSurfaceVariant,
-          outline: Color(0xFF857371),
-        ),
-      );
+    isEmergency: true,
+    scheme: const ColorScheme(
+      brightness: Brightness.light,
+      primary: AppPalette.emergencyPrimary,
+      onPrimary: AppPalette.emergencyOnPrimary,
+      primaryContainer: AppPalette.emergencyPrimaryContainer,
+      onPrimaryContainer: AppPalette.emergencyOnPrimaryContainer,
+      secondary: AppPalette.emergencySecondary,
+      onSecondary: Colors.white,
+      error: AppPalette.urgencyCritical,
+      onError: Colors.white,
+      surface: AppPalette.emergencySurface,
+      onSurface: AppPalette.emergencyOnSurface,
+      onSurfaceVariant: AppPalette.emergencyOnSurfaceVariant,
+      outline: Color(0xFF857A75),
+    ),
+  );
 
   static ThemeData _build({
     required bool isEmergency,
@@ -164,13 +162,25 @@ class AppTheme {
     final text = base.textTheme;
     final textTheme = text.copyWith(
       headlineSmall: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-      titleLarge: text.titleLarge?.copyWith(fontSize: 22, fontWeight: FontWeight.w700),
-      titleMedium: text.titleMedium?.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
+      titleLarge: text.titleLarge?.copyWith(
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+      ),
+      titleMedium: text.titleMedium?.copyWith(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+      ),
       bodyLarge: text.bodyLarge?.copyWith(fontSize: 18, height: 1.4),
       bodyMedium: text.bodyMedium?.copyWith(fontSize: 16, height: 1.4),
       bodySmall: text.bodySmall?.copyWith(fontSize: 14),
-      labelLarge: text.labelLarge?.copyWith(fontSize: 16, fontWeight: FontWeight.w600),
-      labelMedium: text.labelMedium?.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+      labelLarge: text.labelLarge?.copyWith(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
+      labelMedium: text.labelMedium?.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
     );
 
     return base.copyWith(
@@ -185,7 +195,7 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 72,
-        backgroundColor: scheme.surface,
+        backgroundColor: Colors.white,
         indicatorColor: scheme.primaryContainer,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith(
@@ -208,7 +218,10 @@ class AppTheme {
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
         extendedTextStyle: textTheme.labelLarge?.copyWith(fontSize: 18),
-        extendedSizeConstraints: const BoxConstraints(minHeight: 64, minWidth: 64),
+        extendedSizeConstraints: const BoxConstraints(
+          minHeight: 64,
+          minWidth: 64,
+        ),
         sizeConstraints: const BoxConstraints.tightFor(width: 64, height: 64),
         iconSize: 28,
       ),
@@ -218,8 +231,16 @@ class AppTheme {
           textStyle: textTheme.labelLarge,
         ),
       ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(minTouchTarget, minTouchTarget),
+          textStyle: textTheme.labelLarge,
+        ),
+      ),
       chipTheme: base.chipTheme.copyWith(labelStyle: textTheme.labelLarge),
-      snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+      ),
       extensions: [
         MiBarrioColors(
           isEmergency: isEmergency,
