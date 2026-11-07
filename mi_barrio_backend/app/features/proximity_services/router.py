@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -12,8 +11,20 @@ from app.features.proximity_services.schemas import (
     LocalServiceResponse,
     NeighborEndorsementCreate,
 )
+from app.features.proximity_services.service import (
+    rating_avg_by_service,
+    rating_avg_subquery,
+    recalculate_service_rating,
+)
 
 router = APIRouter(prefix="/api/v1/services", tags=["Proximity Services"])
+
+
+def _to_response(service: LocalService, rating_avg: float | None) -> dict:
+    data = {c.name: getattr(service, c.name) for c in service.__table__.columns}
+    data["rating_avg"] = None if rating_avg is None else round(float(rating_avg), 1)
+    return data
+
 
 @router.post("", response_model=LocalServiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_service(
@@ -30,11 +41,13 @@ async def create_service(
         is_available_in_emergency=payload.is_available_in_emergency,
         lat=payload.lat,
         lng=payload.lng,
+        publisher_type=payload.publisher_type,
+        publisher_name=payload.publisher_name,
     )
     db.add(new_service)
     await db.commit()
     await db.refresh(new_service)
-    return new_service
+    return _to_response(new_service, None)
 
 @router.get("", response_model=list[LocalServiceResponse])
 async def list_services(
@@ -43,9 +56,16 @@ async def list_services(
     emergency_only: bool = Query(False),
     db: AsyncSession = Depends(get_db_session),
 ):
-    stmt = select(LocalService).where(
-        LocalService.tenant_id == tenant_uuid,
-        LocalService.is_deleted.is_(False),
+    """Oficios del barrio con su promedio de estrellas.
+    Orden: mejor promedio → más calificaciones → más recientes."""
+    avg = rating_avg_subquery(tenant_uuid)
+    stmt = (
+        select(LocalService, avg.c.rating_avg)
+        .outerjoin(avg, avg.c.service_id == LocalService.id)
+        .where(
+            LocalService.tenant_id == tenant_uuid,
+            LocalService.is_deleted.is_(False),
+        )
     )
 
     if category:
@@ -53,16 +73,22 @@ async def list_services(
     if emergency_only:
         stmt = stmt.where(LocalService.is_available_in_emergency.is_(True))
 
-    stmt = stmt.order_by(LocalService.endorsements_count.desc(), LocalService.created_at.desc())
+    stmt = stmt.order_by(
+        avg.c.rating_avg.desc().nulls_last(),
+        LocalService.endorsements_count.desc(),
+        LocalService.created_at.desc(),
+    )
     result = await db.execute(stmt)
-    return result.scalars().all()
+    return [_to_response(service, rating) for service, rating in result.all()]
 
-@router.post("/endorse", status_code=status.HTTP_201_CREATED)
+@router.post("/endorse", status_code=status.HTTP_200_OK)
 async def endorse_service(
     payload: NeighborEndorsementCreate,
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Califica un servicio con estrellas (1 a 5), comentario y foto opcionales.
+    Una calificación por vecino y servicio: si ya existe, se actualiza (upsert)."""
     stmt_service = select(LocalService).where(
         LocalService.id == payload.service_id,
         LocalService.tenant_id == tenant_uuid,
@@ -73,24 +99,38 @@ async def endorse_service(
 
     if not service:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    if service.provider_user_id == payload.endorser_user_id:
+        raise HTTPException(status_code=400, detail="No puedes calificar tu propio servicio")
 
     stmt_endorsement = select(NeighborEndorsement).where(
         NeighborEndorsement.service_id == payload.service_id,
         NeighborEndorsement.endorser_user_id == payload.endorser_user_id,
     )
-    result_endorsement = await db.execute(stmt_endorsement)
-    if result_endorsement.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Ya registró un visto bueno para este servicio")
+    endorsement = (await db.execute(stmt_endorsement)).scalar_one_or_none()
 
-    endorsement = NeighborEndorsement(
-        tenant_id=tenant_uuid,
-        service_id=payload.service_id,
-        endorser_user_id=payload.endorser_user_id,
-        short_comment=payload.short_comment,
-    )
-    service.endorsements_count += 1
-    service.updated_at = datetime.now(timezone.utc)
+    if endorsement is None:
+        endorsement = NeighborEndorsement(
+            tenant_id=tenant_uuid,
+            service_id=payload.service_id,
+            endorser_user_id=payload.endorser_user_id,
+        )
+        db.add(endorsement)
+    endorsement.rating = payload.rating
+    endorsement.short_comment = payload.short_comment
+    endorsement.photo_b64 = payload.photo_b64
+    endorsement.is_deleted = False
 
-    db.add(endorsement)
+    await db.flush()
+    service = await recalculate_service_rating(db, payload.service_id)
     await db.commit()
-    return {"success": True, "message": "Visto bueno vecinal registrado con éxito"}
+
+    averages = await rating_avg_by_service(db, tenant_uuid)
+    return {
+        "success": True,
+        "message": "Calificación registrada",
+        "data": {
+            "service_id": str(payload.service_id),
+            "rating_avg": averages.get(payload.service_id),
+            "endorsements_count": service.endorsements_count if service else 0,
+        },
+    }

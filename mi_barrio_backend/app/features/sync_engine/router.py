@@ -9,6 +9,7 @@ from app.features.sync_engine.schemas import SyncPushRequest, SyncPushResponse, 
 from app.features.sync_engine.service import process_sync_push
 from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService
+from app.features.proximity_services.service import rating_avg_by_service
 
 router = APIRouter(prefix="/api/v1/sync", tags=["Sync Engine"])
 
@@ -73,11 +74,17 @@ async def pull_delta(
             out.append(item)
         return out
 
+    averages = await rating_avg_by_service(db, tenant_uuid)
+
     return SyncPullResponse(
         server_timestamp=datetime.now(timezone.utc),
         has_more=False,
         delta={
             "solidarity_posts": serialize(posts_results.scalars().all()),
-            "local_services": serialize(services_results.scalars().all()),
+            "local_services": [
+                # El celular guarda el promedio de estrellas ya calculado (sin fotos).
+                {**svc, "rating_avg": averages.get(uuid.UUID(svc["id"]))}
+                for svc in serialize(services_results.scalars().all())
+            ],
         },
     )

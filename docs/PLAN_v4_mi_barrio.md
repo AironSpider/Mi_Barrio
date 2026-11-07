@@ -5,6 +5,21 @@
 
 ---
 
+## 🚦 Estado del Sprint 5 (actualizado sáb 09:40, H14.7)
+
+| Parte | Estado |
+|---|---|
+| **Checkpoint 1** | ✅ **APROBADO contra el backend real:** post creado sin red → `PENDING` → reconexión → fila en PostgreSQL con el mismo UUID (test `test/e2e/checkpoint1_e2e_test.dart` de SoyJust). |
+| **Dev 2** | ✅ Sync automático, pull seguro, SQLite v3, estrellas (UUID v5), perfil, distancia, estado de emergencia. |
+| **Dev 1** (lo cubrió Dandy mientras Adrian descansa) | ✅ Swagger con `X-Tenant-ID` en todas las rutas · migración `a7c3e91f5b20` (`rating`, `photo_b64`, `publisher_type`, `publisher_name`) · `/sync/push` acepta `neighbor_endorsements`, recalcula el contador y **un ítem inválido ya no tumba el lote** · `/sync/pull` y `GET /services` devuelven `rating_avg` · `/services/endorse` hace upsert con estrellas (200). 15 pruebas contra PostgreSQL real en verde. |
+| **Dev 3** | ⏳ **Falta:** paleta naranja, 4 pestañas fijas, kit (`sync_status_chip`, estrellas, `emergency_toggle`, filtros) y actualizar los tests del Sprint 1. |
+
+**Adrian, al despertar:** `git pull` y luego `alembic upgrade head` (hay 1 migración nueva). Archivos tuyos modificados: `core/tenant_middleware.py` (el tenant como `Header`), `proximity_services/{models,schemas,router,service}.py` y `sync_engine/{service,router}.py`. La lógica LWW es la tuya; se agregó un SAVEPOINT por ítem y la búsqueda de calificaciones por (servicio, vecino). Tu siguiente tarea es la del **Sprint 6**.
+
+**Cuando Dev 3 termine el kit → todos pasamos juntos al Sprint 6.**
+
+---
+
 ## 1. Qué cambia respecto a los planes anteriores
 
 | Tema | Plan de Adrian | v3 | **v4 (decisión)** |

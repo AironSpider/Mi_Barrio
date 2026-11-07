@@ -1,5 +1,5 @@
 import uuid
-from fastapi import Request, HTTPException, status
+from fastapi import Header, Request, HTTPException, status
 from fastapi.security import APIKeyHeader
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -47,7 +47,11 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
         return await call_next(request)
 
-def get_current_tenant_id(request: Request) -> uuid.UUID:
+def get_current_tenant_id(
+    request: Request,
+    # Declarado como Header para que Swagger (/docs) muestre el campo X-Tenant-ID.
+    x_tenant_id: str = Header(..., alias="X-Tenant-ID", description="UUID del barrio"),
+) -> uuid.UUID:
     """
     Dependencia FastAPI para inyectar directamente el UUID validado del tenant
     en cualquier endpoint.
