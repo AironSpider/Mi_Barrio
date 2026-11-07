@@ -1,22 +1,32 @@
 import 'package:flutter/material.dart';
 
-import '../../data/onboarding_local_storage.dart';
+import '../../../profile_me/data/tutorial_progress.dart';
 import 'tutorial_screen.dart';
 
 /// Muestra el tutorial la primera vez que una cuenta entra; después, [child].
+///
+/// La bandera la maneja [TutorialProgress] (Dev 2): queda en el teléfono al
+/// instante y se sincroniza con el perfil, así no se repite ni en otro teléfono.
 class TutorialGate extends StatefulWidget {
-  const TutorialGate({super.key, required this.userId, required this.child, this.storage});
+  const TutorialGate({
+    super.key,
+    required this.tenantId,
+    required this.userId,
+    required this.child,
+    this.progress,
+  });
 
+  final String tenantId;
   final String userId;
   final Widget child;
-  final OnboardingLocalStorage? storage;
+  final TutorialProgress? progress;
 
   @override
   State<TutorialGate> createState() => _TutorialGateState();
 }
 
 class _TutorialGateState extends State<TutorialGate> {
-  late final OnboardingLocalStorage _storage = widget.storage ?? OnboardingLocalStorage();
+  late final TutorialProgress _progress = widget.progress ?? TutorialProgress();
   bool? _completed;
 
   @override
@@ -34,7 +44,7 @@ class _TutorialGateState extends State<TutorialGate> {
   Future<void> _check() async {
     bool completed;
     try {
-      completed = await _storage.isCompleted(widget.userId);
+      completed = await _progress.isCompleted(widget.userId);
     } catch (_) {
       completed = true; // si falla la lectura, no bloqueamos la app con el tutorial
     }
@@ -44,7 +54,7 @@ class _TutorialGateState extends State<TutorialGate> {
   Future<void> _finish() async {
     setState(() => _completed = true);
     try {
-      await _storage.markCompleted(widget.userId);
+      await _progress.markCompleted(tenantId: widget.tenantId, userId: widget.userId);
     } catch (_) {
       // Si no se pudo guardar, se mostrará otra vez la próxima: no es grave.
     }

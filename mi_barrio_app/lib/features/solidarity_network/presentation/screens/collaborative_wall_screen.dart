@@ -12,6 +12,7 @@ import '../../../../shared/emergency_ranking.dart';
 import '../../data/datasources/solidarity_sqlite_ds.dart';
 import '../../data/models/solidarity_post_model.dart';
 import '../widgets/favor_detail_sheet.dart';
+import '../widgets/support_groups_section.dart';
 
 class CollaborativeWallScreen extends StatefulWidget {
   const CollaborativeWallScreen({
@@ -172,6 +173,11 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
           const SizedBox(height: 12),
           _buildSyncControls(context, hasSyncError, syncError),
           const SizedBox(height: 12),
+          // En emergencia: grupos de apoyo del barrio antes del muro (Sprint 11).
+          if (EmergencyModeProvider.instance.isActive.value) ...[
+            const SupportGroupsSection(),
+            const SizedBox(height: 16),
+          ],
           Wrap(
             spacing: 8,
             children: [

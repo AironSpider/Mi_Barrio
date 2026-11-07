@@ -18,8 +18,7 @@ Future<void> _pumpAuthenticatedApp(
   WidgetTester tester, {
   bool initialEmergencyMode = false,
 }) async {
-  // La cuenta de prueba ya vio el tutorial (Sprint 11): entra directo a las pestañas.
-  SharedPreferences.setMockInitialValues({'tutorial_completed_test-user': true});
+  SharedPreferences.setMockInitialValues({});
   await tester.pumpWidget(
     ProviderScope(
       overrides: [

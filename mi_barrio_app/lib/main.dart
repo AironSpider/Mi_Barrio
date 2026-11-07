@@ -158,6 +158,7 @@ class _AuthGate extends ConsumerWidget {
       UserRole.adminBarrio => NeighborhoodAdminScreen(user: user),
       // La primera vez que una cuenta entra, ve el tutorial de 3 pasos.
       UserRole.comerciante || UserRole.vecino => TutorialGate(
+          tenantId: user.tenantId ?? TenantSession.instance.tenantId,
           userId: user.id,
           child: MainNavigationShell(
             isEmergencyMode: isEmergencyMode,

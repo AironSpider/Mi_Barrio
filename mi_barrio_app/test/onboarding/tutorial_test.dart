@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mi_barrio_app/core/database_sqlite/sqlite_database.dart';
 import 'package:mi_barrio_app/core/ui_kit/app_theme.dart';
 import 'package:mi_barrio_app/features/onboarding_tutorial/presentation/screens/tutorial_gate.dart';
 import 'package:mi_barrio_app/features/onboarding_tutorial/presentation/screens/tutorial_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   Widget app(Widget home) => MaterialApp(theme: AppTheme.day(), home: home);
@@ -35,27 +36,39 @@ void main() {
     expect(finished, 1);
   });
 
-  testWidgets('se ve solo la primera vez por cuenta', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+  testWidgets('se ve solo la primera vez por cuenta (TutorialProgress)', (tester) async {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    await tester.runAsync(() => LocalDatabase.instance.resetForTesting(path: inMemoryDatabasePath));
+    addTearDown(() => tester.runAsync(() => LocalDatabase.instance.close()));
+    const tenant = 'a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d';
+    const vecina = '5f3a2c1b-1234-4abc-9def-0123456789ab';
+    const vecino = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
     const child = Text('Pestañas de la app');
 
-    await tester.pumpWidget(app(const TutorialGate(userId: 'vecina-1', child: child)));
-    await tester.pumpAndSettle();
+    Future<void> openGate(String userId) async {
+      await tester.pumpWidget(app(TutorialGate(key: ValueKey(userId), tenantId: tenant, userId: userId, child: child)));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+      await tester.pumpAndSettle();
+    }
+
+    await openGate(vecina);
     expect(find.byType(TutorialScreen), findsOneWidget);
-    await tester.tap(find.byKey(TutorialScreen.skipKey));
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(TutorialScreen.skipKey));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
     await tester.pumpAndSettle();
     expect(find.text('Pestañas de la app'), findsOneWidget);
 
     // Reabrir la app con la misma cuenta: ya no aparece.
     await tester.pumpWidget(const SizedBox());
-    await tester.pumpWidget(app(const TutorialGate(userId: 'vecina-1', child: child)));
-    await tester.pumpAndSettle();
+    await openGate(vecina);
     expect(find.byType(TutorialScreen), findsNothing);
     expect(find.text('Pestañas de la app'), findsOneWidget);
 
     // Otra cuenta en el mismo teléfono sí lo ve.
-    await tester.pumpWidget(app(const TutorialGate(userId: 'vecino-2', child: child)));
-    await tester.pumpAndSettle();
+    await openGate(vecino);
     expect(find.byType(TutorialScreen), findsOneWidget);
   });
 
