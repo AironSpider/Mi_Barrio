@@ -38,7 +38,7 @@ void main() {
 
   test('UserModel rejects unsupported roles', () {
     expect(
-      () => UserModel.fromJson({...userJson, 'role': 'ADMIN'}),
+      () => UserModel.fromJson({...userJson, 'role': 'OWNER'}),
       throwsFormatException,
     );
   });
@@ -62,6 +62,35 @@ void main() {
       AuthStatus.authenticatedSuperAdmin,
     );
   });
+
+  test('UserRole accepts canonical backend roles and short UX aliases', () {
+    expect(UserRole.fromApi('SUPERADMIN'), UserRole.superAdmin);
+    expect(UserRole.fromApi('SUPER_ADMIN'), UserRole.superAdmin);
+    expect(UserRole.fromApi('ADMIN'), UserRole.adminBarrio);
+    expect(UserRole.fromApi('ADMIN_BARRIO'), UserRole.adminBarrio);
+  });
+
+  test('unapproved merchant status survives local session persistence', () {
+    final merchant = UserModel.fromJson({...userJson, 'is_approved': false});
+    final restored = UserModel.fromStoredJson(merchant.toJson());
+
+    expect(merchant.isApproved, isFalse);
+    expect(restored.isApproved, isFalse);
+  });
+
+  test(
+    'AuthState maps each role to the corresponding authenticated status',
+    () {
+      AuthStatus statusFor(String role) => AuthState.authenticated(
+        UserModel.fromJson({...userJson, 'role': role}),
+      ).status;
+
+      expect(statusFor('VECINO'), AuthStatus.authenticatedNeighbor);
+      expect(statusFor('COMERCIANTE'), AuthStatus.authenticatedMerchant);
+      expect(statusFor('ADMIN'), AuthStatus.authenticatedNeighborhoodAdmin);
+      expect(statusFor('SUPERADMIN'), AuthStatus.authenticatedSuperAdmin);
+    },
+  );
 
   test('administrator roles cannot be selected in public registration', () {
     expect(UserRole.values.where((role) => role.isSelfSelectable).toList(), [

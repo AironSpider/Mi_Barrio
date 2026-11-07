@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/neighborhood_emergency_card.dart';
+import '../../../proximity_services/presentation/widgets/admin_merchant_approval_panel.dart';
 
 class NeighborhoodAdminScreen extends ConsumerWidget {
   const NeighborhoodAdminScreen({super.key, required this.user});
@@ -39,6 +40,8 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
             NeighborhoodEmergencyCard(tenantId: user.tenantId!),
             const SizedBox(height: 16),
           ],
+          const AdminMerchantApprovalPanel(),
+          const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -60,22 +63,47 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
                     'a tu barrio.',
                   ),
                   if (joinCode.isNotEmpty)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () async {
-                          await Clipboard.setData(
-                            ClipboardData(text: joinCode),
-                          );
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Código copiado')),
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: joinCode),
                             );
-                          }
-                        },
-                        icon: const Icon(Icons.copy_rounded),
-                        label: const Text('Copiar código'),
-                      ),
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Código copiado')),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.copy_rounded),
+                          label: const Text('Copiar código'),
+                        ),
+                        TextButton.icon(
+                          onPressed: () async {
+                            await Clipboard.setData(
+                              ClipboardData(
+                                text:
+                                    'Únete a ${user.tenantName ?? 'mi barrio'} '
+                                    'en Mi Barrio con el código $joinCode.',
+                              ),
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Invitación copiada. Ya puedes compartirla.',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.share_rounded),
+                          label: const Text('Compartir invitación'),
+                        ),
+                      ],
                     ),
                 ],
               ),

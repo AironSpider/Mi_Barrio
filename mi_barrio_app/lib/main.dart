@@ -114,12 +114,16 @@ class _AuthGate extends ConsumerWidget {
     ref.listen(authProvider, (previous, next) {
       final user = next.user;
       if (user != null) {
-        if (user.role != UserRole.superAdmin && user.tenantId != null) {
+        if (user.role == UserRole.superAdmin) {
+          TenantSession.instance.applyPlatformAdmin(user.id);
+        } else if (user.tenantId != null) {
           TenantSession.instance.applyAuthenticatedUser(
             authenticatedTenantId: user.tenantId!,
             authenticatedUserId: user.id,
             authenticatedTenantName: user.tenantName ?? '',
             authenticatedRole: user.role.apiValue,
+            authenticatedInviteCode: user.joinCode,
+            authenticatedIsApproved: user.isApproved,
             authenticatedCenterLat: user.centerLat ?? 0,
             authenticatedCenterLng: user.centerLng ?? 0,
           );
@@ -145,21 +149,23 @@ class _AuthGate extends ConsumerWidget {
     if (auth.status == AuthStatus.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (auth.user == null) return const LoginScreen();
-    if (auth.user!.role == UserRole.superAdmin) {
-      return PlatformAdminScreen(user: auth.user!);
-    }
-    if (auth.user!.role == UserRole.adminBarrio) {
-      return NeighborhoodAdminScreen(user: auth.user!);
-    }
+    final user = auth.user;
+    if (user == null) return const LoginScreen();
 
-    return MainNavigationShell(
-      isEmergencyMode: isEmergencyMode,
-      // En emergencia el botón principal es "Pedir ayuda" (SOS en 3 clics).
-      onPublish: () => isEmergencyMode
-          ? showSosSheet(context)
-          : QuickPublishLauncher.open(context, isEmergencyMode: isEmergencyMode),
-      onEmergencyPreviewChanged: onEmergencyPreviewChanged,
-    );
+    return switch (user.role) {
+      UserRole.superAdmin => PlatformAdminScreen(user: user),
+      UserRole.adminBarrio => NeighborhoodAdminScreen(user: user),
+      UserRole.comerciante || UserRole.vecino => MainNavigationShell(
+        isEmergencyMode: isEmergencyMode,
+        // En emergencia el botón principal es "Pedir ayuda" (SOS en 3 clics).
+        onPublish: () => isEmergencyMode
+            ? showSosSheet(context)
+            : QuickPublishLauncher.open(
+                context,
+                isEmergencyMode: isEmergencyMode,
+              ),
+        onEmergencyPreviewChanged: onEmergencyPreviewChanged,
+      ),
+    };
   }
 }

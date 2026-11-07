@@ -38,6 +38,9 @@ class User(Base, BarrioBaseMixin):
     home_lat: Mapped[float] = mapped_column(Float, nullable=False)
     home_lng: Mapped[float] = mapped_column(Float, nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="VECINO", nullable=False)
+    is_approved: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
     tutorial_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email: Mapped[str | None] = mapped_column(String(254), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)

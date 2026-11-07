@@ -30,6 +30,9 @@ PROTECTED_FIELDS = {
     "updated_at",
     "endorsements_count",
     "rating_avg",
+    "is_approved",
+    "provider_reply",
+    "replied_at",
     "role",
     "server_updated_at",
     "email",
@@ -281,6 +284,14 @@ async def process_sync_push(
                     raise ValueError("no puedes sincronizar el perfil de otro usuario")
                 if model_class is LocalService and principal_role != "COMERCIANTE":
                     raise ValueError("solo un comerciante puede sincronizar servicios")
+                if model_class is LocalService:
+                    merchant = await db.get(User, principal_id)
+                    if merchant is None or merchant.is_deleted:
+                        raise ValueError("la cuenta del comerciante ya no está activa")
+                    if not merchant.is_approved:
+                        raise ValueError(
+                            "la cuenta de comerciante está pendiente de aprobación"
+                        )
                 if model_class is NeighborEndorsement:
                     touched_services.add(await _validate_endorsement(payload, tenant_uuid, db))
 

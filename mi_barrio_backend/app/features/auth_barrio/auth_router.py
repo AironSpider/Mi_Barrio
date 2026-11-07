@@ -3,13 +3,14 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.core import rate_limit
 from app.core.auth_security import create_access_token, hash_password, verify_password
 from app.core.database import get_db_session
+from app.core.tenant_middleware import require_role
 from app.features.auth_barrio.models import PlatformAdmin, Tenant, User
 from app.features.auth_barrio.schemas import (
     AuthResponse,
@@ -75,6 +76,7 @@ def _auth_response(
             full_name=user.full_name,
             email=user.email,
             role=user.role,
+            is_approved=user.is_approved,
             tenant=TenantResponse.model_validate(tenant),
         ),
     )
@@ -102,6 +104,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
         email=email,
         password_hash=await _hash(payload.password),
         role=payload.role,
+        is_approved=payload.role != "COMERCIANTE",
         phone="",
         home_lat=tenant.center_lat,
         home_lng=tenant.center_lng,
@@ -222,6 +225,7 @@ async def current_user(
         full_name=user.full_name,
         email=user.email,
         role=user.role,
+        is_approved=user.is_approved,
         tenant=TenantResponse.model_validate(tenant),
     )
 
@@ -255,15 +259,12 @@ def _is_join_code_collision(error: IntegrityError) -> bool:
 )
 async def create_neighborhood(
     payload: NeighborhoodAdminCreate,
-    request: Request,
+    principal: dict = Depends(require_role(["SUPER_ADMIN"])),
     db: AsyncSession = Depends(get_db_session),
 ):
-    claims = getattr(request.state, "auth_claims", None)
-    if claims is None or claims.get("role") != "SUPER_ADMIN":
-        raise HTTPException(status_code=403, detail="Solo SUPER_ADMIN puede crear barrios")
     super_admin = await db.scalar(
         select(PlatformAdmin).where(
-            PlatformAdmin.id == uuid.UUID(claims["sub"]),
+            PlatformAdmin.id == uuid.UUID(principal["sub"]),
             PlatformAdmin.is_active.is_(True),
         )
     )
@@ -335,6 +336,7 @@ async def create_neighborhood(
         email=email,
         password_hash=await _hash(payload.admin_password),
         role="ADMIN_BARRIO",
+        is_approved=True,
         phone="",
         home_lat=tenant.center_lat,
         home_lng=tenant.center_lng,
@@ -362,3 +364,34 @@ async def create_neighborhood(
             tenant=TenantResponse.model_validate(tenant),
         ),
     )
+
+
+@platform_router.get("/neighborhoods")
+async def list_neighborhoods(
+    principal: dict = Depends(require_role(["SUPER_ADMIN"])),
+    db: AsyncSession = Depends(get_db_session),
+):
+    admin_counts = (
+        select(User.tenant_id, func.count(User.id).label("admin_count"))
+        .where(
+            User.role == "ADMIN_BARRIO",
+            User.is_deleted.is_(False),
+        )
+        .group_by(User.tenant_id)
+        .subquery()
+    )
+    rows = (await db.execute(
+        select(Tenant, func.coalesce(admin_counts.c.admin_count, 0))
+        .outerjoin(admin_counts, admin_counts.c.tenant_id == Tenant.id)
+        .order_by(Tenant.name)
+    )).all()
+    return [
+        {
+            "id": str(tenant.id),
+            "name": tenant.name,
+            "invite_code": tenant.join_code,
+            "is_emergency_active": tenant.is_emergency_active,
+            "admin_count": admin_count,
+        }
+        for tenant, admin_count in rows
+    ]

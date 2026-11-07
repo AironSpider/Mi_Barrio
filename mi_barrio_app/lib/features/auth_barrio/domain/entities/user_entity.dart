@@ -12,11 +12,11 @@ enum UserRole {
   bool get isSelfSelectable =>
       this == UserRole.vecino || this == UserRole.comerciante;
 
-  static UserRole fromApi(String value) => switch (value.toUpperCase()) {
+  static UserRole fromApi(String value) => switch (value.trim().toUpperCase()) {
     'VECINO' => UserRole.vecino,
     'COMERCIANTE' => UserRole.comerciante,
-    'ADMIN_BARRIO' => UserRole.adminBarrio,
-    'SUPER_ADMIN' => UserRole.superAdmin,
+    'ADMIN' || 'ADMIN_BARRIO' => UserRole.adminBarrio,
+    'SUPERADMIN' || 'SUPER_ADMIN' => UserRole.superAdmin,
     _ => throw FormatException('Rol de usuario no soportado: $value'),
   };
 }
@@ -28,6 +28,7 @@ class UserEntity {
     required this.fullName,
     required this.role,
     required this.token,
+    this.isApproved = true,
     this.tenantName,
     this.joinCode,
     this.centerLat,
@@ -39,6 +40,7 @@ class UserEntity {
   final String fullName;
   final UserRole role;
   final String token;
+  final bool isApproved;
   final String? tenantName;
   final String? joinCode;
   final double? centerLat;
