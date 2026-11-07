@@ -87,8 +87,8 @@ async def endorse_service(
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Califica un servicio con estrellas (1 a 5), comentario y foto opcionales.
-    Una calificación por vecino y servicio: si ya existe, se actualiza (upsert)."""
+    """Registra un visto bueno y, opcionalmente, estrellas, comentario y foto.
+    Un visto bueno por vecino y servicio: si ya existe, se actualiza (upsert)."""
     stmt_service = select(LocalService).where(
         LocalService.id == payload.service_id,
         LocalService.tenant_id == tenant_uuid,

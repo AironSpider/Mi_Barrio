@@ -24,8 +24,10 @@ import 'package:uuid/uuid.dart';
 /// Requiere el backend levantado. Si no responde, la prueba se salta.
 ///   flutter test test/e2e --dart-define=API_BASE_URL=http://localhost:8000
 void main() {
-  const baseUrl = String.fromEnvironment('API_BASE_URL',
-      defaultValue: 'http://localhost:8000');
+  const baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:8000',
+  );
   const tenant = TenantSession.demoTenantId;
   const me = TenantSession.demoUserId;
 
@@ -76,9 +78,13 @@ void main() {
     );
     await Future<void>.delayed(const Duration(milliseconds: 700));
     final db = await local.database;
-    Future<String?> status() async => (await db.query('solidarity_posts',
-            where: 'id = ?', whereArgs: [post.id]))
-        .first['sync_status'] as String?;
+    Future<String?> status() async =>
+        (await db.query(
+              'solidarity_posts',
+              where: 'id = ?',
+              whereArgs: [post.id],
+            )).first['sync_status']
+            as String?;
     expect(await status(), 'PENDING');
     expect(SyncCoordinator.instance.phase.value, SyncPhase.offline);
 
@@ -92,13 +98,19 @@ void main() {
     expect(await db.query('sync_outbox'), isEmpty);
 
     // 3. El servidor la devuelve desde PostgreSQL con el mismo UUID.
-    final r = await http.get(Uri.parse('$baseUrl/api/v1/sync/pull'),
-        headers: {'X-Tenant-ID': tenant});
+    final r = await http.get(
+      Uri.parse('$baseUrl/api/v1/sync/pull'),
+      headers: {'X-Tenant-ID': tenant},
+    );
     expect(r.statusCode, 200);
     final remote = (jsonDecode(r.body)['delta']['solidarity_posts'] as List)
         .cast<Map<String, dynamic>>()
         .where((p) => p['id'] == post.id);
-    expect(remote, hasLength(1), reason: 'La fila ${post.id} no está en PostgreSQL');
+    expect(
+      remote,
+      hasLength(1),
+      reason: 'La fila ${post.id} no está en PostgreSQL',
+    );
     expect(remote.first['title'], post.title);
 
     // ignore: avoid_print
@@ -106,8 +118,7 @@ void main() {
     await connection.close();
   });
 
-  test('servicios, calificación y perfil offline suben; el pull trae el promedio',
-      () async {
+  test('servicios, calificación y perfil offline suben; el pull trae el promedio', () async {
     if (!backendUp) {
       markTestSkipped('Backend no disponible en $baseUrl');
       return;
@@ -117,16 +128,18 @@ void main() {
 
     // Otro vecino (otro teléfono) publica un oficio que llega al servidor.
     final otherProvider = const Uuid().v4();
-    final created = await http.post(Uri.parse('$baseUrl/api/v1/services'),
-        headers: headers,
-        body: jsonEncode({
-          'provider_user_id': otherProvider,
-          'category': ServiceCategory.electricidad,
-          'title': 'E2E Electricista $stamp',
-          'description': 'Creado por otro teléfono',
-          'lat': TenantSession.demoCenterLat,
-          'lng': TenantSession.demoCenterLng,
-        }));
+    final created = await http.post(
+      Uri.parse('$baseUrl/api/v1/services'),
+      headers: headers,
+      body: jsonEncode({
+        'provider_user_id': otherProvider,
+        'category': ServiceCategory.electricidad,
+        'title': 'E2E Electricista $stamp',
+        'description': 'Creado por otro teléfono',
+        'lat': TenantSession.demoCenterLat,
+        'lng': TenantSession.demoCenterLng,
+      }),
+    );
     expect(created.statusCode, 201, reason: created.body);
     final otherServiceId = jsonDecode(created.body)['id'] as String;
 
@@ -144,8 +157,15 @@ void main() {
     // 0. Con red, el teléfono descarga el oficio del vecino; luego se queda sin red.
     await SyncCoordinator.instance.syncNow();
     final db = await local.database;
-    expect(await db.query('local_services', where: 'id = ?', whereArgs: [otherServiceId]),
-        hasLength(1), reason: 'El pull no trajo el oficio del otro teléfono');
+    expect(
+      await db.query(
+        'local_services',
+        where: 'id = ?',
+        whereArgs: [otherServiceId],
+      ),
+      hasLength(1),
+      reason: 'El pull no trajo el oficio del otro teléfono',
+    );
     online = false;
     connection.add(ConnectionStatus.offline);
 
@@ -167,6 +187,11 @@ void main() {
       rating: 4,
       shortComment: 'Llegó rápido',
     );
+    final simpleEndorsement = await EndorsementsSqliteDatasource().rateService(
+      tenantId: tenant,
+      serviceId: otherServiceId,
+      endorserUserId: const Uuid().v4(),
+    );
     final profileUserId = const Uuid().v4();
     await ProfileLocalStorage().saveProfile(
       userId: profileUserId,
@@ -179,10 +204,18 @@ void main() {
     );
     await Future<void>.delayed(const Duration(milliseconds: 700));
     Future<String?> status(String table, String id) async =>
-        (await db.query(table, where: 'id = ?', whereArgs: [id])).first['sync_status']
+        (await db.query(
+              table,
+              where: 'id = ?',
+              whereArgs: [id],
+            )).first['sync_status']
             as String?;
     expect(await status('local_services', mine.id), 'PENDING');
     expect(await status('neighbor_endorsements', rating.id), 'PENDING');
+    expect(
+      await status('neighbor_endorsements', simpleEndorsement.id),
+      'PENDING',
+    );
     expect(await status('users', profileUserId), 'PENDING');
 
     // 2. Vuelve internet.
@@ -192,31 +225,47 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
     await SyncCoordinator.instance.syncNow(); // asegura que el pull terminó
-    expect(await db.query('sync_outbox'), isEmpty,
-        reason: 'Quedaron mutaciones sin confirmar por el servidor');
+    expect(
+      await db.query('sync_outbox'),
+      isEmpty,
+      reason: 'Quedaron mutaciones sin confirmar por el servidor',
+    );
     expect(await status('local_services', mine.id), 'SYNCED');
     expect(await status('neighbor_endorsements', rating.id), 'SYNCED');
+    expect(
+      await status('neighbor_endorsements', simpleEndorsement.id),
+      'SYNCED',
+    );
     expect(await status('users', profileUserId), 'SYNCED');
 
     // 3. El servidor tiene mi oficio y recalculó la calificación del vecino.
-    final list = await http.get(Uri.parse('$baseUrl/api/v1/services'), headers: headers);
-    final services = (jsonDecode(list.body) as List).cast<Map<String, dynamic>>();
+    final list = await http.get(
+      Uri.parse('$baseUrl/api/v1/services'),
+      headers: headers,
+    );
+    final services = (jsonDecode(list.body) as List)
+        .cast<Map<String, dynamic>>();
     final remoteMine = services.firstWhere((s) => s['id'] == mine.id);
     expect(remoteMine['publisher_name'], 'Gasfitería E2E');
     final remoteOther = services.firstWhere((s) => s['id'] == otherServiceId);
     expect(remoteOther['rating_avg'], 4.0);
-    expect(remoteOther['endorsements_count'], 1);
+    expect(remoteOther['endorsements_count'], 2);
 
     // 4. El pull dejó en el teléfono el oficio del vecino con su promedio.
-    final localOther = await db
-        .query('local_services', where: 'id = ?', whereArgs: [otherServiceId]);
+    final localOther = await db.query(
+      'local_services',
+      where: 'id = ?',
+      whereArgs: [otherServiceId],
+    );
     expect(localOther, hasLength(1));
     expect(localOther.first['rating_avg'], 4.0);
-    expect(localOther.first['endorsements_count'], 1);
+    expect(localOther.first['endorsements_count'], 2);
     expect(localOther.first['sync_status'], 'SYNCED');
 
     // ignore: avoid_print
-    print('Servicios/calificación/perfil OK: ${mine.id}, $otherServiceId, $profileUserId');
+    print(
+      'Servicios/calificación/perfil OK: ${mine.id}, $otherServiceId, $profileUserId',
+    );
     await connection.close();
   });
 }

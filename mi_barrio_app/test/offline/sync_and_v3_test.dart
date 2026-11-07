@@ -452,6 +452,61 @@ void main() {
       expect((await ds.myRating(service.id, me))!.rating, 5);
     });
 
+    test('Dar visto bueno guarda en SQLite y encola la mutación', () async {
+      final ds = EndorsementsSqliteDatasource();
+      final endorsement = await ds.rateService(
+        tenantId: tenant,
+        serviceId: service.id,
+        endorserUserId: me,
+      );
+
+      expect(endorsement.rating, isNull);
+      expect(endorsement.isPending, isTrue);
+      expect((await ds.myRating(service.id, me))!.id, endorsement.id);
+      final pending = await (await db()).query(
+        'sync_outbox',
+        where: 'target_table = ? AND record_id = ?',
+        whereArgs: [EndorsementModel.table, endorsement.id],
+      );
+      expect(pending, hasLength(1));
+      final payload =
+          jsonDecode(pending.single['payload_json'] as String) as Map;
+      expect(payload['service_id'], service.id);
+      expect(payload['endorser_user_id'], me);
+      expect(payload['rating'], isNull);
+      expect(payload['is_deleted'], isFalse);
+    });
+
+    test('retirar visto bueno guarda borrado lógico en la cola', () async {
+      final ds = EndorsementsSqliteDatasource();
+      final created = await ds.rateService(
+        tenantId: tenant,
+        serviceId: service.id,
+        endorserUserId: me,
+      );
+
+      final removed = await ds.removeEndorsement(
+        tenantId: tenant,
+        serviceId: service.id,
+        endorserUserId: me,
+      );
+
+      expect(removed.id, created.id);
+      expect(removed.isDeleted, isTrue);
+      expect(removed.isPending, isTrue);
+      expect(await ds.myRating(service.id, me), isNull);
+      final pending = await (await db()).query(
+        'sync_outbox',
+        where: 'target_table = ? AND record_id = ?',
+        whereArgs: [EndorsementModel.table, created.id],
+        orderBy: 'outbox_id DESC',
+        limit: 1,
+      );
+      final payload =
+          jsonDecode(pending.single['payload_json'] as String) as Map;
+      expect(payload['is_deleted'], isTrue);
+    });
+
     test('permite estrellas vacías y rechaza datos inválidos', () async {
       final ds = EndorsementsSqliteDatasource();
       final empty = await ds.rateService(

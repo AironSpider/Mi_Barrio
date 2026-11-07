@@ -2,11 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../features/emergency_support/presentation/screens/emergency_map_screen.dart';
+import '../../features/profile_me/presentation/screens/profile_screen.dart';
 import '../../features/proximity_services/presentation/screens/services_directory_screen.dart';
 import '../../features/solidarity_network/presentation/screens/collaborative_wall_screen.dart';
 import 'app_theme.dart';
 import 'quick_publish_fab.dart';
-import 'ui_kit_preview_screen.dart';
 
 class ShellTab {
   const ShellTab({
@@ -54,7 +54,7 @@ class ShellTabs {
       label: 'Tú',
       icon: Icons.person_outline_rounded,
       selectedIcon: Icons.person_rounded,
-      builder: (_) => const UiKitPreviewScreen(),
+      builder: (_) => const ProfileScreen(),
     ),
   ];
 }

@@ -20,7 +20,29 @@ void main() {
     }
     expect(find.text('Publicar'), findsOneWidget);
     expect(find.byType(ServicesDirectoryScreen), findsOneWidget);
+    for (final oficio in [
+      'Gasfitería',
+      'Carpintería',
+      'Electricidad',
+      'Clases',
+      'Mascotas',
+    ]) {
+      expect(find.text(oficio), findsOneWidget);
+    }
     expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsNothing);
+  });
+
+  testWidgets('el selector de oficios permite filtrar el directorio', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MiBarrioApp());
+
+    final chip = find.byKey(const ValueKey('service_category_GASFITERIA'));
+    await tester.ensureVisible(chip);
+    await tester.tap(chip);
+    await tester.pump();
+
+    expect(tester.widget<ChoiceChip>(chip).selected, isTrue);
   });
 
   testWidgets('las pestañas cambian el contenido', (tester) async {

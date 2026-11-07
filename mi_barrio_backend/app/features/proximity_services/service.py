@@ -38,15 +38,22 @@ async def rating_avg_by_service(db: AsyncSession, tenant_id: uuid.UUID) -> dict[
 
 
 async def recalculate_service_rating(db: AsyncSession, service_id: uuid.UUID) -> LocalService | None:
-    """Actualiza endorsements_count (= cantidad de calificaciones con estrellas)
-    y marca el servicio como modificado para que el pull lleve el nuevo promedio."""
+    """Actualiza el total de vistos buenos y marca el servicio para el pull.
+
+    El promedio solo considera opiniones con estrellas; el contador también
+    incluye vistos buenos sin calificación, que son válidos en el cliente.
+    """
     service = await db.get(LocalService, service_id)
     if service is None:
         return None
     count = await db.scalar(
         select(func.count())
         .select_from(NeighborEndorsement)
-        .where(NeighborEndorsement.service_id == service_id, *_rated(service.tenant_id))
+        .where(
+            NeighborEndorsement.service_id == service_id,
+            NeighborEndorsement.tenant_id == service.tenant_id,
+            NeighborEndorsement.is_deleted.is_(False),
+        )
     )
     service.endorsements_count = int(count or 0)
     service.updated_at = datetime.now(timezone.utc)
