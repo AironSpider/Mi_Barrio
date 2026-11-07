@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mi_barrio_app/core/ui_kit/app_theme.dart';
 import 'package:mi_barrio_app/core/ui_kit/main_navigation_shell.dart';
 import 'package:mi_barrio_app/core/ui_kit/quick_publish_fab.dart';
+import 'package:mi_barrio_app/features/proximity_services/presentation/screens/services_directory_screen.dart';
 import 'package:mi_barrio_app/main.dart';
 
 void main() {
@@ -15,7 +16,7 @@ void main() {
     expect(find.text('Muro'), findsOneWidget);
     expect(find.text('Emergencia'), findsOneWidget);
     expect(find.text('Publicar'), findsOneWidget);
-    expect(find.text('Oficios del barrio'), findsOneWidget);
+    expect(find.byType(ServicesDirectoryScreen), findsOneWidget);
     expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsNothing);
   });
 
@@ -59,9 +60,21 @@ void main() {
     expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsNothing);
   });
 
-  testWidgets('el botón (+) responde aunque el modal aún no exista',
+  testWidgets('el botón (+) abre el modal de publicación rápida',
       (tester) async {
     await tester.pumpWidget(const MiBarrioApp());
+
+    await tester.tap(find.byKey(QuickPublishFab.fabKey));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+  });
+
+  testWidgets('sin onPublish, el botón (+) avisa en lugar de fallar',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.day(),
+      home: const MainNavigationShell(isEmergencyMode: false),
+    ));
 
     await tester.tap(find.byKey(QuickPublishFab.fabKey));
     await tester.pump();
