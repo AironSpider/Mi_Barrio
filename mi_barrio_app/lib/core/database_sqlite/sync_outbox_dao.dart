@@ -27,7 +27,7 @@ class SyncOutboxDao {
     );
   }
 
-  Future<List>> getPendingMutations(String tenantId) async {
+  Future<List<Map<String, dynamic>>> getPendingMutations(String tenantId) async {
     final db = await _dbProvider.database;
     return await db.query(
       'sync_outbox',
