@@ -5,6 +5,12 @@
 
 ---
 
+## ✅ SPRINT 5 CERRADO (sáb 11:30, H16.5) → todos pasamos al **Sprint 6**
+
+Verificado en la PC de Dandy contra PostgreSQL real: **13 endpoints (40/40 pruebas)**, calificaciones (15/15), sincronización de `users`, y **59/59 tests de la app**, incluido el e2e del Checkpoint 1. Dev 3: card con texto grande corregido y tests actualizados (Adrian). Backend: `main.py` reparado tras el último merge, y `/health` ahora revisa la base de datos y las migraciones.
+
+**Antes de empezar el Sprint 6, todos:** `git pull` → `alembic upgrade head` → abrir `http://localhost:8000/health` (debe decir `migrations_up_to_date: true`) → `flutter test`.
+
 ## 🚦 Estado del Sprint 5 (actualizado sáb 09:40, H14.7)
 
 | Parte | Estado |

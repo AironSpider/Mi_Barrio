@@ -112,6 +112,11 @@ async def process_sync_push(
                     touched_services.add(await _validate_endorsement(payload, tenant_uuid, db))
 
                 existing_record = await _find_existing(model_class, rec_id, tenant_uuid, payload, db)
+                if existing_record is None and model_class is not NeighborEndorsement:
+                    # El id ya existe en OTRO barrio: nunca se sobrescribe (aislamiento multi-tenant).
+                    taken = await db.scalar(select(model_class.id).where(model_class.id == rec_id))
+                    if taken is not None:
+                        raise ValueError("este id ya pertenece a otro barrio; genera un UUID nuevo")
 
                 client_updated_str = payload.get("updated_at")
                 if client_updated_str:
