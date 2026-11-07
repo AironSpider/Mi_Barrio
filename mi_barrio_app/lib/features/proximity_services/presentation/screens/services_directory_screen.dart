@@ -2,21 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/barrio_context/emergency_mode_provider.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
+import '../../../../core/ui_kit/podium_frame.dart';
 import '../../../../core/ui_kit/star_rating_display.dart';
+import '../../../../shared/emergency_ranking.dart';
 import '../../data/datasources/endorsements_sqlite_ds.dart';
 import '../../data/datasources/services_sqlite_ds.dart';
 import '../../data/models/endorsement_model.dart';
 import '../../data/models/service_model.dart';
+import '../widgets/offer_service_sheet.dart';
 import '../widgets/service_card.dart';
-
-import '../../../../core/barrio_context/emergency_mode_provider.dart';
-import '../../../../core/ui_kit/priority_podium_frame.dart';
-import '../../../../shared/emergency_ranking.dart';
-
-
+import '../widgets/service_detail_sheet.dart';
 
 class ServicesDirectoryScreen extends StatefulWidget {
   const ServicesDirectoryScreen({
@@ -72,6 +71,7 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
   bool _isLoading = true;
   String? _loadError;
   int _loadVersion = 0;
+  MerchantProfile _merchant = const MerchantProfile.none();
 
   @override
   void initState() {
@@ -84,11 +84,14 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
         widget.endorsementsDatasource ?? EndorsementsSqliteDatasource();
     _sync = SyncCoordinator.instance;
     _sync.phase.addListener(_onSyncChanged);
+    EmergencyModeProvider.instance.isActive.addListener(_onEmergencyChanged);
     _queueSubscription = SyncOutboxDao.onQueued.listen((tenantId) {
       if (tenantId == _tenantId) _loadServices();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_loadServices());
+      if (!mounted) return;
+      unawaited(_loadServices());
+      unawaited(_loadMerchant());
     });
   }
 
@@ -103,8 +106,13 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
   @override
   void dispose() {
     _sync.phase.removeListener(_onSyncChanged);
+    EmergencyModeProvider.instance.isActive.removeListener(_onEmergencyChanged);
     unawaited(_queueSubscription.cancel());
     super.dispose();
+  }
+
+  void _onEmergencyChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onSyncChanged() {
@@ -200,6 +208,31 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
     }
   }
 
+  Future<void> _loadMerchant() async {
+    final profile = await loadMerchantProfile(_userId, tenantId: _tenantId);
+    if (!mounted) return;
+    setState(() => _merchant = profile);
+  }
+
+  Future<void> _openOffer() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final published = await showOfferServiceSheet(
+      context,
+      tenantId: _tenantId,
+      userId: _userId,
+      datasource: _servicesDatasource,
+      profile: _merchant,
+    );
+    if (!published || !mounted) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Servicio publicado. Se sincronizará en segundo plano.'),
+        ),
+      );
+  }
+
   List<LocalServiceModel> get _visibleServices {
     final query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) return _services;
@@ -232,6 +265,18 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
+          if (_merchant.isMerchant) ...[
+            FilledButton.icon(
+              key: const ValueKey('offer_service_button'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(56),
+              ),
+              onPressed: () => unawaited(_openOffer()),
+              icon: const Icon(Icons.storefront_rounded),
+              label: const Text('Ofrecer servicio'),
+            ),
+            const SizedBox(height: 16),
+          ],
           TextField(
             key: const ValueKey('services_search'),
             onChanged: (value) => setState(() => _searchQuery = value),
@@ -307,49 +352,46 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
                   : 'No hay servicios de ${ServiceCategory.labels[_selectedCategory]}.',
             )
           else
-                       _buildServiceList(context),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: Column(
+                key: ValueKey('services_list_${EmergencyModeProvider.instance.isActive.value}'),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _buildServiceList(context),
+              ),
+            ),
         ],
       ),
     );
   }
-  
-  Widget _buildServiceList(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: EmergencyModeProvider.instance.isActive,
-      builder: (context, emergency, _) {
-        final session = TenantSession.instance;
-        final ranked = emergency
-            ? EmergencyRanking.rankServices(
-                _visibleServices,
-                lat: session.centerLat,
-                lng: session.centerLng,
-              )
-            : null;
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350),
-          child: Column(
-            key: ValueKey(
-              ranked == null
-                  ? 'normal'
-                  : 'podio_${ranked.map((r) => r.item.id).join(',')}',
-            ),
-            children: ranked == null
-                ? [
-                    for (final s in _visibleServices)
-                      _buildServiceCard(context, s),
-                  ]
-                : [
-                    for (final r in ranked)
-                      PriorityPodiumFrame(
-                        priority: r.priority,
-                        child: _buildServiceCard(context, r.item),
-                      ),
-                  ],
-          ),
-        );
-      },
+
+  /// En emergencia, las 3 primeras según el ranking suben arriba con el
+  /// marco "Prioridad 1/2/3"; el resto sigue en su orden normal.
+  List<Widget> _buildServiceList(BuildContext context) {
+    final services = _visibleServices;
+    if (!EmergencyModeProvider.instance.isActive.value) {
+      return [for (final s in services) _buildServiceCard(context, s)];
+    }
+    final session = TenantSession.instance;
+    final ranked = EmergencyRanking.rankServices(
+      services,
+      lat: session.centerLat,
+      lng: session.centerLng,
     );
+    final podium = ranked.where((r) => r.isPodium).toList();
+    final podiumIds = {for (final r in podium) r.item.id};
+    return [
+      for (final r in podium)
+        PodiumFrame(
+          key: ValueKey('podium_service_${r.item.id}'),
+          priority: r.priority!,
+          child: _buildServiceCard(context, r.item),
+        ),
+      for (final s in services)
+        if (!podiumIds.contains(s.id)) _buildServiceCard(context, s),
+    ];
   }
+
   Widget _buildServiceCard(BuildContext context, LocalServiceModel service) {
     final endorsement = _myEndorsements[service.id];
     final isOwnService = service.providerUserId == _userId;
@@ -372,6 +414,15 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
           onEndorse: isOwnService || _updatingEndorsements.contains(service.id)
               ? null
               : () => unawaited(_toggleEndorsement(service)),
+          onTap: () => unawaited(
+            showServiceDetailSheet(
+              context,
+              service: service,
+              tenantId: _tenantId,
+              userId: _userId,
+              endorsementsDatasource: _endorsementsDatasource,
+            ),
+          ),
         ),
         if (service.ratingAvg != null)
           Padding(

@@ -2,16 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/barrio_context/emergency_mode_provider.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
+import '../../../../core/ui_kit/podium_frame.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
+import '../../../../shared/emergency_ranking.dart';
 import '../../data/datasources/solidarity_sqlite_ds.dart';
 import '../../data/models/solidarity_post_model.dart';
-
-import '../../../../core/barrio_context/emergency_mode_provider.dart';
-import '../../../../core/ui_kit/priority_podium_frame.dart';
-import '../../../../shared/emergency_ranking.dart';
+import '../widgets/favor_detail_sheet.dart';
 
 class CollaborativeWallScreen extends StatefulWidget {
   const CollaborativeWallScreen({
@@ -19,12 +19,17 @@ class CollaborativeWallScreen extends StatefulWidget {
     this.criticalResourcesOnly = false,
     this.tenantId,
     this.datasource,
+    this.onCoordinate,
   });
 
   /// En Modo Emergencia prioriza recursos críticos (agua, botiquín, generador).
   final bool criticalResourcesOnly;
   final String? tenantId;
   final SolidaritySqliteDatasource? datasource;
+
+  /// Marca un favor ajeno como "en coordinación" (método de la capa de datos).
+  /// Si es null, el botón "Coordinar" del detalle aparece desactivado.
+  final CoordinateFavorCallback? onCoordinate;
 
   @override
   State<CollaborativeWallScreen> createState() =>
@@ -51,6 +56,7 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
     _sync = SyncCoordinator.instance;
     _sync.phase.addListener(_onSyncPhaseChanged);
     _sync.lastError.addListener(_onLastSyncErrorChanged);
+    EmergencyModeProvider.instance.isActive.addListener(_onEmergencyChanged);
     _queueSubscription = SyncOutboxDao.onQueued.listen((tenantId) {
       if (tenantId == _tenantId) _loadPosts();
     });
@@ -63,8 +69,13 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
   void dispose() {
     _sync.phase.removeListener(_onSyncPhaseChanged);
     _sync.lastError.removeListener(_onLastSyncErrorChanged);
+    EmergencyModeProvider.instance.isActive.removeListener(_onEmergencyChanged);
     unawaited(_queueSubscription.cancel());
     super.dispose();
+  }
+
+  void _onEmergencyChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onSyncPhaseChanged() {
@@ -91,6 +102,7 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
       final posts = await _datasource.getActivePosts(
         _tenantId,
         emergencyOnly: widget.criticalResourcesOnly,
+        includeCompleted: false,
       );
       if (!mounted || version != _loadVersion) return;
       setState(() {
@@ -107,8 +119,30 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
   }
 
   List<SolidarityPostModel> get _visiblePosts => _posts
+      .where((post) => post.status != SolidarityStatus.completado)
       .where((post) => _flowFilter == null || post.flowType == _flowFilter)
       .toList(growable: false);
+
+  void _openDetail(SolidarityPostModel post) {
+    unawaited(
+      showFavorDetailSheet(
+        context,
+        post: post,
+        userId: TenantSession.instance.userId,
+        onCoordinate: widget.onCoordinate ?? _coordinate,
+      ),
+    );
+  }
+
+  /// Coordina un favor ajeno: guarda PENDING en el teléfono y encola el cambio.
+  Future<void> _coordinate(SolidarityPostModel post) async {
+    await _datasource.coordinatePost(
+      tenantId: _tenantId,
+      postId: post.id,
+      coordinatorUserId: TenantSession.instance.userId,
+    );
+    if (mounted) unawaited(_loadPosts());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -173,46 +207,46 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
                   : 'No hay publicaciones en esta categoría.',
             )
           else
-            _buildPostList(),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: Column(
+                key: ValueKey('wall_list_${EmergencyModeProvider.instance.isActive.value}'),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _buildPostList(),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  
-  Widget _buildPostList() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: EmergencyModeProvider.instance.isActive,
-      builder: (context, emergency, _) {
-        final session = TenantSession.instance;
-        final ranked = emergency
-            ? EmergencyRanking.rankPosts(
-                _visiblePosts,
-                lat: session.centerLat,
-                lng: session.centerLng,
-              )
-            : null;
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350),
-          child: Column(
-            key: ValueKey(
-              ranked == null
-                  ? 'normal'
-                  : 'podio_${ranked.map((r) => r.item.id).join(',')}',
-            ),
-            children: ranked == null
-                ? [for (final post in _visiblePosts) _PostCard(post: post)]
-                : [
-                    for (final r in ranked)
-                      PriorityPodiumFrame(
-                        priority: r.priority,
-                        child: _PostCard(post: r.item),
-                      ),
-                  ],
-          ),
-        );
-      },
+  /// En emergencia, los 3 primeros según el ranking suben arriba con el
+  /// marco "Prioridad 1/2/3"; el resto sigue en su orden normal.
+  List<Widget> _buildPostList() {
+    final posts = _visiblePosts;
+    Widget card(SolidarityPostModel p) =>
+        _PostCard(post: p, onTap: () => _openDetail(p));
+    if (!EmergencyModeProvider.instance.isActive.value) {
+      return [for (final p in posts) card(p)];
+    }
+    final session = TenantSession.instance;
+    final ranked = EmergencyRanking.rankPosts(
+      posts,
+      lat: session.centerLat,
+      lng: session.centerLng,
     );
+    final podium = ranked.where((r) => r.isPodium).toList();
+    final podiumIds = {for (final r in podium) r.item.id};
+    return [
+      for (final r in podium)
+        PodiumFrame(
+          key: ValueKey('podium_post_${r.item.id}'),
+          priority: r.priority!,
+          child: card(r.item),
+        ),
+      for (final p in posts)
+        if (!podiumIds.contains(p.id)) card(p),
+    ];
   }
 
   Widget _buildSyncControls(
@@ -297,9 +331,10 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
 }
 
 class _PostCard extends StatelessWidget {
-  const _PostCard({required this.post});
+  const _PostCard({required this.post, required this.onTap});
 
   final SolidarityPostModel post;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -308,7 +343,10 @@ class _PostCard extends StatelessWidget {
     return Card(
       key: ValueKey('solidarity_post_${post.id}'),
       margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,6 +390,7 @@ class _PostCard extends StatelessWidget {
             ],
           ],
         ),
+      ),
       ),
     );
   }

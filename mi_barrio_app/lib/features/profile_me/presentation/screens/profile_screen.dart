@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/barrio_context/tenant_session.dart';
-
 import '../../../../core/sync_manager/pending_changes.dart';
-
 import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../../auth_barrio/presentation/providers/auth_provider.dart';
 import '../../data/profile_local_storage.dart';
@@ -108,35 +106,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  
-  Future<void> _confirmLogout() async {
-    final user = ref.read(authProvider).user;
-    final aviso = PendingChanges.logoutWarning(
-      await PendingChanges.count(user?.tenantId),
-    );
-    if (!mounted) return;
-
+  /// Si hay cambios sin sincronizar, pide confirmación antes de cerrar sesión.
+  Future<void> _logout() async {
+    final n = await PendingChanges.count(TenantSession.instance.tenantId);
+    final aviso = PendingChanges.logoutWarning(n);
     if (aviso != null) {
-      final salir = await showDialog<bool>(
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.sync_problem_rounded),
+        builder: (dialogContext) => AlertDialog(
           title: const Text('Cambios sin sincronizar'),
           content: Text(aviso),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Quedarme'),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Seguir aquí'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Cerrar sesión igual'),
+              style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Cerrar sesión'),
             ),
           ],
         ),
       );
-      if (salir != true || !mounted) return;
+      if (confirmed != true) return;
     }
+    if (!mounted) return;
     await ref.read(authProvider.notifier).logout();
   }
 
@@ -234,7 +231,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: _confirmLogout,
+          key: const ValueKey('logout_button'),
+          onPressed: () => unawaited(_logout()),
           icon: const Icon(Icons.logout_rounded),
           label: const Text('Cerrar sesión'),
         ),
