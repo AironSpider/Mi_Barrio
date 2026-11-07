@@ -23,7 +23,6 @@ async def push_offline_mutations(
     except ValueError:
         raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
 
-    # Delegamos el trabajo pesado al servicio que acabamos de crear
     processed_ids = await process_sync_push(tenant_uuid, request, db)
 
     return SyncPushResponse(
@@ -44,35 +43,42 @@ async def pull_delta(
     except ValueError:
         raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
 
-    # Consultamos las tablas filtrando por el barrio actual
     posts_stmt = select(SolidarityPost).where(SolidarityPost.tenant_id == tenant_uuid)
     services_stmt = select(LocalService).where(LocalService.tenant_id == tenant_uuid)
-    
+
     if since:
         try:
             parsed_since = datetime.fromisoformat(since.replace("Z", "+00:00"))
-            posts_stmt = posts_stmt.where(SolidarityPost.updated_at > parsed_since)
-            services_stmt = services_stmt.where(LocalService.updated_at > parsed_since)
+            # Normalizar a naive UTC si la base de datos almacena sin tzinfo
+            parsed_since_naive = parsed_since.astimezone(timezone.utc).replace(tzinfo=None)
+            posts_stmt = posts_stmt.where(SolidarityPost.updated_at > parsed_since_naive)
+            services_stmt = services_stmt.where(LocalService.updated_at > parsed_since_naive)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Formato de fecha inválido.")
+            raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usar ISO-8601.")
 
     posts_results = await db.execute(posts_stmt)
     services_results = await db.execute(services_stmt)
 
-    # Serialización manual rápida para evitar errores de validación de Pydantic con SQLAlchemy
-    def serialize_records(records):
-        return [
-            {**{c.name: getattr(r, c.name) for c in r.__table__.columns}, 
-             "id": str(r.id), "tenant_id": str(r.tenant_id), 
-             "updated_at": r.updated_at.isoformat()}
-            for r in records
-        ]
+    def serialize(records):
+        out = []
+        for r in records:
+            item = {}
+            for col in r.__table__.columns:
+                val = getattr(r, col.name)
+                if isinstance(val, uuid.UUID):
+                    item[col.name] = str(val)
+                elif isinstance(val, datetime):
+                    item[col.name] = val.isoformat()
+                else:
+                    item[col.name] = val
+            out.append(item)
+        return out
 
     return SyncPullResponse(
         server_timestamp=datetime.now(timezone.utc),
         has_more=False,
         delta={
-            "solidarity_posts": serialize_records(posts_results.scalars().all()),
-            "local_services": serialize_records(services_results.scalars().all()),
+            "solidarity_posts": serialize(posts_results.scalars().all()),
+            "local_services": serialize(services_results.scalars().all()),
         },
     )
