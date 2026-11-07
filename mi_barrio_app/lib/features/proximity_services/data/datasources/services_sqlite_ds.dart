@@ -27,6 +27,8 @@ class ServicesSqliteDatasource {
     required double lng,
     String description = '',
     bool isAvailableInEmergency = false,
+    String? publisherType,
+    String? publisherName,
   }) async {
     RecordValidation.uuid(tenantId, 'tenantId');
     RecordValidation.uuid(providerUserId, 'providerUserId');
@@ -43,6 +45,8 @@ class ServicesSqliteDatasource {
       title: cleanTitle,
       description: description.trim(),
       isAvailableInEmergency: isAvailableInEmergency,
+      publisherType: publisherType?.trim().isEmpty ?? true ? null : publisherType!.trim(),
+      publisherName: publisherName?.trim().isEmpty ?? true ? null : publisherName!.trim(),
       lat: lat,
       lng: lng,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
@@ -64,7 +68,7 @@ class ServicesSqliteDatasource {
     return service;
   }
 
-  /// Oficios del barrio ordenados por "Visto Bueno Vecinal" (más avalados primero).
+  /// Oficios del barrio: mejor promedio de estrellas primero, luego más calificados.
   Future<List<LocalServiceModel>> getServices(
     String tenantId, {
     String? category,
@@ -83,7 +87,7 @@ class ServicesSqliteDatasource {
       LocalServiceModel.table,
       where: where.toString(),
       whereArgs: args,
-      orderBy: 'endorsements_count DESC, title ASC',
+      orderBy: 'COALESCE(rating_avg, 0) DESC, endorsements_count DESC, title ASC',
     );
     return rows.map(LocalServiceModel.fromSqlite).toList();
   }

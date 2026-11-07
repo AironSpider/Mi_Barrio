@@ -53,13 +53,22 @@ class LocalDatabase {
   /// Actualiza teléfonos que ya tenían una versión anterior instalada
   /// sin borrar sus datos ni sus mutaciones pendientes.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    final batch = db.batch();
     for (var v = oldVersion + 1; v <= newVersion; v++) {
       for (final sql in SqliteTables.migrations[v] ?? const <String>[]) {
-        batch.execute(sql);
+        await db.execute(sql);
+      }
+      final columns = SqliteTables.addedColumns[v] ?? const {};
+      for (final table in columns.entries) {
+        final existing = (await db.rawQuery('PRAGMA table_info(${table.key})'))
+            .map((c) => c['name'])
+            .toSet();
+        for (final col in table.value.entries) {
+          if (!existing.contains(col.key)) {
+            await db.execute('ALTER TABLE ${table.key} ADD COLUMN ${col.key} ${col.value}');
+          }
+        }
       }
     }
-    await batch.commit(noResult: true);
   }
 
   Future<void> close() async {

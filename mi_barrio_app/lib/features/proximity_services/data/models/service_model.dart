@@ -35,6 +35,9 @@ class LocalServiceModel {
     this.description = '',
     this.isAvailableInEmergency = false,
     this.endorsementsCount = 0,
+    this.ratingAvg,
+    this.publisherType,
+    this.publisherName,
     required this.lat,
     required this.lng,
     this.isDeleted = false,
@@ -56,6 +59,13 @@ class LocalServiceModel {
   /// Lo calcula el servidor a partir de `neighbor_endorsements`;
   /// el teléfono solo lo muestra.
   final int endorsementsCount;
+
+  /// Promedio de estrellas (1 a 5) calculado por el servidor; null = sin calificaciones.
+  final double? ratingAvg;
+
+  /// Perfil de publicador (v3): Persona natural, Emprendedor, Bodega, etc.
+  final String? publisherType;
+  final String? publisherName;
   final double lat;
   final double lng;
   final bool isDeleted;
@@ -73,6 +83,9 @@ class LocalServiceModel {
         'description': description,
         'is_available_in_emergency': isAvailableInEmergency ? 1 : 0,
         'endorsements_count': endorsementsCount,
+        'rating_avg': ratingAvg,
+        'publisher_type': publisherType,
+        'publisher_name': publisherName,
         'lat': lat,
         'lng': lng,
         'is_deleted': isDeleted ? 1 : 0,
@@ -80,8 +93,8 @@ class LocalServiceModel {
         'sync_status': syncStatus,
       };
 
-  /// Payload para `/sync/push`. No incluye `endorsements_count`: si dos
-  /// teléfonos lo enviaran offline, Last-Write-Wins perdería avales.
+  /// Payload para `/sync/push`. No incluye `endorsements_count` ni `rating_avg`:
+  /// los calcula el servidor (si dos teléfonos los enviaran, LWW perdería votos).
   Map<String, Object?> toSyncPayload() => {
         'id': id,
         'provider_user_id': providerUserId,
@@ -89,6 +102,8 @@ class LocalServiceModel {
         'title': title,
         'description': description,
         'is_available_in_emergency': isAvailableInEmergency,
+        'publisher_type': publisherType,
+        'publisher_name': publisherName,
         'lat': lat,
         'lng': lng,
         'is_deleted': isDeleted,
@@ -105,6 +120,9 @@ class LocalServiceModel {
       description: row['description'] as String? ?? '',
       isAvailableInEmergency: (row['is_available_in_emergency'] as int? ?? 0) == 1,
       endorsementsCount: row['endorsements_count'] as int? ?? 0,
+      ratingAvg: (row['rating_avg'] as num?)?.toDouble(),
+      publisherType: row['publisher_type'] as String?,
+      publisherName: row['publisher_name'] as String?,
       lat: (row['lat'] as num).toDouble(),
       lng: (row['lng'] as num).toDouble(),
       isDeleted: (row['is_deleted'] as int? ?? 0) == 1,

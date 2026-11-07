@@ -13,7 +13,7 @@ class SqliteTables {
 
   /// Versión actual del esquema. Súbela al agregar tablas o columnas
   /// y añade el paso correspondiente en [migrations].
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
 
   // ── Valores permitidos (idénticos al contrato del backend) ──
   static const syncPending = 'PENDING';
@@ -51,6 +51,9 @@ class SqliteTables {
       description TEXT NOT NULL DEFAULT '',
       is_available_in_emergency INTEGER NOT NULL DEFAULT 0,
       endorsements_count INTEGER NOT NULL DEFAULT 0,
+      rating_avg REAL,
+      publisher_type TEXT,
+      publisher_name TEXT,
       lat REAL NOT NULL,
       lng REAL NOT NULL,
       is_deleted INTEGER NOT NULL DEFAULT 0,
@@ -59,7 +62,59 @@ class SqliteTables {
     )
   ''';
 
+  /// Calificación con estrellas (reemplaza al "Visto Bueno").
+  /// Una por vecino y servicio: el id es UUID v5(service_id + endorser_user_id).
+  static const createNeighborEndorsements = '''
+    CREATE TABLE IF NOT EXISTS neighbor_endorsements (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      service_id TEXT NOT NULL,
+      endorser_user_id TEXT NOT NULL,
+      rating INTEGER CHECK (rating IS NULL OR rating BETWEEN 1 AND 5),
+      short_comment TEXT,
+      photo_b64 TEXT,
+      is_deleted INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      sync_status TEXT NOT NULL DEFAULT 'SYNCED',
+      UNIQUE (service_id, endorser_user_id)
+    )
+  ''';
+
+  /// Perfil del vecino (módulo "Tú").
+  static const createUsers = '''
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      phone TEXT NOT NULL DEFAULT '',
+      address_reference TEXT,
+      home_lat REAL NOT NULL,
+      home_lng REAL NOT NULL,
+      role TEXT NOT NULL DEFAULT 'VECINO',
+      tutorial_completed INTEGER NOT NULL DEFAULT 0,
+      email TEXT,
+      whatsapp TEXT,
+      facebook_url TEXT,
+      instagram_url TEXT,
+      photo_b64 TEXT,
+      publisher_type TEXT,
+      publisher_category TEXT,
+      publisher_name TEXT,
+      is_deleted INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      sync_status TEXT NOT NULL DEFAULT 'SYNCED'
+    )
+  ''';
+
   // ── Tablas exclusivas del dispositivo ──
+
+  /// Preferencias locales (ej. toggle de emergencia del vecino).
+  static const createAppSettings = '''
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    )
+  ''';
 
   /// Cola de mutaciones pendientes de subir (Outbox Pattern).
   static const createSyncOutbox = '''
@@ -97,19 +152,43 @@ class SqliteTables {
         'ON sync_outbox (tenant_id, outbox_id)',
   ];
 
+  static const indexesV3 = [
+    'CREATE INDEX IF NOT EXISTS idx_endorsements_service '
+        'ON neighbor_endorsements (tenant_id, service_id, is_deleted)',
+    'CREATE INDEX IF NOT EXISTS idx_users_tenant ON users (tenant_id)',
+  ];
+
   /// Esquema completo para una instalación nueva.
   static const List<String> createAll = [
     createSolidarityPosts,
     createLocalServices,
+    createNeighborEndorsements,
+    createUsers,
     createSyncOutbox,
     createSyncState,
+    createAppSettings,
     ...indexes,
+    ...indexesV3,
   ];
 
   /// Pasos de actualización: clave = versión destino.
   /// v1 (Sprint 1): solidarity_posts, sync_outbox, sync_state.
   /// v2 (Sprint 2): + local_services + índices.
+  /// v3 (Sprint 5): + neighbor_endorsements, users, app_settings.
   static const Map<int, List<String>> migrations = {
     2: [createLocalServices, ...indexes],
+    3: [createNeighborEndorsements, createUsers, createAppSettings, ...indexesV3],
+  };
+
+  /// Columnas nuevas en tablas existentes, por versión destino.
+  /// Se agregan solo si faltan (SQLite no tiene ADD COLUMN IF NOT EXISTS).
+  static const Map<int, Map<String, Map<String, String>>> addedColumns = {
+    3: {
+      'local_services': {
+        'rating_avg': 'REAL',
+        'publisher_type': 'TEXT',
+        'publisher_name': 'TEXT',
+      },
+    },
   };
 }

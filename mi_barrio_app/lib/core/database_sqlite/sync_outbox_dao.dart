@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:sqflite/sqflite.dart';
@@ -14,6 +15,20 @@ class OutboxOperation {
 
 class SyncOutboxDao {
   final LocalDatabase _dbProvider = LocalDatabase.instance;
+
+  static final StreamController<String> _queued = StreamController.broadcast();
+
+  /// Avisa (con el tenant) cada vez que se encola una mutación.
+  /// El SyncCoordinator lo escucha para sincronizar apenas haya red.
+  static Stream<String> get onQueued => _queued.stream;
+
+  /// Cantidad de mutaciones pendientes del barrio (para el aviso de "N cambios sin sincronizar").
+  Future<int> countPending(String tenantId) async {
+    final db = await _dbProvider.database;
+    final r = await db.rawQuery(
+        'SELECT COUNT(*) AS c FROM sync_outbox WHERE tenant_id = ?', [tenantId]);
+    return r.first['c'] as int;
+  }
 
   /// Encola una mutación pendiente de subir.
   ///
@@ -44,6 +59,8 @@ class SyncOutboxDao {
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    // Aviso diferido: si estamos dentro de una transacción, el sync espera a que termine.
+    scheduleMicrotask(() => _queued.add(tenantId));
   }
 
   Future<List<Map<String, dynamic>>> getPendingMutations(String tenantId) async {

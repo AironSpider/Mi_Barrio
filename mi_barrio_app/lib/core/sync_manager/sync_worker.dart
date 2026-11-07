@@ -19,14 +19,59 @@ class PushResult {
   });
 }
 
+/// Resultado de descargar cambios del servidor.
+class PullResult {
+  final bool success;
+  final int savedCount;
+  final int skippedPendingCount;
+  final String? message;
+
+  const PullResult({
+    required this.success,
+    this.savedCount = 0,
+    this.skippedPendingCount = 0,
+    this.message,
+  });
+}
+
 class SyncWorker {
   final String baseUrl;
   final SyncOutboxDao _outboxDao = SyncOutboxDao();
+  final http.Client _client;
 
   // Solo estas tablas se pueden marcar como SYNCED.
-  static const _syncableTables = {'solidarity_posts', 'local_services'};
+  static const _syncableTables = {
+    'solidarity_posts',
+    'local_services',
+    'neighbor_endorsements',
+    'users',
+  };
 
-  SyncWorker({required this.baseUrl});
+  /// Columnas que se guardan en SQLite por tabla al hacer pull.
+  /// Lo que el servidor mande de más (ej. created_at) se ignora;
+  /// lo que falte queda en null / valor por defecto.
+  static const _pullColumns = <String, List<String>>{
+    'solidarity_posts': [
+      'id', 'tenant_id', 'author_user_id', 'flow_type', 'modality', 'title',
+      'description', 'is_emergency_context', 'status', 'lat', 'lng',
+      'is_deleted', 'updated_at',
+    ],
+    'local_services': [
+      'id', 'tenant_id', 'provider_user_id', 'category', 'title', 'description',
+      'is_available_in_emergency', 'endorsements_count', 'rating_avg',
+      'publisher_type', 'publisher_name', 'lat', 'lng', 'is_deleted', 'updated_at',
+    ],
+  };
+
+  /// Columnas booleanas: el servidor manda true/false, SQLite guarda 1/0.
+  static const _boolColumns = {
+    'is_emergency_context',
+    'is_available_in_emergency',
+    'is_deleted',
+  };
+
+  SyncWorker({required this.baseUrl, http.Client? client})
+      : _client = client ?? http.Client();
 
   Future<void> synchronize(String tenantId) async {
     await pushLocalChanges(tenantId);
@@ -49,7 +94,7 @@ class SyncWorker {
         };
       }).toList();
 
-      final response = await http
+      final response = await _client
           .post(
             Uri.parse('$baseUrl/api/v1/sync/push'),
             headers: {
@@ -122,67 +167,94 @@ class SyncWorker {
     }
   }
 
-  Future<void> pullRemoteChanges(String tenantId) async {
-    final db = await LocalDatabase.instance.database;
-
-    final state = await db.query(
-      'sync_state',
-      where: 'tenant_id = ?',
-      whereArgs: [tenantId],
-    );
-
-    String? lastPulled =
-        state.isNotEmpty ? state.first['last_pulled_at'] as String? : null;
-
-    final uri = Uri.parse('$baseUrl/api/v1/sync/pull').replace(
-      queryParameters: lastPulled != null ? {'since': lastPulled} : null,
-    );
-
+  /// Descarga lo que cambió en el servidor desde la última vez y lo guarda en SQLite.
+  ///
+  /// Si un registro tiene cambios locales todavía sin subir (PENDING), NO se pisa:
+  /// primero se sube con el push y el servidor decide con Last-Write-Wins.
+  Future<PullResult> pullRemoteChanges(String tenantId) async {
     try {
-      final response = await http.get(
-        uri,
-        headers: {'X-Tenant-ID': tenantId},
+      final db = await LocalDatabase.instance.database;
+
+      final state = await db.query(
+        'sync_state',
+        where: 'tenant_id = ?',
+        whereArgs: [tenantId],
+      );
+      final lastPulled =
+          state.isNotEmpty ? state.first['last_pulled_at'] as String? : null;
+
+      final uri = Uri.parse('$baseUrl/api/v1/sync/pull').replace(
+        queryParameters: lastPulled != null ? {'since': lastPulled} : null,
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final String serverTimestamp = data['server_timestamp'];
-        final List posts = data['delta']['solidarity_posts'] ?? [];
+      final response = await _client
+          .get(uri, headers: {'X-Tenant-ID': tenantId})
+          .timeout(const Duration(seconds: 15));
 
-        final batch = db.batch();
-        for (var p in posts) {
-          batch.insert(
-            'solidarity_posts',
-            {
-              'id': p['id'],
-              'tenant_id': p['tenant_id'],
-              'author_user_id': p['author_user_id'],
-              'flow_type': p['flow_type'],
-              'modality': p['modality'],
-              'title': p['title'],
-              'description': p['description'],
-              'is_emergency_context': p['is_emergency_context'] == true ? 1 : 0,
-              'status': p['status'],
-              'lat': p['lat'],
-              'lng': p['lng'],
-              'is_deleted': p['is_deleted'] == true ? 1 : 0,
-              'updated_at': p['updated_at'],
-              'sync_status': 'SYNCED',
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+      if (response.statusCode != 200) {
+        return PullResult(
+          success: false,
+          message: 'El servidor respondio ${response.statusCode}',
+        );
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final serverTimestamp = data['server_timestamp'] as String;
+      final delta = (data['delta'] as Map<String, dynamic>?) ?? const {};
+
+      var saved = 0;
+      var skipped = 0;
+      await db.transaction((txn) async {
+        for (final entry in _pullColumns.entries) {
+          final table = entry.key;
+          final rows = (delta[table] as List?) ?? const [];
+          if (rows.isEmpty) continue;
+
+          final pendingIds = (await txn.query(
+            table,
+            columns: ['id'],
+            where: 'tenant_id = ? AND sync_status = ?',
+            whereArgs: [tenantId, 'PENDING'],
+          ))
+              .map((r) => r['id'])
+              .toSet();
+
+          for (final raw in rows) {
+            final record = raw as Map<String, dynamic>;
+            // Seguridad multi-tenant: nunca guardar datos de otro barrio.
+            if (record['tenant_id'] != null && record['tenant_id'] != tenantId) {
+              continue;
+            }
+            if (pendingIds.contains(record['id'])) {
+              skipped++;
+              continue;
+            }
+            final row = <String, Object?>{'tenant_id': tenantId};
+            for (final col in entry.value) {
+              if (!record.containsKey(col)) continue;
+              final value = record[col];
+              row[col] = _boolColumns.contains(col)
+                  ? ((value == true || value == 1) ? 1 : 0)
+                  : value;
+            }
+            row['sync_status'] = 'SYNCED';
+            await txn.insert(table, row,
+                conflictAlgorithm: ConflictAlgorithm.replace);
+            saved++;
+          }
         }
 
-        batch.insert(
+        await txn.insert(
           'sync_state',
           {'tenant_id': tenantId, 'last_pulled_at': serverTimestamp},
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
+      });
 
-        await batch.commit(noResult: true);
-      }
+      return PullResult(success: true, savedCount: saved, skippedPendingCount: skipped);
     } catch (e) {
       // Sin conexion: el usuario sigue usando sus datos locales sin error.
+      return PullResult(success: false, message: e.toString());
     }
   }
 }

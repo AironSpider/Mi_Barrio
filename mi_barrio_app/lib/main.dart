@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'core/barrio_context/emergency_mode_provider.dart';
 import 'core/network/connectivity_monitor.dart';
+import 'core/sync_manager/sync_coordinator.dart';
 import 'core/ui_kit/app_theme.dart';
 import 'core/ui_kit/main_navigation_shell.dart';
 import 'core/ui_kit/quick_publish_launcher.dart';
@@ -17,6 +19,10 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
   await ConnectivityMonitor.instance.start();
+  // Dev 2: estado de emergencia guardado + sincronización automática
+  // (al abrir, al volver internet, tras cada publicación y cada 60 s).
+  await EmergencyModeProvider.instance.load();
+  await SyncCoordinator.instance.start();
   runApp(const MiBarrioApp());
 }
 
