@@ -8,6 +8,7 @@ import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../../auth_barrio/presentation/providers/auth_provider.dart';
 import '../../data/profile_local_storage.dart';
 import '../../data/user_profile_model.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key, this.storage});
@@ -183,6 +184,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 )
               : const Icon(Icons.save_rounded),
           label: const Text('Guardar perfil'),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          key: const ValueKey('open_edit_profile'),
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => EditProfileScreen(storage: _storage)),
+            );
+            if (mounted) unawaited(_loadProfile());
+          },
+          icon: const Icon(Icons.manage_accounts_rounded),
+          label: const Text('Redes y perfil de publicador'),
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
