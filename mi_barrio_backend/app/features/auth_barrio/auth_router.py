@@ -1,3 +1,4 @@
+"""Cuentas: registro, login, sesión actual y gestión de barrios del superadministrador."""
 import uuid
 import secrets
 
@@ -107,6 +108,7 @@ def _auth_response(user: User, tenant: Tenant) -> AuthResponse:
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_session)):
+    """Crea la cuenta (vecino o comerciante) en el barrio del código, envía el código de verificación al correo y devuelve la sesión."""
     email = payload.email.strip().lower()
     # Correos desechables, con errores de tipeo o de dominios que no existen
     # nunca recibirían el código: se rechazan antes de crear la cuenta.
@@ -181,6 +183,7 @@ async def login(
     request: Request,
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Inicia sesión con correo y contraseña. Tras varios intentos fallidos pide esperar (429)."""
     email = payload.email.strip().lower()
     ip = _client_ip(request)
     wait = rate_limit.retry_after(email, ip)
@@ -233,6 +236,7 @@ async def current_user(
     request: Request,
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Datos de la cuenta de la sesión actual (para restaurar la sesión al abrir la app)."""
     claims = getattr(request.state, "auth_claims", None)
     if claims is None:
         raise HTTPException(
@@ -323,6 +327,7 @@ async def create_neighborhood(
     principal: dict = Depends(require_role(["SUPER_ADMIN"])),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Solo superadministrador: crea un barrio (o usa uno existente por su código) y su administrador."""
     super_admin = await db.scalar(
         select(PlatformAdmin).where(
             PlatformAdmin.id == uuid.UUID(principal["sub"]),
@@ -422,6 +427,7 @@ async def list_neighborhoods(
     principal: dict = Depends(require_role(["SUPER_ADMIN"])),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Solo superadministrador: lista los barrios con su código y si tienen administrador."""
     admin_counts = (
         select(User.tenant_id, func.count(User.id).label("admin_count"))
         .where(

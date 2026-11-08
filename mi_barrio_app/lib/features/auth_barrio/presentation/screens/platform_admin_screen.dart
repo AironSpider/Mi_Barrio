@@ -14,6 +14,7 @@ import '../providers/auth_provider.dart';
 /// Trae los barrios de la plataforma (lo inyectan los tests).
 typedef NeighborhoodsLoader = Future<List<NeighborhoodSummary>> Function();
 
+/// Panel del superadministrador: crear barrios con su administrador y ver los barrios.
 class PlatformAdminScreen extends ConsumerStatefulWidget {
   const PlatformAdminScreen({
     super.key,

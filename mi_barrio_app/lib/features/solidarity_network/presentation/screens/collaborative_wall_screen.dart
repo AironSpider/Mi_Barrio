@@ -19,6 +19,7 @@ import '../widgets/post_meta_label.dart';
 import '../widgets/support_groups_section.dart';
 import 'favor_detail_screen.dart';
 
+/// Muro de favores del barrio (pido / ofrezco ayuda), con búsqueda y filtros.
 class CollaborativeWallScreen extends StatefulWidget {
   const CollaborativeWallScreen({
     super.key,

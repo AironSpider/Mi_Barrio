@@ -1,3 +1,4 @@
+"""Tabla de reportes de publicaciones (moderación)."""
 import uuid
 
 from sqlalchemy import String, UniqueConstraint

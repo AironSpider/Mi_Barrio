@@ -1,8 +1,10 @@
+"""Esquemas (Pydantic) del push y pull de sincronización."""
 from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 class MutationItem(BaseModel):
+    """Un cambio hecho en el celular: tabla, id del registro, operación (UPSERT o DELETE) y sus datos (el payload lleva updated_at para LWW)."""
     target_table: str
     record_id: str
     operation: str = Field(..., pattern="^(UPSERT|DELETE)$")
@@ -10,6 +12,7 @@ class MutationItem(BaseModel):
 
 class SyncPushRequest(BaseModel):
     # Ejemplo listo para "Try it out" en Swagger (un post creado sin internet).
+    """Lote de cambios que sube la app."""
     model_config = ConfigDict(json_schema_extra={"examples": [{
         "client_sync_timestamp": "2026-11-07T15:00:00Z",
         "mutations": [{
@@ -37,11 +40,13 @@ class SyncPushRequest(BaseModel):
     mutations: List[MutationItem]
 
 class RejectedMutation(BaseModel):
+    """Un cambio que el servidor no aceptó y por qué."""
     record_id: str
     target_table: str
     reason: str
 
 class SyncPushResponse(BaseModel):
+    """Resultado del push: cuántos se aplicaron, cuáles no y la hora del servidor."""
     success: bool
     processed_count: int
     server_timestamp: datetime
@@ -57,6 +62,7 @@ class TenantInfo(BaseModel):
     registered: bool = False  # False si el barrio no existe en la tabla tenants
 
 class SyncPullResponse(BaseModel):
+    """Cambios del barrio desde la última vez (delta por tabla), datos del barrio y si hay más páginas."""
     server_timestamp: datetime
     has_more: bool
     tenant: Optional[TenantInfo] = None

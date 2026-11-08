@@ -1,3 +1,4 @@
+"""Esquemas (Pydantic) de emergencia."""
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
@@ -6,6 +7,7 @@ import uuid
 from app.shared.contract_values import ReportStatus, SupportGroupType, UrgencyLevel, VulnerabilityType
 
 class VulnerableReportBase(BaseModel):
+    """Campos comunes de un pedido de ayuda (SOS)."""
     reporter_user_id: uuid.UUID
     urgency_level: str = Field(..., description="CRITICA, ALTA, MEDIA")
     vulnerability_type: str = Field(..., max_length=50)
@@ -17,6 +19,7 @@ class VulnerableReportBase(BaseModel):
 
 class VulnerableReportCreate(VulnerableReportBase):
     # Solo valores del contrato: Swagger los muestra como lista y rechaza "string".
+    """Datos para crear un SOS (valores del contrato)."""
     urgency_level: UrgencyLevel
     vulnerability_type: VulnerabilityType
     description: str = Field(..., min_length=1, examples=["Adulto mayor solo, necesita agua"])
@@ -25,6 +28,7 @@ class VulnerableReportCreate(VulnerableReportBase):
     lng: float = Field(..., ge=-180, le=180, examples=[-80.6328])
 
 class VulnerableReportResponse(VulnerableReportBase):
+    """Un SOS como lo devuelve la API."""
     id: uuid.UUID
     tenant_id: uuid.UUID
     created_at: datetime
@@ -34,6 +38,7 @@ class VulnerableReportResponse(VulnerableReportBase):
     model_config = ConfigDict(from_attributes=True)
 
 class SupportGroupCreate(BaseModel):
+    """Datos para registrar un grupo de apoyo del barrio (brigada, rescate…)."""
     name: str = Field(..., min_length=2, max_length=120, examples=["Brigada de primeros auxilios"])
     group_type: SupportGroupType
     description: Optional[str] = None
@@ -44,6 +49,7 @@ class SupportGroupCreate(BaseModel):
     coordinator_user_id: Optional[uuid.UUID] = None
 
 class SupportGroupResponse(BaseModel):
+    """Un grupo de apoyo como lo devuelve la API."""
     id: uuid.UUID
     tenant_id: uuid.UUID
     name: str

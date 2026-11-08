@@ -1,3 +1,4 @@
+"""Moderación: el admin del barrio y el superadministrador revisan publicaciones reportadas."""
 import uuid
 from datetime import datetime
 from typing import Literal
@@ -19,11 +20,13 @@ Action = Literal["restore", "remove"]
 
 
 class ReportReasonItem(BaseModel):
+    """Un motivo de reporte y su detalle escrito."""
     reason: str
     detail: str | None = None
 
 
 class ReportedItem(BaseModel):
+    """Publicación reportada con sus motivos, para el panel de revisión."""
     target_type: str
     target_id: str
     tenant_id: str
@@ -37,6 +40,7 @@ class ReportedItem(BaseModel):
 
 
 class PendingCount(BaseModel):
+    """Cantidad de publicaciones esperando revisión."""
     pending: int
 
 
@@ -65,6 +69,7 @@ async def count_reports(
     _: dict = Depends(require_role(["ADMIN_BARRIO"])),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Admin del barrio: cuántas publicaciones esperan revisión."""
     return PendingCount(pending=await service.pending_count(db, tenant_uuid))
 
 
@@ -83,6 +88,7 @@ async def resolve_report(
 
 # ── Cuentas suspendidas (solo el jefe del barrio las reactiva) ──
 class SuspendedAccount(BaseModel):
+    """Cuenta suspendida por reportes, para el panel del jefe del barrio."""
     user_id: str
     full_name: str
     email: str | None = None
@@ -121,6 +127,7 @@ async def platform_list_reports(
     _: dict = Depends(require_role(["SUPER_ADMIN"])),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Superadministrador: publicaciones reportadas de todos los barrios."""
     return await service.list_reported(db, None)
 
 
@@ -129,6 +136,7 @@ async def platform_count_reports(
     _: dict = Depends(require_role(["SUPER_ADMIN"])),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Superadministrador: cuántas publicaciones esperan revisión en total."""
     return PendingCount(pending=await service.pending_count(db, None))
 
 
@@ -140,4 +148,5 @@ async def platform_resolve_report(
     _: dict = Depends(require_role(["SUPER_ADMIN"])),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Superadministrador: restaurar o retirar una publicación reportada."""
     return await _resolve(db, None, target_type, target_id, action)

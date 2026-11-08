@@ -1,3 +1,4 @@
+"""Seguridad por barrio: rutas públicas, token de sesión, X-Tenant-ID y permisos por rol."""
 import uuid
 from collections.abc import Sequence
 from fastapi import Header, Request, HTTPException, status
@@ -67,6 +68,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
     y formato del header X-Tenant-ID, inyectándolo en request.state.tenant_id.
     """
     async def dispatch(self, request: Request, call_next):
+        """Revisa cada petición: rutas públicas pasan; el resto necesita token válido y X-Tenant-ID del mismo barrio del token."""
         if request.url.path in EXEMPT_PATHS or request.method == "OPTIONS":
             return await call_next(request)
 
@@ -203,6 +205,7 @@ def get_current_tenant_id(
 
 
 def get_current_principal(request: Request) -> dict:
+    """Dependencia: datos del token de la petición (sub, tenant_id, role). 401 si no hay sesión."""
     claims = getattr(request.state, "auth_claims", None)
     if claims is None:
         raise HTTPException(
@@ -246,6 +249,7 @@ def require_role(allowed_roles: Sequence[str]):
     async def role_dependency(
         principal: dict = Depends(get_current_principal),
     ) -> dict:
+        """Deja pasar solo si el rol del token está entre los permitidos; si no, 403."""
         principal_role = _normalize_role(str(principal.get("role", "")))
         if principal_role not in roles:
             raise HTTPException(

@@ -82,6 +82,9 @@ class PullResult {
 bool isTransientHttpStatus(int status) =>
     status == 408 || status == 429 || status >= 500;
 
+/// Habla con el servidor de sincronización: sube la cola de cambios (push) y
+/// baja lo nuevo del barrio (pull). Marca como reintentables los errores
+/// temporales (408, 429, 5xx); `SyncCoordinator` decide cuándo reintentar.
 class SyncWorker {
   final String baseUrl;
   final SyncOutboxDao _outboxDao = SyncOutboxDao();

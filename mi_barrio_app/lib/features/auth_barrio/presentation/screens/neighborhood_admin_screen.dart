@@ -9,6 +9,7 @@ import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/neighborhood_emergency_card.dart';
 
+/// Panel del administrador del barrio: Modo Emergencia, código de invitación y reportes.
 class NeighborhoodAdminScreen extends ConsumerWidget {
   const NeighborhoodAdminScreen({super.key, required this.user});
 

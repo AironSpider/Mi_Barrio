@@ -5,6 +5,7 @@ String _s(Object? v) => v?.toString() ?? '';
 DateTime _date(Object? v) =>
     DateTime.tryParse(v?.toString() ?? '')?.toLocal() ?? DateTime.now();
 
+/// Un comentario público de un favor.
 class PostComment {
   const PostComment({
     required this.id,
@@ -29,6 +30,7 @@ class PostComment {
   final DateTime createdAt;
 }
 
+/// Calificación entre vecinos al terminar un favor (1 a 5 estrellas).
 class FavorReview {
   const FavorReview({
     required this.id,

@@ -1,3 +1,4 @@
+"""Muro de apoyo: favores, "voy a ayudar", comentarios y calificaciones."""
 import uuid
 from datetime import datetime, timezone
 
@@ -52,6 +53,7 @@ async def create_solidarity_post(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Publica un favor a nombre del usuario de la sesión."""
     author_id = uuid.UUID(principal["sub"])
     if payload.author_user_id != author_id:
         raise HTTPException(status_code=403, detail="No puedes publicar a nombre de otro usuario")
@@ -79,6 +81,7 @@ async def list_solidarity_posts(
     emergency_only: bool = Query(False),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Favores del barrio que no están borrados (se puede filtrar por tipo: SOLICITO_AYUDA u OFREZCO_AYUDA)."""
     stmt = select(SolidarityPost).where(
         SolidarityPost.tenant_id == tenant_id,
         SolidarityPost.is_deleted.is_(False),
@@ -99,6 +102,7 @@ async def get_solidarity_post(
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Un favor del barrio por su id."""
     return await _post_or_404(db, tenant_id, post_id)
 
 
@@ -134,6 +138,7 @@ async def coordinate_solidarity_post(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """"Voy a ayudar": el usuario se ofrece para el favor. No se puede en el propio."""
     post = await _post_or_404(db, tenant_id, post_id, for_update=True)
     me = uuid.UUID(principal["sub"])
     if post.author_user_id == me:
@@ -156,6 +161,7 @@ async def delete_solidarity_post(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Borra un favor. Solo quien lo publicó."""
     post = await _post_or_404(db, tenant_id, post_id)
     if post.author_user_id != uuid.UUID(principal["sub"]):
         raise HTTPException(status_code=403, detail="Solo quien publicó puede eliminarla")
@@ -174,6 +180,7 @@ async def list_comments(
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Comentarios públicos de un favor."""
     await _post_or_404(db, tenant_id, post_id)
     comments = (await db.execute(
         select(PostComment).where(
@@ -200,6 +207,7 @@ async def create_comment(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Agrega un comentario público al favor."""
     await _post_or_404(db, tenant_id, post_id)
     me = uuid.UUID(principal["sub"])
     comment = PostComment(tenant_id=tenant_id, post_id=post_id, author_user_id=me, body=payload.body.strip())
@@ -221,6 +229,7 @@ async def delete_comment(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Borra un comentario. Solo su autor."""
     comment = await db.scalar(select(PostComment).where(
         PostComment.id == comment_id,
         PostComment.post_id == post_id,
@@ -244,6 +253,7 @@ async def list_reviews(
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Calificaciones entre vecinos de un favor terminado."""
     await _post_or_404(db, tenant_id, post_id)
     reviews = (await db.execute(
         select(FavorReview).where(

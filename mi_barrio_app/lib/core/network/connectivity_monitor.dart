@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
+/// Si el teléfono tiene red o no.
 enum ConnectionStatus { online, offline }
 
 /// Indica si el teléfono TIENE una red (Wi-Fi, datos, etc.).

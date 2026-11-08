@@ -1,3 +1,4 @@
+"""Servicios del barrio: publicar, listar, fotos, reseñas y respuestas del dueño."""
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -50,6 +51,7 @@ async def create_service(
 ):
     # Vecinos y comerciantes publican servicios; el rol de comerciante solo
     # agrega la gestión de su negocio.
+    """Publica un servicio a nombre del usuario de la sesión (vecinos y comerciantes)."""
     if principal["role"] not in ("VECINO", "COMERCIANTE"):
         raise HTTPException(status_code=403, detail="Solo vecinos y comerciantes publican servicios")
     provider_id = uuid.UUID(principal["sub"])
@@ -118,6 +120,7 @@ async def list_my_services(
     principal: dict = Depends(require_role(["COMERCIANTE", "VECINO"])),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Servicios publicados por el usuario de la sesión."""
     services = (await db.execute(
         select(LocalService).where(
             LocalService.tenant_id == tenant_uuid,
@@ -192,6 +195,7 @@ async def list_service_endorsements(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Vistos buenos y reseñas de un servicio."""
     service = (await db.execute(
         select(LocalService).where(
             LocalService.id == service_id,
@@ -247,6 +251,7 @@ async def reply_to_recommendation(
     principal: dict = Depends(require_role(["COMERCIANTE"])),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """El dueño del servicio responde una reseña."""
     service = await db.scalar(select(LocalService).where(
         LocalService.id == service_id,
         LocalService.tenant_id == tenant_uuid,
@@ -278,6 +283,7 @@ async def get_endorsement_photo(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Foto de una reseña (se pide aparte para no cargar todas las fotos en la lista)."""
     endorsement = (await db.execute(
         select(NeighborEndorsement).where(
             NeighborEndorsement.id == endorsement_id,

@@ -1,3 +1,4 @@
+"""Perfil propio: ver el perfil completo y borrar la cuenta (derecho de cancelación)."""
 import uuid
 from datetime import datetime, timezone
 

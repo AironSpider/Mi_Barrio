@@ -32,6 +32,7 @@ class ChatTarget {
   final String ownerUserId;
 }
 
+/// Un mensaje del chat entre el dueño de una publicación y un vecino.
 class ChatMessage {
   const ChatMessage({
     required this.id,

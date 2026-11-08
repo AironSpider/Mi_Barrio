@@ -1,3 +1,4 @@
+"""Esquemas (Pydantic) del muro de apoyo."""
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
@@ -7,6 +8,7 @@ from app.shared.contract_values import FlowType, Modality, PostStatus
 
 # 1. Base compartida (datos que siempre viajan)
 class SolidarityPostBase(BaseModel):
+    """Campos comunes de un favor."""
     author_user_id: uuid.UUID
     flow_type: str = Field(..., description="Debe ser 'SOLICITO_AYUDA' o 'OFREZCO_AYUDA'")
     modality: str = Field(..., description="Ej: 'PRESTAMO_HERRAMIENTA', 'RECURSO_CRITICO'")
@@ -21,6 +23,7 @@ class SolidarityPostBase(BaseModel):
 # Nota: No pedimos el tenant_id aquí porque se inyecta seguro desde el header X-Tenant-ID
 # Solo valores del contrato: Swagger los muestra como lista y rechaza "string".
 class SolidarityPostCreate(SolidarityPostBase):
+    """Datos para publicar un favor (valores del contrato)."""
     flow_type: FlowType
     modality: Modality
     title: str = Field(..., min_length=1, max_length=200, examples=["Préstamo de escalera"])
@@ -31,6 +34,7 @@ class SolidarityPostCreate(SolidarityPostBase):
 # 3. Schema de Respuesta (GET / POST devuelto)
 class SolidarityPostResponse(SolidarityPostBase):
     # Configuración vital para que Pydantic lea los objetos de SQLAlchemy
+    """Un favor como lo devuelve la API."""
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -42,12 +46,14 @@ class SolidarityPostResponse(SolidarityPostBase):
 
 
 class PostPhotoResponse(BaseModel):
+    """La primera foto del favor (apps anteriores)."""
     id: uuid.UUID
     photo_b64: str
     content_type: str = "image/jpeg"
 
 
 class PostPhotosResponse(BaseModel):
+    """Todas las fotos del favor (hasta 4)."""
     id: uuid.UUID
     photos: list[str]
     content_type: str = "image/jpeg"
@@ -55,10 +61,12 @@ class PostPhotosResponse(BaseModel):
 
 # ── Comentarios ──
 class CommentCreate(BaseModel):
+    """Texto de un comentario nuevo."""
     body: str = Field(..., min_length=1, max_length=500, examples=["¡Yo te presto la escalera!"])
 
 
 class CommentResponse(BaseModel):
+    """Un comentario con el nombre corto de su autor."""
     id: uuid.UUID
     post_id: uuid.UUID
     author_user_id: uuid.UUID
@@ -69,11 +77,13 @@ class CommentResponse(BaseModel):
 
 # ── Reseñas (al completar el favor) ──
 class ReviewCreate(BaseModel):
+    """Calificación (1 a 5 estrellas) y comentario opcional."""
     rating: int = Field(..., ge=1, le=5)
     comment: Optional[str] = Field(None, max_length=300)
 
 
 class ReviewResponse(BaseModel):
+    """Una calificación con los nombres de quién califica y a quién."""
     id: uuid.UUID
     post_id: uuid.UUID
     reviewer_user_id: uuid.UUID

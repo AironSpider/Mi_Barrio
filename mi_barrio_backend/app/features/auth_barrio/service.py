@@ -1,3 +1,4 @@
+"""Funciones de cuentas y barrios usadas por varios routers (nombre corto público, contactos, emergencia)."""
 import uuid
 
 from fastapi import HTTPException
@@ -43,6 +44,7 @@ async def public_profiles(
 
 
 async def get_tenant_or_404(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
+    """El barrio por su id, o 404 si no existe."""
     tenant = await db.get(Tenant, tenant_id)
     if tenant is None:
         raise HTTPException(
@@ -53,6 +55,7 @@ async def get_tenant_or_404(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
 
 
 async def set_emergency(db: AsyncSession, tenant_id: uuid.UUID, active: bool) -> Tenant:
+    """Activa o desactiva el Modo Emergencia del barrio."""
     tenant = await get_tenant_or_404(db, tenant_id)
     tenant.is_emergency_active = active
     await db.commit()

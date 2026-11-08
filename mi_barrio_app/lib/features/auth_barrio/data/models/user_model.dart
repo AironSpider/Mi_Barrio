@@ -1,5 +1,6 @@
 import '../../domain/entities/user_entity.dart';
 
+/// La cuenta leída del servidor o del teléfono (JSON) y guardada en la sesión.
 class UserModel extends UserEntity {
   const UserModel({
     required super.id,

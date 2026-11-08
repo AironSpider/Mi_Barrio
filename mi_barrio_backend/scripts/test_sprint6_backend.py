@@ -193,6 +193,8 @@ def main() -> int:
     check("pull trae vulnerable_reports nuevos", rep.get("id") in rep_ids, pull_r)
     s, other = call("GET", "/api/v1/sync/pull", tenant=str(uuid.uuid4()))
     check("el token bloquea el pull de otro barrio", s == 403, other)
+    s, own = call("PATCH", f"/api/v1/emergency/{rep.get('id')}/attend?helper_user_id={ME}")
+    check("no puedo atender mi propio SOS → 403", s == 403, own)
     # Ayuda OTRO vecino (nadie puede atender su propio pedido: 403).
     own_token = ACCESS_TOKEN
     helper = register(BASE, JOIN_CODE, "VECINO", "Vecino que ayuda")

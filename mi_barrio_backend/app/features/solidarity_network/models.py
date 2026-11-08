@@ -1,3 +1,4 @@
+"""Tablas del muro de apoyo: favores, comentarios y calificaciones."""
 import uuid
 
 from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, SmallInteger, String, Text, UniqueConstraint
@@ -10,6 +11,7 @@ from app.shared.base_model import BarrioBaseMixin
 
 
 class SolidarityPost(Base, BarrioBaseMixin):
+    """Un favor del muro de apoyo: pido u ofrezco ayuda, con modalidad, fotos, ubicación y estado."""
     __tablename__ = "solidarity_posts"
 
     author_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/ui_kit/app_theme.dart';
 
+/// Botón "Visto bueno" con contador y una pequeña animación al tocarlo.
 class VistoBuenoBadge extends StatefulWidget {
   const VistoBuenoBadge({
     super.key,

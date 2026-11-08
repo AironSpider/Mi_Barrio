@@ -1,3 +1,4 @@
+"""Tablas de emergencia: pedidos de ayuda (SOS) y grupos de apoyo."""
 import uuid
 from sqlalchemy import Boolean, SmallInteger, String, Float, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -6,6 +7,7 @@ from app.core.database import Base
 from app.shared.base_model import BarrioBaseMixin
 
 class VulnerableReport(Base, BarrioBaseMixin):
+    """Pedido de ayuda en emergencia (SOS): urgencia, tipo, ubicación y quién va a ayudar."""
     __tablename__ = "vulnerable_reports"
 
     reporter_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)

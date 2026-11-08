@@ -1,3 +1,4 @@
+"""Modo emergencia: pedir ayuda (SOS), tablero de pedidos, "voy en camino" y grupos de apoyo."""
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -26,6 +27,7 @@ async def report_vulnerability(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Crea un pedido de ayuda (SOS) a nombre del usuario de la sesión."""
     reporter_id = uuid.UUID(principal["sub"])
     if payload.reporter_user_id != reporter_id:
         raise HTTPException(status_code=403, detail="No puedes registrar un reporte a nombre de otro usuario")
@@ -51,6 +53,7 @@ async def list_emergency_board(
     status_filter: str | None = Query(None),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Tablero de emergencia: pedidos de ayuda del barrio, los más recientes primero. Se puede filtrar por urgencia y estado."""
     stmt = select(VulnerableReport).where(
         VulnerableReport.tenant_id == tenant_uuid,
         VulnerableReport.is_deleted.is_(False),
@@ -72,6 +75,7 @@ async def attend_emergency_report(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """"Voy en camino": marca que el usuario va a ayudar. No se puede en el propio pedido ni en uno ya atendido."""
     stmt = select(VulnerableReport).where(
         VulnerableReport.id == report_id,
         VulnerableReport.tenant_id == tenant_uuid,

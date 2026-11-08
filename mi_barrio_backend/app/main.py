@@ -1,3 +1,4 @@
+"""Punto de entrada de la API FastAPI: middlewares, routers, salud y manejo de errores."""
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -9,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core import log_redaction
 from app.core.database import engine
 from app.core.exceptions import (
+    _show_error_details,
     custom_http_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
@@ -101,7 +103,12 @@ async def health_check():
             await conn.execute(text("SELECT 1"))
             db_migration = (await conn.execute(text("SELECT version_num FROM alembic_version"))).scalar()
     except Exception as exc:
-        db_status = f"error: {type(exc).__name__}: {exc}"[:200]
+        # En producción no se muestra el texto del error (puede incluir el host de la base).
+        db_status = (
+            f"error: {type(exc).__name__}: {exc}"[:200]
+            if _show_error_details()
+            else f"error: {type(exc).__name__}"
+        )
         hint = "Revisa que PostgreSQL esté encendido y la variable DATABASE_URL (usuario y contraseña)."
 
     migrations_ok = db_migration is not None and db_migration == EXPECTED_MIGRATION

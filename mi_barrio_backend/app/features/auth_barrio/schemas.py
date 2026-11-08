@@ -1,3 +1,4 @@
+"""Esquemas (Pydantic) de cuentas, barrios y códigos de correo."""
 from datetime import datetime
 import uuid
 from typing import Literal
@@ -19,6 +20,7 @@ class TenantResponse(BaseModel):
 
 
 class EmergencyToggleRequest(BaseModel):
+    """Cuerpo para activar o desactivar el Modo Emergencia del barrio."""
     is_emergency_active: bool = Field(
         ..., description="true activa el Modo Emergencia para todo el barrio", examples=[True]
     )
@@ -28,6 +30,7 @@ Password = Annotated[str, StringConstraints(min_length=8, max_length=128)]
 
 
 class RegisterRequest(BaseModel):
+    """Datos para crear una cuenta con correo y contraseña."""
     full_name: str = Field(..., min_length=2, max_length=150)
     email: str = Field(..., min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: Password
@@ -36,11 +39,13 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    """Correo y contraseña para iniciar sesión."""
     email: str = Field(..., min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     password: Password
 
 
 class AuthUserResponse(BaseModel):
+    """La cuenta tal como la ve la app tras entrar (sin datos sensibles)."""
     id: uuid.UUID
     tenant_id: uuid.UUID | None
     full_name: str
@@ -54,6 +59,7 @@ class AuthUserResponse(BaseModel):
 
 
 class AuthResponse(BaseModel):
+    """Respuesta al entrar: token de sesión + la cuenta."""
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     user: AuthUserResponse
@@ -69,21 +75,25 @@ Code = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{6}$
 
 
 class EmailRequest(BaseModel):
+    """Solo un correo (para pedir códigos)."""
     email: Email
 
 
 class VerifyEmailRequest(BaseModel):
+    """Correo + código de 6 números para confirmarlo."""
     email: Email
     code: Code
 
 
 class ResetPasswordRequest(BaseModel):
+    """Correo + código + contraseña nueva."""
     email: Email
     code: Code
     new_password: Password
 
 
 class GoogleLoginRequest(BaseModel):
+    """ID token de Google y, solo la primera vez, el código del barrio y el rol."""
     id_token: str = Field(..., min_length=20, max_length=4096)
     # Solo para crear la cuenta la primera vez: a qué barrio entra y con qué rol.
     join_code: str | None = Field(default=None, min_length=3, max_length=20)
@@ -91,10 +101,12 @@ class GoogleLoginRequest(BaseModel):
 
 
 class SetPasswordRequest(BaseModel):
+    """Contraseña nueva para quien entró con Google y aún no tiene una."""
     password: Password
 
 
 class CodeSentResponse(BaseModel):
+    """Respuesta al pedir un código: siempre el mismo mensaje, exista o no la cuenta."""
     sent: bool = True
     message: str
     # Solo con AUTH_DEBUG_CODES=1 y sin correo configurado (pruebas locales).
@@ -102,6 +114,7 @@ class CodeSentResponse(BaseModel):
 
 
 class NeighborhoodAdminCreate(BaseModel):
+    """Datos del superadministrador para crear un barrio y su administrador."""
     neighborhood_name: str | None = Field(default=None, min_length=2, max_length=100)
     join_code: str | None = Field(default=None, min_length=3, max_length=20)
     admin_full_name: str = Field(..., min_length=2, max_length=150)
@@ -112,6 +125,7 @@ class NeighborhoodAdminCreate(BaseModel):
 
     @model_validator(mode="after")
     def require_coordinates_for_new_neighborhood(self):
+        """Un barrio nuevo necesita nombre y coordenadas; uno existente se indica por su código."""
         if self.join_code is None:
             if self.neighborhood_name is None:
                 raise ValueError("Se requiere el nombre del barrio")
@@ -121,6 +135,7 @@ class NeighborhoodAdminCreate(BaseModel):
 
 
 class NeighborhoodAdminCreated(BaseModel):
+    """Barrio y administrador recién creados."""
     neighborhood: TenantResponse
     administrator: AuthUserResponse
 

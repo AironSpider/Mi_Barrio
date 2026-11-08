@@ -6,6 +6,8 @@ import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
 import '../models/user_model.dart';
 
+/// Une el servidor ([AuthRemoteDatasource]) con la sesión guardada en el teléfono
+/// ([AuthSessionStore]) y los datos locales pendientes de sincronizar.
 class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
     AuthRemoteDatasource? remote,

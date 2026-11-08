@@ -83,6 +83,7 @@ def censor(text: str | None) -> str | None:
 
 
 def is_offensive(text: str | None) -> bool:
+    """True si el texto tiene groserías o discurso de odio (si censor() lo cambiaría)."""
     return bool(text) and censor(text) != text
 
 

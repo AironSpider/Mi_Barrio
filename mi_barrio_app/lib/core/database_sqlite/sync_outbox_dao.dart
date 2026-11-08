@@ -13,6 +13,8 @@ class OutboxOperation {
   static const values = {upsert, delete};
 }
 
+/// Cola de cambios pendientes de subir (outbox): lo que se hace sin internet se
+/// guarda aquí y la sincronización lo envía al servidor cuando hay conexión.
 class SyncOutboxDao {
   final LocalDatabase _dbProvider = LocalDatabase.instance;
 
