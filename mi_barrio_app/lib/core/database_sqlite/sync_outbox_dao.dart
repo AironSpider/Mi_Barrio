@@ -122,7 +122,14 @@ class SyncOutboxDao {
     await db.delete('app_settings', where: 'key = ?', whereArgs: [_ownerKey]);
   }
 
-  /// Removes only the cached rows and queued mutations owned by this account.
+  /// Al cerrar sesión (o al entrar otra persona): borra lo PRIVADO de la cuenta.
+  ///
+  /// - El perfil (`users`) se borra siempre.
+  /// - De favores, servicios, calificaciones y SOS se borra solo lo que NUNCA
+  ///   llegó al servidor (PENDING / FAILED). Lo ya publicado (SYNCED) es del
+  ///   barrio y se queda: el pull es incremental y no lo volvería a bajar,
+  ///   así que el siguiente vecino de este teléfono dejaría de verlo.
+  /// - La cola del barrio se vacía (lo pendiente era de esta cuenta).
   Future<void> clearUserData({
     required String tenantId,
     required String userId,
@@ -132,16 +139,20 @@ class SyncOutboxDao {
       'solidarity_posts': 'author_user_id',
       'local_services': 'provider_user_id',
       'neighbor_endorsements': 'endorser_user_id',
+      'vulnerable_reports': 'reporter_user_id',
       'users': 'id',
     };
+    const alwaysPrivate = {'users'};
 
     await db.transaction((txn) async {
       final ownedRecordIds = <String>{};
       for (final entry in ownerColumns.entries) {
+        final onlyUnsent = !alwaysPrivate.contains(entry.key);
         final rows = await txn.query(
           entry.key,
           columns: ['id'],
-          where: 'tenant_id = ? AND ${entry.value} = ?',
+          where: 'tenant_id = ? AND ${entry.value} = ?'
+              '${onlyUnsent ? " AND sync_status != 'SYNCED'" : ''}',
           whereArgs: [tenantId, userId],
         );
         final ids = rows.map((row) => row['id'] as String).toSet();

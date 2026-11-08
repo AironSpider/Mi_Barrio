@@ -19,6 +19,10 @@ class PushResult {
   /// Cuántos envíos a `/sync/push` se hicieron (lotes de [SyncWorker.maxBatch]).
   final int batchCount;
 
+  /// Cambios que el servidor dejó "para después" (ej. comerciante esperando
+  /// la aprobación de la junta). Siguen en la cola como Pendiente.
+  final int waitingCount;
+
   const PushResult({
     required this.success,
     this.sentCount = 0,
@@ -26,6 +30,7 @@ class PushResult {
     this.message,
     this.unauthorized = false,
     this.batchCount = 0,
+    this.waitingCount = 0,
   });
 }
 
@@ -34,6 +39,7 @@ class _BatchOutcome {
   const _BatchOutcome({
     required this.sentCount,
     this.processedCount = 0,
+    this.waitingCount = 0,
     this.message,
     this.httpFailed = false,
     this.unauthorized = false,
@@ -41,6 +47,7 @@ class _BatchOutcome {
 
   final int sentCount;
   final int processedCount;
+  final int waitingCount;
   final String? message;
 
   /// El servidor no respondió 200: se detienen los lotes siguientes.
@@ -176,6 +183,7 @@ class SyncWorker {
     var sent = 0;
     var processed = 0;
     var batches = 0;
+    var waiting = 0;
     final problems = <String>[];
     try {
       final pending = await _outboxDao.getPendingMutations(tenantId);
@@ -191,6 +199,7 @@ class SyncWorker {
         batches++;
         sent += batch.sentCount;
         processed += batch.processedCount;
+        waiting += batch.waitingCount;
         if (batch.message != null) problems.add(batch.message!);
         if (batch.httpFailed) {
           return PushResult(
@@ -204,12 +213,19 @@ class SyncWorker {
         }
       }
 
+      // Esperar la aprobación de la junta NO es un error: lo demás se envió bien
+      // y lo que espera sigue en la cola (Pendiente) para el próximo sync.
       return PushResult(
         success: problems.isEmpty,
         sentCount: sent,
         processedCount: processed,
         batchCount: batches,
-        message: problems.isEmpty ? null : problems.join(' | '),
+        waitingCount: waiting,
+        message: problems.isNotEmpty
+            ? problems.join(' | ')
+            : waiting > 0
+            ? 'Esperando aprobación de la junta: $waiting cambio(s) se enviarán después'
+            : null,
       );
     } catch (e) {
       // Sin internet o timeout: lo que no se confirmó queda intacto en la cola.
@@ -274,10 +290,20 @@ class SyncWorker {
         .where((item) =>
             item['record_id'] is String && item['target_table'] is String)
         .toList(growable: false);
-    final rejectedReasons = <String, String>{
+    final allRejected = <String, String>{
       for (final item in rejectedItems)
         '${item['target_table']}:${item['record_id']}':
             item['reason']?.toString() ?? 'Rechazado por el servidor',
+    };
+    // Rechazo TEMPORAL ("todavía no"): se queda en la cola como Pendiente y se
+    // reintenta en cada sync. Rechazo definitivo ("nunca"): sale como Sin enviar.
+    final waiting = {
+      for (final e in allRejected.entries)
+        if (isRetryableRejection(e.value)) e.key: e.value,
+    };
+    final rejectedReasons = {
+      for (final e in allRejected.entries)
+        if (!waiting.containsKey(e.key)) e.key: e.value,
     };
 
     // Confirmed changes and terminal rejections are both removed from outbox.
@@ -327,12 +353,24 @@ class SyncWorker {
       processedCount: pending
           .where((m) => confirmed.contains(m['record_id']))
           .length,
+      waitingCount: pending
+          .where((m) => waiting.containsKey('${m['target_table']}:${m['record_id']}'))
+          .length,
       message: rejectedReasons.isNotEmpty
           ? 'El servidor rechazó ${rejectedReasons.length} cambio(s): ${rejectedReasons.values.join('; ')}'
-          : toClean.length == pending.length
+          : toClean.length + waiting.length >= pending.length
           ? null
           : 'El servidor no confirmó ${pending.length - toClean.length} cambio(s)',
     );
+  }
+
+  /// Motivos de rechazo que se resuelven solos con el tiempo (no son datos
+  /// inválidos). Hoy: comerciante esperando la aprobación de la junta.
+  static const _retryableReasons = ['pendiente de aprobación'];
+
+  static bool isRetryableRejection(String reason) {
+    final text = reason.toLowerCase();
+    return _retryableReasons.any(text.contains);
   }
 
   /// Descarga lo que cambió en el servidor desde la última vez y lo guarda en SQLite.
@@ -435,8 +473,9 @@ class SyncWorker {
       // Modo Emergencia decidido por la junta vecinal (llega en cada pull).
       final tenant = data['tenant'];
       if (tenant is Map && tenant['is_emergency_active'] is bool) {
-        EmergencyModeProvider.instance.setTenantFlag(
+        await EmergencyModeProvider.instance.setTenantFlag(
           tenant['is_emergency_active'] as bool,
+          tenantId: tenantId,
         );
       }
 
