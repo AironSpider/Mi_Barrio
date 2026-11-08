@@ -21,7 +21,19 @@ class ServiceCard extends StatelessWidget {
     this.photoCount = 0,
     this.onEndorse,
     this.onTap,
+    this.isNeed = false,
+    this.publisherBadge,
+    this.isUnderReview = false,
   });
+
+  /// true = es un pedido ("Necesito"): no lleva estrellas ni Visto Bueno.
+  final bool isNeed;
+
+  /// "Vecino" o "Negocio": quién lo publica.
+  final String? publisherBadge;
+
+  /// Propio y oculto por reportes, hasta que el administrador lo revise.
+  final bool isUnderReview;
 
   /// Promedio de estrellas (null = sin calificaciones con estrellas).
   final double? ratingAvg;
@@ -50,16 +62,24 @@ class ServiceCard extends StatelessWidget {
     final texto = Theme.of(context).textTheme;
     final colores = MiBarrioColors.of(context);
 
+    // Lo propio se distingue con fondo verde agua y la etiqueta "Tuyo"
+    // (no solo con color); al tocarlo, gris suave.
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 6),
-      color: Colors.white,
+      color: isOwn ? colores.accentSoft : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: esquema.outline.withValues(alpha: 0.35)),
+        side: BorderSide(
+          color: isOwn
+              ? colores.brand.withValues(alpha: 0.35)
+              : esquema.outline.withValues(alpha: 0.35),
+        ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
+        highlightColor: isOwn ? AppPalette.filterActiveBackground : null,
+        splashColor: isOwn ? AppPalette.filterActiveBackground : null,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -72,7 +92,7 @@ class ServiceCard extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: esquema.primaryContainer,
+                      color: isOwn ? Colors.white : esquema.primaryContainer,
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(
@@ -86,11 +106,22 @@ class ServiceCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          categoryLabel,
-                          style: texto.labelMedium?.copyWith(
-                            color: esquema.onSurfaceVariant,
-                          ),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              categoryLabel,
+                              style: texto.labelMedium?.copyWith(
+                                color: esquema.onSurfaceVariant,
+                              ),
+                            ),
+                            if (publisherBadge != null)
+                              _Badge(text: publisherBadge!),
+                            if (isOwn) const _Badge(text: 'Tuyo', strong: true),
+                            if (isNeed) const _Badge(text: 'Necesita', need: true),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -99,7 +130,7 @@ class ServiceCard extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (ratingAvg != null) ...[
+                        if (ratingAvg != null && !isNeed) ...[
                           const SizedBox(height: 4),
                           StarRatingDisplay(
                             rating: ratingAvg!,
@@ -107,12 +138,12 @@ class ServiceCard extends StatelessWidget {
                             size: 18,
                           ),
                         ],
-                        if (isOwn) ...[
+                        if (isOwn && isUnderReview) ...[
                           const SizedBox(height: 4),
                           Text(
-                            'Este es tu servicio',
+                            'En revisión: tus vecinos no lo ven por ahora',
                             style: texto.labelMedium?.copyWith(
-                              color: colores.accentText,
+                              color: colores.urgencyCritical,
                             ),
                           ),
                         ],
@@ -165,16 +196,18 @@ class ServiceCard extends StatelessWidget {
                   runSpacing: 8,
                   alignment: WrapAlignment.spaceBetween,
                   children: [
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: constraints.maxWidth,
+                    // Un pedido no se recomienda: no lleva Visto Bueno.
+                    if (!isNeed)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: constraints.maxWidth,
+                        ),
+                        child: VistoBuenoBadge(
+                          count: endorsementsCount,
+                          isEndorsed: isEndorsed,
+                          onPressed: onEndorse,
+                        ),
                       ),
-                      child: VistoBuenoBadge(
-                        count: endorsementsCount,
-                        isEndorsed: isEndorsed,
-                        onPressed: onEndorse,
-                      ),
-                    ),
                     if (isAvailableInEmergency)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -248,6 +281,44 @@ class _Tag extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Insignia corta junto al rubro: "Vecino" / "Negocio", "Tuyo" o "Necesita".
+class _Badge extends StatelessWidget {
+  const _Badge({required this.text, this.strong = false, this.need = false});
+
+  final String text;
+  final bool strong;
+  final bool need;
+
+  @override
+  Widget build(BuildContext context) {
+    final colores = MiBarrioColors.of(context);
+    final bg = strong
+        ? Colors.white
+        : need
+        ? colores.pill
+        : AppPalette.filterActiveBackground;
+    final fg = strong
+        ? colores.accentText
+        : need
+        ? colores.onPill
+        : AppPalette.textPrimary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

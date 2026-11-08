@@ -1,15 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../features/emergency_support/presentation/screens/emergency_map_screen.dart';
+import '../../features/onboarding_tutorial/presentation/screens/tutorial_screen.dart';
 import '../../features/profile_me/presentation/screens/profile_screen.dart';
 import '../../features/proximity_services/presentation/screens/services_directory_screen.dart';
 import '../../features/proximity_services/presentation/screens/merchant_business_screen.dart';
 import '../../features/solidarity_network/presentation/screens/collaborative_wall_screen.dart';
 import 'app_theme.dart';
-import 'dev_tools.dart';
 import 'global_sync_status_bar.dart';
 import 'quick_publish_fab.dart';
+import '../barrio_context/emergency_mode_provider.dart';
 import '../barrio_context/tenant_session.dart';
 import '../sync_manager/sync_coordinator.dart';
 
@@ -53,6 +57,8 @@ class ShellTabs {
     ShellTab(
       id: 'mapa',
       label: 'Mapa',
+      // En el mapa no se publica (en emergencia sí aparece "Ayuda").
+      showsPublish: false,
       icon: Icons.map_outlined,
       selectedIcon: Icons.map_rounded,
       builder: (_) => const EmergencyMapScreen(),
@@ -73,7 +79,8 @@ class ShellTabs {
       ...all.take(3),
       const ShellTab(
         id: 'negocio',
-        label: 'Mi negocio',
+        // "Mi negocio" no cabía con 5 pestañas y empujaba el ícono.
+        label: 'Negocio',
         icon: Icons.storefront_outlined,
         selectedIcon: Icons.storefront_rounded,
         builder: _merchantBusiness,
@@ -109,7 +116,9 @@ class MainNavigationShell extends StatefulWidget {
   /// Índices de pestañas (orden de [ShellTabs.all]).
   static const apoyoTabIndex = 1;
   static const mapaTabIndex = 2;
+  /// Interruptor ⚠ de la barra (modo emergencia del vecino).
   static const emergencyPreviewSwitchKey = ValueKey('emergency_preview_switch');
+  static const helpButtonKey = ValueKey('help_button');
 
   @override
   State<MainNavigationShell> createState() => _MainNavigationShellState();
@@ -117,6 +126,15 @@ class MainNavigationShell extends StatefulWidget {
 
 class _MainNavigationShellState extends State<MainNavigationShell> {
   int _index = 0;
+
+  Future<void> _openTutorial(BuildContext context) {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => TutorialScreen(onFinished: () => Navigator.of(ctx).pop()),
+      ),
+    );
+  }
 
   Future<void> _handlePublish() async {
     final onPublish = widget.onPublish;
@@ -172,27 +190,29 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 4),
+            // Ayuda: vuelve a mostrar el tutorial de inicio.
+            IconButton(
+              key: MainNavigationShell.helpButtonKey,
+              tooltip: 'Cómo usar Mi Barrio',
+              onPressed: () => _openTutorial(context),
+              icon: const FaIcon(
+                FontAwesomeIcons.circleInfo,
+                size: 20,
+                color: Colors.white,
+              ),
+            ),
           ],
         ),
         actions: [
-          if (DevTools.enabled && previewChanged != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Tooltip(
-                message: 'Vista previa de emergencia (solo desarrollo)',
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.bug_report_outlined),
-                    Switch(
-                      key: MainNavigationShell.emergencyPreviewSwitchKey,
-                      value: widget.isEmergencyMode,
-                      onChanged: previewChanged,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          _EmergencyToggle(
+            isEmergencyMode: widget.isEmergencyMode,
+            onChanged: (value) {
+              unawaited(EmergencyModeProvider.instance.setLocal(value));
+              previewChanged?.call(value);
+            },
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Column(
@@ -292,6 +312,69 @@ class _EmergencyBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Interruptor ⚠ de la barra: el vecino pasa SU vista a modo emergencia
+/// (naranja, solo lo de emergencia y botón "Ayuda"). Si la junta vecinal ya
+/// activó la emergencia, queda encendido y bloqueado.
+class _EmergencyToggle extends StatelessWidget {
+  const _EmergencyToggle({required this.isEmergencyMode, required this.onChanged});
+
+  final bool isEmergencyMode;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: EmergencyModeProvider.instance.isLockedByTenant,
+      builder: (context, locked, _) {
+        final on = isEmergencyMode || locked;
+        return Tooltip(
+          message: locked
+              ? 'Emergencia activada por tu junta vecinal'
+              : on
+              ? 'Salir del modo emergencia'
+              : 'Ver el barrio en modo emergencia',
+          // Una sola etiqueta para el ícono y el interruptor.
+          child: MergeSemantics(
+            child: Semantics(
+              label: 'Modo emergencia',
+              child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const ExcludeSemantics(
+                  child: FaIcon(
+                    FontAwesomeIcons.triangleExclamation,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Switch(
+                  key: MainNavigationShell.emergencyPreviewSwitchKey,
+                  value: on,
+                  onChanged: locked ? null : onChanged,
+                  // Apagado: blanco. Encendido: blanco con el punto naranja.
+                  thumbColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.selected)
+                        ? AppPalette.emergencyPrimary
+                        : Colors.white,
+                  ),
+                  trackColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.selected)
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.35),
+                  ),
+                  trackOutlineColor: const WidgetStatePropertyAll(Colors.white),
+                ),
+              ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

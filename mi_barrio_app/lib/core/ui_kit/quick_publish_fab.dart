@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 /// Botón flotante (+) de publicación rápida — Clic 1 del flujo de 3 clics.
 ///
 /// - Modo Día a Día: "Publicar" (verde).
-/// - Modo Emergencia: "Pedir ayuda" (rojo, ícono SOS).
+/// - Modo Emergencia: "Ayuda" (naranja, ícono SOS).
 ///
 /// Extendido con texto (no solo ícono) para que cualquier vecino,
 /// incluidos adultos mayores, entienda qué hace sin adivinar.
@@ -21,7 +21,7 @@ class QuickPublishFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = isEmergencyMode ? 'Pedir ayuda' : 'Publicar';
+    final label = isEmergencyMode ? 'Ayuda' : 'Publicar';
     final hint = isEmergencyMode
         ? 'Abre el reporte rápido de emergencia'
         : 'Publica un favor, préstamo u oficio en tres pasos';

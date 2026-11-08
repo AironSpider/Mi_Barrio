@@ -3,7 +3,7 @@ from typing import Annotated, Optional
 from datetime import datetime
 import uuid
 
-from app.shared.contract_values import MAX_PHOTO_B64, MAX_SERVICE_PHOTOS, PublisherType, ServiceCategory
+from app.shared.contract_values import MAX_PHOTO_B64, MAX_SERVICE_PHOTOS, FlowType, PublisherType, ServiceCategory
 
 class LocalServiceBase(BaseModel):
     provider_user_id: uuid.UUID
@@ -16,12 +16,15 @@ class LocalServiceBase(BaseModel):
     publisher_type: Optional[str] = Field(None, max_length=30)
     publisher_name: Optional[str] = Field(None, max_length=120)
     price_text: Optional[str] = Field(None, max_length=60, examples=["S/ 30 la visita"])
+    # Ofrezco o Necesito (mismos valores que el muro).
+    flow_type: str = "OFREZCO_AYUDA"
 
 class LocalServiceCreate(LocalServiceBase):
     # Solo valores del contrato: Swagger los muestra como lista y rechaza "string".
     category: ServiceCategory
     title: str = Field(..., min_length=1, max_length=200, examples=["Don Pedro, gasfitero"])
     publisher_type: Optional[PublisherType] = None
+    flow_type: FlowType = "OFREZCO_AYUDA"
     lat: float = Field(..., ge=-90, le=90, examples=[-5.1945])
     lng: float = Field(..., ge=-180, le=180, examples=[-80.6328])
     photos: Optional[list[Annotated[str, StringConstraints(min_length=1, max_length=MAX_PHOTO_B64)]]] = Field(
@@ -41,6 +44,7 @@ class LocalServiceResponse(LocalServiceBase):
     created_at: datetime
     updated_at: datetime
     is_deleted: bool
+    is_under_review: bool = False
 
 class NeighborEndorsementCreate(BaseModel):
     service_id: uuid.UUID

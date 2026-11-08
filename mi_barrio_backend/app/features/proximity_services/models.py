@@ -27,6 +27,14 @@ class LocalService(Base, BarrioBaseMixin):
     # Precio en texto libre ("S/ 30 la visita") y hasta 4 fotos (base64).
     price_text: Mapped[str | None] = mapped_column(String(60), nullable=True)
     photos: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    # Ofrezco (OFREZCO_AYUDA) o Necesito (SOLICITO_AYUDA) este servicio.
+    flow_type: Mapped[str] = mapped_column(
+        String(30), default="OFREZCO_AYUDA", server_default="OFREZCO_AYUDA", nullable=False
+    )
+    # true = 3 vecinos lo reportaron: oculto hasta que el administrador lo revise.
+    is_under_review: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
 class NeighborEndorsement(Base, BarrioBaseMixin):
     __tablename__ = "neighbor_endorsements"

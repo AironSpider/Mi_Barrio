@@ -48,8 +48,10 @@ async def create_service(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
-    if principal["role"] != "COMERCIANTE":
-        raise HTTPException(status_code=403, detail="Solo un comerciante puede ofrecer servicios")
+    # Vecinos y comerciantes publican servicios; el rol de comerciante solo
+    # agrega la gestión de su negocio.
+    if principal["role"] not in ("VECINO", "COMERCIANTE"):
+        raise HTTPException(status_code=403, detail="Solo vecinos y comerciantes publican servicios")
     provider_id = uuid.UUID(principal["sub"])
     if payload.provider_user_id != provider_id:
         raise HTTPException(status_code=403, detail="No puedes publicar servicios a nombre de otro usuario")
@@ -69,6 +71,7 @@ async def create_service(
         publisher_name=payload.publisher_name,
         price_text=(payload.price_text or "").strip() or None,
         photos=payload.photos or None,
+        flow_type=payload.flow_type,
     )
     db.add(new_service)
     await db.commit()
@@ -91,6 +94,7 @@ async def list_services(
         .where(
             LocalService.tenant_id == tenant_uuid,
             LocalService.is_deleted.is_(False),
+            LocalService.is_under_review.is_(False),
         )
     )
 
@@ -111,7 +115,7 @@ async def list_services(
 @router.get("/mine", response_model=list[LocalServiceResponse])
 async def list_my_services(
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
-    principal: dict = Depends(require_role(["COMERCIANTE"])),
+    principal: dict = Depends(require_role(["COMERCIANTE", "VECINO"])),
     db: AsyncSession = Depends(get_db_session),
 ):
     services = (await db.execute(

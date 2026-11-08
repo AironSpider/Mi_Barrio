@@ -22,6 +22,7 @@ class HumanitarianBoardScreen extends StatefulWidget {
     this.sortByDistance = false,
     this.repository,
     this.header,
+    this.footer,
   });
 
   final bool isEmergencyMode;
@@ -30,6 +31,10 @@ class HumanitarianBoardScreen extends StatefulWidget {
 
   /// Contenido opcional arriba de la lista (lo usa el Mapa).
   final Widget? header;
+
+  /// Contenido opcional debajo de los pedidos de ayuda (en el Mapa: los
+  /// favores y servicios, para que la lista muestre lo mismo que el mapa).
+  final Widget? footer;
 
   @override
   State<HumanitarianBoardScreen> createState() => _HumanitarianBoardScreenState();
@@ -174,6 +179,8 @@ class _HumanitarianBoardScreenState extends State<HumanitarianBoardScreen> {
             )
           else if (_error != null)
             _Message(icon: Icons.error_outline_rounded, text: _error!)
+          else if (reports.isEmpty && widget.footer != null)
+            const SizedBox.shrink()
           else if (reports.isEmpty)
             _Message(
               icon: Icons.verified_user_rounded,
@@ -191,6 +198,7 @@ class _HumanitarianBoardScreenState extends State<HumanitarianBoardScreen> {
                 busy: _busy.contains(report.id),
                 onOfferHelp: () => _offerHelp(report),
               ),
+          ?widget.footer,
         ],
       ),
     );

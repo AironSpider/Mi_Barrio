@@ -14,6 +14,7 @@ from app.core.database import Base
 import app.features.auth_barrio.models  # noqa: F401
 import app.features.chat.models  # noqa: F401
 import app.features.emergency_support.models  # noqa: F401
+import app.features.moderation.models  # noqa: F401
 import app.features.proximity_services.models  # noqa: F401
 import app.features.solidarity_network.models  # noqa: F401
 

@@ -264,7 +264,7 @@ class RoleChoice extends StatelessWidget {
           key: vecinoKey,
           icon: Icons.home_rounded,
           title: 'Soy vecino',
-          subtitle: 'Pido y ofrezco ayuda, y encuentro oficios.',
+          subtitle: 'Pido y ofrezco ayuda y servicios a mis vecinos.',
           selected: role == UserRole.vecino,
           onTap: onChanged == null ? null : () => onChanged!(UserRole.vecino),
         ),
@@ -272,8 +272,10 @@ class RoleChoice extends StatelessWidget {
         RoleCard(
           key: comercianteKey,
           icon: Icons.storefront_rounded,
-          title: 'Tengo un oficio o negocio',
-          subtitle: 'Ofrezco mis servicios a mis vecinos.',
+          // Publicar servicios lo puede hacer cualquiera: esta opción solo
+          // suma la pestaña "Negocio" para gestionar el local.
+          title: 'Tengo un negocio y quiero gestionarlo',
+          subtitle: 'Además de todo lo de un vecino, tengo la pestaña Negocio.',
           selected: role == UserRole.comerciante,
           onTap: onChanged == null
               ? null

@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../moderation/data/content_reports.dart';
+import '../../../moderation/presentation/report_flow.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/ui_kit/app_theme.dart';
 import '../../../../core/ui_kit/star_rating_display.dart';
@@ -418,12 +420,25 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
               Text(_post.description!, style: texto.bodyLarge),
             ],
             const SizedBox(height: 16),
-            _PersonRow(
-              name: _authorName,
-              caption: [
-                if (_isOwn) 'Publicaste este favor' else 'Publicó este favor',
-                ?meta,
-              ].join(' · '),
+            Row(
+              children: [
+                Expanded(
+                  child: _PersonRow(
+                    name: _authorName,
+                    caption: [
+                      if (_isOwn) 'Publicaste este favor' else 'Publicó este favor',
+                      ?meta,
+                    ].join(' · '),
+                  ),
+                ),
+                // Al otro extremo: reportar (no en lo propio).
+                if (!_isOwn)
+                  ReportButton(
+                    targetType: ReportTarget.post,
+                    targetId: _post.id,
+                    onReported: () => Navigator.of(context).maybePop(true),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
             _StatusBanner(post: _post, me: _me),

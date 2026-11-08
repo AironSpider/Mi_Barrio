@@ -214,7 +214,7 @@ void main() {
       for (var i = 0; i < 4; i++) {
         await ServicesSqliteDatasource().insertService(
             tenantId: tenant, providerUserId: provider, category: ServiceCategory.gasfiteria,
-            title: 'Servicio $i', lat: lat, lng: lng, isAvailableInEmergency: i == 3);
+            title: 'Servicio $i', lat: lat, lng: lng, isAvailableInEmergency: true);
       }
     });
     await EmergencyModeProvider.instance.setTenantFlag(true);

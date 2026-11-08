@@ -104,7 +104,7 @@ void main() {
     expect(find.text('Crear cuenta'), findsNWidgets(2));
     expect(find.text('Código de tu barrio'), findsOneWidget);
     expect(find.text('Soy vecino'), findsOneWidget);
-    expect(find.text('Tengo un oficio o negocio'), findsOneWidget);
+    expect(find.text('Tengo un negocio y quiero gestionarlo'), findsOneWidget);
   });
 
   testWidgets('el superadministrador ve el formulario de alta de barrios', (
@@ -229,6 +229,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final pill = find.byKey(const ValueKey('filter_option_oficio_GASFITERIA'));
+    await tester.ensureVisible(pill);
+    await tester.pumpAndSettle();
     await tester.tap(pill);
     await tester.pump();
     expect(tester.widget<FilterPill>(pill).selected, isTrue);
@@ -266,7 +268,7 @@ void main() {
     for (final label in ['Servicios', 'Apoyo', 'Mapa', 'Tú']) {
       expect(find.text(label), findsOneWidget);
     }
-    expect(find.text('Pedir ayuda'), findsOneWidget);
+    expect(find.text('Ayuda'), findsOneWidget);
 
     final context = tester.element(find.byType(MainNavigationShell));
     expect(Theme.of(context).colorScheme.primary, AppPalette.emergencyPrimary);

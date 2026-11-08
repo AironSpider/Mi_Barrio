@@ -215,7 +215,7 @@ void main() {
         ),
       )));
       await tester.pump();
-      expect(find.text('Pedir ayuda'), findsOneWidget);
+      expect(find.text('Ayuda'), findsOneWidget);
 
       await tester.tap(find.byKey(QuickPublishFab.fabKey));
       await tester.pumpAndSettle();

@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../moderation/data/content_reports.dart';
+import '../../../moderation/presentation/report_flow.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sqlite_database.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
@@ -403,19 +405,40 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
               _PhotoStrip(photos: _photos, title: service.title),
             ],
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                StarRatingDisplay(
-                  rating: service.ratingAvg ?? 0,
-                  count: service.endorsementsCount,
+                Expanded(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      // Un pedido ("Necesito") no se califica: no tiene estrellas.
+                      if (service.isNeed)
+                        const Chip(
+                          avatar: Icon(Icons.campaign_rounded, size: 18),
+                          label: Text('Necesita este servicio'),
+                        )
+                      else
+                        StarRatingDisplay(
+                          rating: service.ratingAvg ?? 0,
+                          count: service.endorsementsCount,
+                        ),
+                      if (service.priceText != null)
+                        Chip(
+                          avatar: const Icon(Icons.sell_rounded, size: 18),
+                          label: Text(service.priceText!),
+                        ),
+                    ],
+                  ),
                 ),
-                if (service.priceText != null)
-                  Chip(
-                    avatar: const Icon(Icons.sell_rounded, size: 18),
-                    label: Text(service.priceText!),
+                // Al otro extremo de las estrellas: reportar (no en lo propio).
+                if (!_isOwn)
+                  ReportButton(
+                    targetType: ReportTarget.service,
+                    targetId: service.id,
+                    onReported: () => Navigator.of(context).maybePop(),
                   ),
               ],
             ),

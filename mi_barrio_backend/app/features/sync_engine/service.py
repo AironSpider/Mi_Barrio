@@ -10,6 +10,8 @@ from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService, NeighborEndorsement
 from app.features.proximity_services.service import recalculate_service_rating
 from app.features.emergency_support.models import VulnerableReport
+from app.features.moderation.models import ContentReport
+from app.features.moderation import service as moderation
 from app.features.sync_engine.validation import validate_payload
 
 logger = logging.getLogger("mi_barrio.sync")
@@ -20,6 +22,8 @@ TABLE_MODEL_MAP = {
     "local_services": LocalService,
     "neighbor_endorsements": NeighborEndorsement,
     "vulnerable_reports": VulnerableReport,
+    # Reportes de publicaciones: solo subida (nunca bajan a otros celulares).
+    "content_reports": ContentReport,
 }
 
 # Campos que el celular nunca puede escribir: los controla el servidor.
@@ -38,6 +42,7 @@ PROTECTED_FIELDS = {
     "email",
     "password_hash",
     "coordinator_user_id",  # lo pone el servidor al coordinar
+    "is_under_review",  # lo decide la moderación (3 reportes / administrador)
 }
 
 # Dueño de cada tabla: solo él puede crear o modificar sus registros.
@@ -46,10 +51,14 @@ OWNER_FIELD = {
     LocalService: "provider_user_id",
     NeighborEndorsement: "endorser_user_id",
     VulnerableReport: "reporter_user_id",
+    ContentReport: "reporter_user_id",
 }
 
 # Campos que no cambian después de crear el registro (autoría y relación).
-IMMUTABLE_ON_UPDATE = {"author_user_id", "provider_user_id", "endorser_user_id", "reporter_user_id", "service_id"}
+IMMUTABLE_ON_UPDATE = {
+    "author_user_id", "provider_user_id", "endorser_user_id", "reporter_user_id",
+    "service_id", "target_id", "target_type",
+}
 
 # Un celular con la fecha mal configurada (ej. 2099) no puede "congelar" registros.
 MAX_CLOCK_SKEW = timedelta(minutes=5)
@@ -73,6 +82,13 @@ async def _find_existing(model_class, rec_id: uuid.UUID, tenant_uuid: uuid.UUID,
             NeighborEndorsement.tenant_id == tenant_uuid,
             NeighborEndorsement.service_id == _coerce("service_id", payload.get("service_id")),
             NeighborEndorsement.endorser_user_id == _coerce("endorser_user_id", payload.get("endorser_user_id")),
+        )
+    elif model_class is ContentReport:
+        # Un reporte por vecino y publicación, aunque el id difiera.
+        query = select(ContentReport).where(
+            ContentReport.tenant_id == tenant_uuid,
+            ContentReport.target_id == _coerce("target_id", payload.get("target_id")),
+            ContentReport.reporter_user_id == _coerce("reporter_user_id", payload.get("reporter_user_id")),
         )
     else:
         query = select(model_class).where(
@@ -223,6 +239,7 @@ async def process_sync_push(
     def reject(reason: str) -> None:
         rejected.append({"record_id": item.record_id, "target_table": item.target_table, "reason": reason})
     touched_services: set[uuid.UUID] = set()
+    reported_targets: set[tuple[str, uuid.UUID]] = set()
     merchant_profile_changed = False
 
     for item in request.mutations:
@@ -279,12 +296,25 @@ async def process_sync_push(
                     raise ValueError("la mutación no pertenece al usuario autenticado")
                 if model_class is User and rec_id != principal_id:
                     raise ValueError("no puedes sincronizar el perfil de otro usuario")
-                if model_class is LocalService and principal_role != "COMERCIANTE":
-                    raise ValueError("solo un comerciante puede sincronizar servicios")
+                # Vecinos y comerciantes publican servicios (el rol solo suma la
+                # gestión del negocio). Las cuentas de administración no publican.
+                if model_class is LocalService and principal_role not in ("VECINO", "COMERCIANTE"):
+                    raise ValueError("solo vecinos y comerciantes publican servicios")
                 if model_class is LocalService:
-                    merchant = await db.get(User, principal_id)
-                    if merchant is None or merchant.is_deleted:
-                        raise ValueError("la cuenta del comerciante ya no está activa")
+                    provider = await db.get(User, principal_id)
+                    if provider is None or provider.is_deleted:
+                        raise ValueError("la cuenta ya no está activa")
+                if model_class is ContentReport:
+                    if existing_record is not None:
+                        # Ya estaba reportada por este vecino: no se repite ni se edita.
+                        await db.flush()
+                        processed_ids.append(rec_id_str)
+                        continue
+                    await moderation.validate_new_report(db, payload, tenant_uuid, principal_id)
+                    payload = {**payload, "status": "PENDIENTE"}
+                    reported_targets.add(
+                        (payload["target_type"], _coerce("target_id", payload["target_id"]))
+                    )
                 if model_class is NeighborEndorsement:
                     touched_services.add(await _validate_endorsement(payload, tenant_uuid, db))
 
@@ -347,6 +377,12 @@ async def process_sync_push(
     for service_id in touched_services:
         await recalculate_service_rating(db, service_id)
 
+    # 3 reportes de vecinos distintos: la publicación pasa a revisión.
+    needs_admin = False
+    for target_type, target_id in reported_targets:
+        if await moderation.apply_review_threshold(db, tenant_uuid, target_type, target_id):
+            needs_admin = True
+
     # Si quien ofrece servicios cambió su perfil (teléfono/WhatsApp), sus servicios
     # vuelven a bajar en el próximo pull con el contacto nuevo (si no tiene, no cambia nada).
     if merchant_profile_changed:
@@ -357,4 +393,6 @@ async def process_sync_push(
         )
 
     await db.commit()
+    if needs_admin:
+        await moderation.notify_admins(db, tenant_uuid)
     return processed_ids, rejected

@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 
+import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/local_id.dart';
 import '../../../../core/database_sqlite/record_validation.dart';
 import '../../../../core/database_sqlite/sqlite_database.dart';
@@ -123,9 +124,17 @@ class SolidaritySqliteDatasource {
     String? modality,
     bool emergencyOnly = false,
     bool includeCompleted = true,
+    String? viewerUserId,
   }) async {
-    final where = StringBuffer('tenant_id = ? AND is_deleted = 0');
-    final args = <Object?>[tenantId];
+    // Lo que está en revisión por reportes solo lo ve quien lo publicó; lo que
+    // este vecino reportó deja de verlo.
+    final viewer = viewerUserId ?? TenantSession.instance.userId;
+    final where = StringBuffer(
+      'tenant_id = ? AND is_deleted = 0 '
+      'AND (is_under_review = 0 OR author_user_id = ?) '
+      'AND id NOT IN (SELECT target_id FROM content_reports WHERE reporter_user_id = ?)',
+    );
+    final args = <Object?>[tenantId, viewer, viewer];
     if (modality != null) {
       where.write(' AND modality = ?');
       args.add(modality);

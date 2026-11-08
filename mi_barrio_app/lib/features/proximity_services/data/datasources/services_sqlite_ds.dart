@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 
+import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/local_id.dart';
 import '../../../../core/database_sqlite/record_validation.dart';
 import '../../../../core/database_sqlite/sqlite_database.dart';
@@ -33,8 +34,14 @@ class ServicesSqliteDatasource {
     String? publisherName,
     String? priceText,
     List<String> photos = const [],
+    String flowType = LocalServiceModel.flowOffer,
   }) async {
     RecordValidation.uuid(tenantId, 'tenantId');
+    RecordValidation.oneOf(
+      flowType,
+      const {LocalServiceModel.flowOffer, LocalServiceModel.flowNeed},
+      'flowType',
+    );
     RecordValidation.uuid(providerUserId, 'providerUserId');
     RecordValidation.oneOf(category, ServiceCategory.values, 'category');
     RecordValidation.coordinates(lat, lng);
@@ -61,6 +68,7 @@ class ServicesSqliteDatasource {
           : publisherName!.trim(),
       priceText: _clean(priceText),
       photoCount: photos.length,
+      flowType: flowType,
       lat: lat,
       lng: lng,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
@@ -99,6 +107,7 @@ class ServicesSqliteDatasource {
     required bool isAvailableInEmergency,
     String? priceText,
     List<String>? photos,
+    String? flowType,
   }) async {
     if (current.providerUserId != providerUserId) {
       throw ArgumentError.value(
@@ -132,6 +141,9 @@ class ServicesSqliteDatasource {
       contactWhatsapp: current.contactWhatsapp,
       priceText: _clean(priceText),
       photoCount: photos?.length ?? current.photoCount,
+      flowType: flowType ?? current.flowType,
+      isUnderReview: current.isUnderReview,
+      providerRole: current.providerRole,
       lat: lat,
       lng: lng,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
@@ -261,9 +273,17 @@ class ServicesSqliteDatasource {
     String tenantId, {
     String? category,
     bool emergencyOnly = false,
+    String? viewerUserId,
   }) async {
-    final where = StringBuffer('tenant_id = ? AND is_deleted = 0');
-    final args = <Object?>[tenantId];
+    // Lo que está en revisión por reportes solo lo ve quien lo publicó; lo que
+    // este vecino reportó deja de verlo.
+    final viewer = viewerUserId ?? TenantSession.instance.userId;
+    final where = StringBuffer(
+      'tenant_id = ? AND is_deleted = 0 '
+      'AND (is_under_review = 0 OR provider_user_id = ?) '
+      'AND id NOT IN (SELECT target_id FROM content_reports WHERE reporter_user_id = ?)',
+    );
+    final args = <Object?>[tenantId, viewer, viewer];
     if (category != null) {
       where.write(' AND category = ?');
       args.add(category);

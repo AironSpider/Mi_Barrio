@@ -14,7 +14,7 @@ from app.features.sync_engine.schemas import (
 )
 from app.features.sync_engine.service import process_sync_push
 from app.features.sync_engine.validation import MAX_BATCH
-from app.features.auth_barrio.models import Tenant
+from app.features.auth_barrio.models import Tenant, User
 from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService
 from app.features.auth_barrio.service import public_profiles
@@ -121,9 +121,12 @@ async def pull_delta(
     averages = await rating_avg_by_service(db, tenant_uuid)
     # Y el contacto del comerciante, para que los vecinos puedan llamarlo
     # (antes el detalle buscaba el teléfono en el celular y nunca lo encontraba).
-    contacts = await provider_contacts(
-        db, tenant_uuid, {uuid.UUID(s["provider_user_id"]) for s in delta["local_services"]}
-    )
+    provider_ids = {uuid.UUID(s["provider_user_id"]) for s in delta["local_services"]}
+    contacts = await provider_contacts(db, tenant_uuid, provider_ids)
+    # Insignia "Vecino" / "Negocio" en la tarjeta del servicio.
+    roles = dict((await db.execute(
+        select(User.id, User.role).where(User.id.in_(provider_ids), User.tenant_id == tenant_uuid)
+    )).all()) if provider_ids else {}
     for svc in delta["local_services"]:
         # Las fotos se piden aparte (GET /services/{id}/photos).
         svc["photo_count"] = len(svc.pop("photos", None) or [])
@@ -131,6 +134,7 @@ async def pull_delta(
         contact = contacts.get(uuid.UUID(svc["provider_user_id"]), {})
         svc["contact_phone"] = contact.get("contact_phone")
         svc["contact_whatsapp"] = contact.get("contact_whatsapp")
+        svc["provider_role"] = roles.get(uuid.UUID(svc["provider_user_id"]))
 
     # Favores: sin la foto (se pide aparte), con nombre público y contacto del
     # autor (para WhatsApp / Llamar al coordinar) y el nombre de quien ayuda.

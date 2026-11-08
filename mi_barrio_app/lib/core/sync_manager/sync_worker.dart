@@ -94,6 +94,7 @@ class SyncWorker {
     'neighbor_endorsements',
     'users',
     'vulnerable_reports',
+    'content_reports',
   };
 
   /// Columnas que se guardan en SQLite por tabla al hacer pull.
@@ -121,6 +122,7 @@ class SyncWorker {
       'has_photo',
       'coordinator_user_id',
       'coordinator_name',
+      'is_under_review', // moderación (solo bajada)
     ],
     'local_services': [
       'id',
@@ -138,6 +140,9 @@ class SyncWorker {
       'contact_whatsapp',
       'price_text',
       'photo_count', // las fotos se piden aparte (solo bajada)
+      'flow_type',
+      'is_under_review', // moderación (solo bajada)
+      'provider_role', // insignia Vecino / Negocio (solo bajada)
       'lat',
       'lng',
       'is_deleted',
@@ -182,6 +187,7 @@ class SyncWorker {
     'is_deleted',
     'is_active',
     'has_photo',
+    'is_under_review',
   };
 
   SyncWorker({required this.baseUrl, http.Client? client})

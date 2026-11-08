@@ -24,6 +24,10 @@ class SolidarityPost(Base, BarrioBaseMixin):
     photo_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Quién está ayudando: lo pone el servidor al coordinar (para las reseñas).
     coordinator_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # true = 3 vecinos lo reportaron: oculto hasta que el administrador lo revise.
+    is_under_review: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
 
 
 class PostComment(Base, BarrioBaseMixin):

@@ -3,8 +3,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/barrio_context/emergency_mode_provider.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sqlite_database.dart';
+import '../../../../core/ui_kit/emergency_switch_tile.dart';
 import '../../../../core/ui_kit/location_map.dart';
 import '../../../../core/ui_kit/photo_picker.dart';
 import '../../../emergency_support/presentation/providers/emergency_provider.dart';
@@ -94,7 +96,11 @@ class OfferServiceSheet extends StatefulWidget {
     this.existing,
     this.lat,
     this.lng,
+    this.initialFlowType = LocalServiceModel.flowOffer,
   });
+
+  /// Con qué opción abre: Ofrezco (por defecto) o Necesito.
+  final String initialFlowType;
 
   final String? tenantId;
   final String? userId;
@@ -116,6 +122,7 @@ class OfferServiceSheet extends StatefulWidget {
   static const emergencySwitchKey = ValueKey('offer_service_emergency');
   static const addPhotoKey = ValueKey('offer_service_add_photo');
   static const gpsKey = ValueKey('offer_service_gps');
+  static const flowKey = ValueKey('offer_service_flow');
 
   @override
   State<OfferServiceSheet> createState() => _OfferServiceSheetState();
@@ -135,7 +142,12 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
     text: _existing?.priceText,
   );
   late String? _category = _existing?.category;
-  late bool _emergency = _existing?.isAvailableInEmergency ?? false;
+  // En modo emergencia, un servicio nuevo viene con el interruptor encendido.
+  late bool _emergency =
+      _existing?.isAvailableInEmergency ??
+      EmergencyModeProvider.instance.isActive.value;
+  late String _flow = _existing?.flowType ?? widget.initialFlowType;
+  bool get _isNeed => _flow == LocalServiceModel.flowNeed;
   late double _lat;
   late double _lng;
   int _mapVersion = 0;
@@ -236,6 +248,7 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
           isAvailableInEmergency: _emergency,
           priceText: _price.text,
           photos: _photosChanged ? _photos : null,
+          flowType: _flow,
         );
       } else {
         await _datasource.insertService(
@@ -251,6 +264,7 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
           publisherName: widget.profile.publisherName,
           priceText: _price.text,
           photos: _photos,
+          flowType: _flow,
         );
       }
       if (!mounted) return;
@@ -322,7 +336,13 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEdit ? 'Editar servicio' : 'Ofrecer un servicio'),
+        title: Text(
+          _isEdit
+              ? 'Editar servicio'
+              : _isNeed
+              ? 'Pedir un servicio'
+              : 'Ofrecer un servicio',
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -330,6 +350,26 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
           Text(
             'Se guarda en tu teléfono y se publica cuando haya internet.',
             style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant),
+          ),
+          section('¿Ofreces o necesitas?'),
+          SegmentedButton<String>(
+            key: OfferServiceSheet.flowKey,
+            style: SegmentedButton.styleFrom(minimumSize: const Size(48, 52)),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(
+                value: LocalServiceModel.flowOffer,
+                label: Text('Ofrezco'),
+                icon: Icon(Icons.handyman_rounded),
+              ),
+              ButtonSegment(
+                value: LocalServiceModel.flowNeed,
+                label: Text('Necesito'),
+                icon: Icon(Icons.campaign_rounded),
+              ),
+            ],
+            selected: {_flow},
+            onSelectionChanged: (v) => setState(() => _flow = v.first),
           ),
           section('¿Qué rubro es?'),
           Wrap(
@@ -346,16 +386,18 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
                 ),
             ],
           ),
-          section('¿Qué ofreces?'),
+          section(_isNeed ? '¿Qué necesitas?' : '¿Qué ofreces?'),
           TextField(
             key: OfferServiceSheet.titleKey,
             controller: _title,
             maxLength: 80,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Título',
-              hintText: 'Ej: Gasfitero a domicilio',
-              border: OutlineInputBorder(),
+              hintText: _isNeed
+                  ? 'Ej: Necesito un electricista hoy'
+                  : 'Ej: Gasfitero a domicilio',
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 8),
@@ -374,7 +416,7 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
             ),
           ),
           section(
-            '¿Cuánto cuesta?',
+            _isNeed ? '¿Cuánto puedes pagar?' : '¿Cuánto cuesta?',
             hint: 'Opcional. Ej: "S/ 30 la visita" o "A tratar".',
           ),
           TextField(
@@ -476,7 +518,7 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
             ),
           ),
           section(
-            '¿Dónde atiendes?',
+            _isNeed ? '¿Dónde lo necesitas?' : '¿Dónde atiendes?',
             hint: 'Toca el mapa para mover el punto.',
           ),
           LocationMap(
@@ -514,17 +556,11 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
               child: Text(_locationNote!, style: texto.bodyMedium),
             ),
           const SizedBox(height: 16),
-          Card(
-            child: SwitchListTile(
-              key: OfferServiceSheet.emergencySwitchKey,
-              value: _emergency,
-              onChanged: (v) => setState(() => _emergency = v),
-              secondary: const Icon(Icons.health_and_safety_rounded),
-              title: const Text('Atiendo en emergencias'),
-              subtitle: const Text(
-                'Apareces primero cuando el barrio está en emergencia.',
-              ),
-            ),
+          EmergencySwitchTile(
+            key: OfferServiceSheet.emergencySwitchKey,
+            value: _emergency,
+            isNeed: _isNeed,
+            onChanged: (v) => setState(() => _emergency = v),
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
@@ -550,7 +586,13 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
                     child: CircularProgressIndicator(strokeWidth: 2.5),
                   )
                 : Icon(_isEdit ? Icons.save_rounded : Icons.check_rounded),
-            label: Text(_isEdit ? 'Guardar cambios' : 'Publicar servicio'),
+            label: Text(
+              _isEdit
+                  ? 'Guardar cambios'
+                  : _isNeed
+                  ? 'Publicar pedido'
+                  : 'Publicar servicio',
+            ),
           ),
           if (_isEdit) ...[
             const SizedBox(height: 10),

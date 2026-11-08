@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../features/solidarity_network/data/datasources/solidarity_sqlite_ds.dart';
 import '../../features/solidarity_network/data/models/solidarity_post_model.dart';
+import 'emergency_switch_tile.dart';
 import 'icon_scale.dart';
 import 'photo_picker.dart';
 import 'safe_image.dart';
@@ -71,6 +72,8 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
   final TextEditingController _titulo = TextEditingController();
   String? _modalidad;
   String _flujo = SolidarityFlowType.solicitoAyuda;
+  // En modo emergencia viene encendido.
+  late bool _emergencia = widget.isEmergencyMode;
   bool _guardando = false;
   String? _error;
   String? _fotoB64;
@@ -154,7 +157,7 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
           modality: _modalidad!,
           flowType: _flujo,
           title: _titulo.text.trim(),
-          isEmergencyContext: widget.isEmergencyMode,
+          isEmergencyContext: _emergencia,
           photoB64: _fotoB64,
         ),
       );
@@ -280,6 +283,13 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
                 style: texto.bodyMedium?.copyWith(color: esquema.error),
               ),
             ],
+            const SizedBox(height: 16),
+            EmergencySwitchTile(
+              key: const ValueKey('quick_publish_emergency'),
+              value: _emergencia,
+              isNeed: _flujo == SolidarityFlowType.solicitoAyuda,
+              onChanged: (v) => setState(() => _emergencia = v),
+            ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,

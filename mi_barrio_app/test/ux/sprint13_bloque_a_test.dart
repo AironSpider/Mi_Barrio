@@ -116,7 +116,7 @@ void main() {
       await tester.pump();
       expect(selected(RegisterScreen.vecinoCardKey), isFalse);
       expect(selected(RegisterScreen.comercianteCardKey), isTrue);
-      expect(find.text('Ofrezco mis servicios a mis vecinos.'), findsOneWidget);
+      expect(find.text('Además de todo lo de un vecino, tengo la pestaña Negocio.'), findsOneWidget);
     });
   });
 
@@ -140,7 +140,7 @@ void main() {
         app(Scaffold(body: ServicesDirectoryScreen(tenantId: tenant, userId: me))),
       );
       await settle(tester);
-      expect(find.text('Ofrecer servicio'), findsOneWidget);
+      expect(find.text('Ofrecer o pedir un servicio'), findsOneWidget);
       expect(find.textContaining('aprobación'), findsNothing);
     });
   });

@@ -6,6 +6,7 @@ import '../../../../core/barrio_context/emergency_mode_provider.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
+import '../../../../core/ui_kit/app_theme.dart';
 import '../../../../core/ui_kit/podium_frame.dart';
 import '../../../../core/ui_kit/search_filter_bar.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
@@ -51,7 +52,7 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
   String? _loadError;
   int _loadVersion = 0;
   String _searchQuery = '';
-  FilterSelection _filters = const {};
+  late FilterSelection _filters = _withEmergencyDefault(const {});
 
   @override
   void initState() {
@@ -78,7 +79,7 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
   }
 
   void _onEmergencyChanged() {
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _filters = _withEmergencyDefault(_filters));
   }
 
   void _onSyncPhaseChanged() {
@@ -128,6 +129,11 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
             FilterOption(SolidarityFlowType.ofrezcoAyuda, 'Ofrezco'),
           ],
         ),
+        const FilterGroup.toggle(id: _mineGroup, title: 'Seleccionar los míos'),
+        const FilterGroup.toggle(
+          id: _emergencyGroup,
+          title: 'Seleccionar apoyo de emergencia',
+        ),
         FilterGroup(
           id: _typeGroup,
           title: 'Tipo',
@@ -145,6 +151,17 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
 
   static const _flowGroup = 'modalidad';
   static const _typeGroup = 'tipo';
+  static const _mineGroup = 'mios';
+  static const _emergencyGroup = 'emergencia';
+
+  /// En modo emergencia el filtro "de emergencia" viene encendido (el vecino
+  /// puede apagarlo); al salir del modo se apaga.
+  FilterSelection _withEmergencyDefault(FilterSelection current) => {
+        ...current,
+        _emergencyGroup: {
+          if (EmergencyModeProvider.instance.isActive.value) FilterGroup.on,
+        },
+      };
 
   bool get _hasFilters =>
       _searchQuery.trim().isNotEmpty || activeFilterCount(_filters) > 0;
@@ -154,8 +171,12 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
     final flows = _filters[_flowGroup];
     final types = _filters[_typeGroup];
     final distance = _filters[DistanceFilter.groupId];
+    final mine = isToggleOn(_filters, _mineGroup);
+    final emergencyOnly = isToggleOn(_filters, _emergencyGroup);
     final session = TenantSession.instance;
     return _posts.where((post) {
+      if (mine && post.authorUserId != session.userId) return false;
+      if (emergencyOnly && !post.isEmergencyContext) return false;
       if (flows != null && flows.isNotEmpty && !flows.contains(post.flowType)) {
         return false;
       }
@@ -388,12 +409,19 @@ class _PostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final colores = MiBarrioColors.of(context);
     final isOffer = post.flowType == SolidarityFlowType.ofrezcoAyuda;
+    // Lo propio: fondo verde agua + etiqueta "Tuyo" (no solo color);
+    // al tocarlo, gris suave.
+    final isOwn = post.authorUserId == TenantSession.instance.userId;
     return Card(
       key: ValueKey('solidarity_post_${post.id}'),
       margin: const EdgeInsets.only(bottom: 10),
       clipBehavior: Clip.antiAlias,
+      color: isOwn ? colores.accentSoft : null,
       child: InkWell(
+        highlightColor: isOwn ? AppPalette.filterActiveBackground : null,
+        splashColor: isOwn ? AppPalette.filterActiveBackground : null,
         onTap: onTap,
         child: Padding(
         padding: const EdgeInsets.all(16),
@@ -406,6 +434,8 @@ class _PostCard extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Chip(
+                  // Ícono con fondo blanco en las tarjetas propias.
+                  backgroundColor: isOwn ? Colors.white : null,
                   avatar: Icon(
                     isOffer ? Icons.favorite_rounded : Icons.back_hand_rounded,
                     size: 18,
@@ -413,6 +443,26 @@ class _PostCard extends StatelessWidget {
                   ),
                   label: Text(isOffer ? 'Ofrezco ayuda' : 'Necesito ayuda'),
                 ),
+                if (isOwn)
+                  Chip(
+                    key: ValueKey('own_post_${post.id}'),
+                    backgroundColor: Colors.white,
+                    label: Text(
+                      'Tuyo',
+                      style: TextStyle(
+                        color: colores.accentText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                if (isOwn && post.isUnderReview)
+                  Chip(
+                    backgroundColor: AppPalette.failedBackground,
+                    label: Text(
+                      'En revisión',
+                      style: TextStyle(color: colores.urgencyCritical),
+                    ),
+                  ),
                 if (post.isEmergencyContext)
                   const Chip(
                     avatar: Icon(Icons.emergency_rounded, size: 18),

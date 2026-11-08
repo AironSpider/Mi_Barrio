@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/auth/auth_session_store.dart';
 import '../../../../core/location/gps_service.dart';
+import '../../../moderation/presentation/reports_panel.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
@@ -221,6 +222,9 @@ class _PlatformAdminScreenState extends ConsumerState<PlatformAdminScreen> {
             'o asigna un administrador a un barrio que ya existe.',
             style: theme.textTheme.bodyMedium,
           ),
+          const SizedBox(height: 16),
+          // Reportes de todos los barrios (con contador).
+          const ReportsPanelCard(),
           const SizedBox(height: 16),
           _NeighborhoodsSection(
             neighborhoods: _neighborhoods,

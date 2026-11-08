@@ -51,7 +51,7 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
 
   String? _selectedCategory;
   String _searchQuery = '';
-  FilterSelection _filters = const {};
+  late FilterSelection _filters = _withEmergencyDefault(const {});
   List<LocalServiceModel> _services = const [];
   final Map<String, EndorsementModel> _myEndorsements = {};
   final Set<String> _updatingEndorsements = {};
@@ -99,8 +99,17 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
   }
 
   void _onEmergencyChanged() {
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _filters = _withEmergencyDefault(_filters));
   }
+
+  /// En modo emergencia el filtro "de emergencia" viene encendido (el vecino
+  /// puede apagarlo); al salir del modo se apaga.
+  FilterSelection _withEmergencyDefault(FilterSelection current) => {
+        ...current,
+        _emergencyGroup: {
+          if (EmergencyModeProvider.instance.isActive.value) FilterGroup.on,
+        },
+      };
 
   void _onSyncChanged() {
     if (_sync.phase.value == SyncPhase.idle ||
@@ -218,9 +227,27 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
   }
 
   static const _categoryGroup = 'oficio';
+  static const _flowGroup = 'modalidad';
+  static const _mineGroup = 'mios';
+  static const _emergencyGroup = 'emergencia';
 
-  /// Grupos del modal de filtros: Oficio (uno) y Distancia.
+  /// Grupos del modal de filtros (igual que en Apoyo): Modalidad, los míos,
+  /// de emergencia, Oficio y Distancia.
   List<FilterGroup> get _filterGroups => [
+        const FilterGroup(
+          id: _flowGroup,
+          title: 'Modalidad',
+          allLabel: 'Todas',
+          options: [
+            FilterOption(LocalServiceModel.flowNeed, 'Necesito'),
+            FilterOption(LocalServiceModel.flowOffer, 'Ofrezco'),
+          ],
+        ),
+        const FilterGroup.toggle(id: _mineGroup, title: 'Seleccionar los míos'),
+        const FilterGroup.toggle(
+          id: _emergencyGroup,
+          title: 'Seleccionar servicios de emergencia',
+        ),
         FilterGroup(
           id: _categoryGroup,
           title: 'Oficio',
@@ -250,8 +277,16 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
   List<LocalServiceModel> get _visibleServices {
     final query = _searchQuery.trim().toLowerCase();
     final distance = _filters[DistanceFilter.groupId];
+    final flows = _filters[_flowGroup];
+    final mine = isToggleOn(_filters, _mineGroup);
+    final emergencyOnly = isToggleOn(_filters, _emergencyGroup);
     final session = TenantSession.instance;
     return _services.where((service) {
+      if (flows != null && flows.isNotEmpty && !flows.contains(service.flowType)) {
+        return false;
+      }
+      if (mine && service.providerUserId != _userId) return false;
+      if (emergencyOnly && !service.isAvailableInEmergency) return false;
       if (distance != null && distance.isNotEmpty) {
         final km = LocalDistance.km(
           session.centerLat,
@@ -305,18 +340,17 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
             ),
             const SizedBox(height: 8),
           ],
-          if (_merchant.isMerchant) ...[
-            FilledButton.icon(
-              key: const ValueKey('offer_service_button'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(56),
-              ),
-              onPressed: () => unawaited(_openOffer()),
-              icon: const Icon(Icons.storefront_rounded),
-              label: const Text('Ofrecer servicio'),
+          // Vecinos y comerciantes ofrecen o piden servicios.
+          FilledButton.icon(
+            key: const ValueKey('offer_service_button'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(56),
             ),
-            const SizedBox(height: 16),
-          ],
+            onPressed: () => unawaited(_openOffer()),
+            icon: const Icon(Icons.storefront_rounded),
+            label: const Text('Ofrecer o pedir un servicio'),
+          ),
+          const SizedBox(height: 16),
           SearchFilterBar(
             searchFieldKey: const ValueKey('services_search'),
             filterButtonKey: const ValueKey('services_filters_button'),
@@ -356,7 +390,7 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
               context,
               icon: Icons.handyman_outlined,
               message: _searchQuery.isNotEmpty ||
-                      (_filters[DistanceFilter.groupId]?.isNotEmpty ?? false)
+                      activeFilterCount(_filters) > 0
                   ? 'No encontramos servicios con esa búsqueda o esos filtros.'
                   : _selectedCategory == null
                   ? 'Todavía no hay servicios publicados en este barrio.'
@@ -437,7 +471,14 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
       isEndorsed: endorsement != null,
       isPending: service.isPending || (endorsement?.isPending ?? false),
       isAvailableInEmergency: service.isAvailableInEmergency,
-      onEndorse: isOwnService || _updatingEndorsements.contains(service.id)
+      isNeed: service.isNeed,
+      isUnderReview: service.isUnderReview,
+      publisherBadge: service.providerRole == null
+          ? null
+          : service.isFromBusiness
+          ? 'Negocio'
+          : 'Vecino',
+      onEndorse: isOwnService || service.isNeed || _updatingEndorsements.contains(service.id)
           ? null
           : () => unawaited(_toggleEndorsement(service)),
       onTap: () => unawaited(

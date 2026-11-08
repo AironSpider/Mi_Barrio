@@ -64,6 +64,7 @@ class SolidarityPostModel {
     this.hasPhoto = false,
     this.coordinatorUserId,
     this.coordinatorName,
+    this.isUnderReview = false,
   });
 
   static const table = 'solidarity_posts';
@@ -101,6 +102,9 @@ class SolidarityPostModel {
   final String? coordinatorUserId;
   final String? coordinatorName;
 
+  /// 3 vecinos lo reportaron: oculto hasta que el administrador lo revise.
+  final bool isUnderReview;
+
   bool get isPending => syncStatus == SqliteTables.syncPending;
 
   bool get hasPhone => contactPhone?.trim().isNotEmpty ?? false;
@@ -136,6 +140,7 @@ class SolidarityPostModel {
         coordinatorUserId:
             clearCoordinator ? null : coordinatorUserId ?? this.coordinatorUserId,
         coordinatorName: clearCoordinator ? null : coordinatorName,
+        isUnderReview: isUnderReview,
       );
 
   Map<String, Object?> toSqlite() => {
@@ -159,6 +164,7 @@ class SolidarityPostModel {
         'has_photo': hasPhoto ? 1 : 0,
         'coordinator_user_id': coordinatorUserId,
         'coordinator_name': coordinatorName,
+        'is_under_review': isUnderReview ? 1 : 0,
       };
 
   /// Payload para la cola outbox / `/sync/push` (formato del contrato).
@@ -200,6 +206,7 @@ class SolidarityPostModel {
       hasPhoto: (row['has_photo'] as int? ?? 0) == 1,
       coordinatorUserId: row['coordinator_user_id'] as String?,
       coordinatorName: row['coordinator_name'] as String?,
+      isUnderReview: (row['is_under_review'] as int? ?? 0) == 1,
     );
   }
 }

@@ -86,10 +86,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(OfferServiceSheet.titleKey), 'Gasfitero a domicilio');
     await tester.pump();
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(OfferServiceSheet.publishKey)); // clic 3
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    });
+    await tester.tap(find.byKey(OfferServiceSheet.publishKey)); // clic 3
+    // Espera a que SQLite termine (en una laptop lenta 300 ms no alcanzaban).
+    for (var i = 0; i < 50 && published == null; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+      await tester.pump();
+    }
     await tester.pumpAndSettle();
 
     expect(published, isTrue);

@@ -74,6 +74,9 @@ class LocalServiceModel {
     this.contactWhatsapp,
     this.priceText,
     this.photoCount = 0,
+    this.flowType = flowOffer,
+    this.isUnderReview = false,
+    this.providerRole,
     required this.lat,
     required this.lng,
     this.isDeleted = false,
@@ -117,6 +120,22 @@ class LocalServiceModel {
   /// Hasta 4 fotos por servicio (mismo tope que el servidor).
   static const maxPhotos = 4;
 
+  /// Ofrezco (`OFREZCO_AYUDA`) o Necesito (`SOLICITO_AYUDA`): mismos valores
+  /// que el muro de Apoyo.
+  final String flowType;
+
+  /// 3 vecinos lo reportaron: oculto hasta que el administrador lo revise.
+  final bool isUnderReview;
+
+  /// Rol de quien publica (`VECINO` / `COMERCIANTE`), para la insignia.
+  final String? providerRole;
+
+  static const flowOffer = 'OFREZCO_AYUDA';
+  static const flowNeed = 'SOLICITO_AYUDA';
+
+  bool get isNeed => flowType == flowNeed;
+  bool get isFromBusiness => providerRole == 'COMERCIANTE';
+
   final double lat;
   final double lng;
   final bool isDeleted;
@@ -141,6 +160,9 @@ class LocalServiceModel {
     'contact_whatsapp': contactWhatsapp,
     'price_text': priceText,
     'photo_count': photoCount,
+    'flow_type': flowType,
+    'is_under_review': isUnderReview ? 1 : 0,
+    'provider_role': providerRole,
     'lat': lat,
     'lng': lng,
     'is_deleted': isDeleted ? 1 : 0,
@@ -160,6 +182,7 @@ class LocalServiceModel {
     'publisher_type': publisherType,
     'publisher_name': publisherName,
     'price_text': priceText,
+    'flow_type': flowType,
     'lat': lat,
     'lng': lng,
     'is_deleted': isDeleted,
@@ -184,6 +207,9 @@ class LocalServiceModel {
       contactWhatsapp: row['contact_whatsapp'] as String?,
       priceText: row['price_text'] as String?,
       photoCount: row['photo_count'] as int? ?? 0,
+      flowType: row['flow_type'] as String? ?? flowOffer,
+      isUnderReview: (row['is_under_review'] as int? ?? 0) == 1,
+      providerRole: row['provider_role'] as String?,
       lat: (row['lat'] as num).toDouble(),
       lng: (row['lng'] as num).toDouble(),
       isDeleted: (row['is_deleted'] as int? ?? 0) == 1,

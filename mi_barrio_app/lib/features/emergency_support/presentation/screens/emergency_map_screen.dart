@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/ui_kit/app_theme.dart';
 import '../../domain/repositories/emergency_repository.dart';
 import '../providers/emergency_provider.dart';
+import '../widgets/nearby_posts_list.dart';
 import '../widgets/neighbor_map.dart';
 import 'humanitarian_board_screen.dart';
 
@@ -10,7 +11,8 @@ import 'humanitarian_board_screen.dart';
 /// - **Mapa** (por defecto): cada vecino que publicó, con sus pedidos de
 ///   ayuda, favores y servicios ([NeighborMap]).
 /// - **Lista**: los pedidos de ayuda, por cercanía ("Más cerca") o por
-///   urgencia ("Más urgente").
+///   urgencia ("Más urgente"), y debajo los favores y servicios (lo mismo
+///   que el mapa).
 class EmergencyMapScreen extends StatefulWidget {
   const EmergencyMapScreen({
     super.key,
@@ -167,6 +169,8 @@ class _EmergencyMapScreenState extends State<EmergencyMapScreen> {
       sortByDistance: _byDistance,
       repository: widget.repository,
       header: header,
+      // Lo mismo que el mapa: favores y servicios, del más cercano al más lejano.
+      footer: NearbyPostsList(location: loc),
     );
   }
 }

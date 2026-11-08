@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../moderation/presentation/reports_panel.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/neighborhood_emergency_card.dart';
@@ -38,6 +39,8 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
           const SizedBox(height: 24),
           if (user.tenantId != null) ...[
             NeighborhoodEmergencyCard(tenantId: user.tenantId!),
+            const SizedBox(height: 16),
+            ReportsPanelCard(tenantId: user.tenantId),
             const SizedBox(height: 16),
           ],
           Card(

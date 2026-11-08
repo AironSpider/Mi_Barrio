@@ -30,6 +30,13 @@ VulnerabilityType = Literal[
     "VIVIENDA_AFECTADA", "FALTA_SUMINISTROS",
 ]
 ReportStatus = Literal["PENDIENTE_APOYO", "VECINOS_EN_CAMINO", "ATENDIDO"]
+# Reportes de publicaciones (moderación vecinal).
+ReportTargetType = Literal["SOLIDARITY_POST", "LOCAL_SERVICE"]
+ReportReason = Literal[
+    "FALSO", "ESTAFA", "OFENSIVO", "SPAM", "PELIGROSO", "DATOS_PERSONALES", "OTRO",
+]
+# Con estos reportes de vecinos DISTINTOS la publicación pasa a revisión.
+REPORTS_TO_REVIEW = 3
 SupportGroupType = Literal[
     "PRIMEROS_AUXILIOS", "RESCATE", "ALBERGUE", "ALIMENTOS", "LOGISTICA", "SALUD_MENTAL",
 ]

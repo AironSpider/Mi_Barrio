@@ -397,7 +397,7 @@ void main() {
       find.byKey(const ValueKey('google_join_code')),
       'barrio-01',
     );
-    await tester.tap(find.text('Tengo un oficio o negocio'));
+    await tester.tap(find.text('Tengo un negocio y quiero gestionarlo'));
     await tester.tap(find.text('Entrar a mi barrio'));
     await settle(tester);
 

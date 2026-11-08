@@ -20,7 +20,17 @@ class FilterGroup {
     required this.options,
     this.multiple = false,
     this.allLabel,
-  });
+  }) : isToggle = false;
+
+  /// Interruptor (encendido / apagado) en lugar de píldoras.
+  /// Encendido se guarda como `{FilterGroup.on}`.
+  const FilterGroup.toggle({required this.id, required this.title})
+    : options = const [],
+      multiple = false,
+      allLabel = null,
+      isToggle = true;
+
+  static const on = 'on';
 
   final String id;
   final String title;
@@ -32,7 +42,13 @@ class FilterGroup {
   /// Si existe, se muestra primero una píldora "Todas" que queda elegida
   /// cuando el grupo no tiene ningún filtro (solo en grupos de una opción).
   final String? allLabel;
+
+  final bool isToggle;
 }
+
+/// true si el interruptor [id] está encendido en [selection].
+bool isToggleOn(FilterSelection selection, String id) =>
+    selection[id]?.contains(FilterGroup.on) ?? false;
 
 /// Filtros elegidos: id del grupo → valores elegidos. Vacío = sin filtros.
 typedef FilterSelection = Map<String, Set<String>>;
@@ -252,8 +268,17 @@ class _FilterDialogState extends State<_FilterDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (var i = 0; i < widget.groups.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 20),
-                      _buildGroup(context, widget.groups[i]),
+                      if (i > 0)
+                        SizedBox(
+                          // Interruptores seguidos: más juntos.
+                          height: widget.groups[i].isToggle &&
+                                  widget.groups[i - 1].isToggle
+                              ? 4
+                              : 20,
+                        ),
+                      widget.groups[i].isToggle
+                          ? _buildToggle(context, widget.groups[i])
+                          : _buildGroup(context, widget.groups[i]),
                     ],
                   ],
                 ),
@@ -290,6 +315,45 @@ class _FilterDialogState extends State<_FilterDialog> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildToggle(BuildContext context, FilterGroup group) {
+    final selected = _draft[group.id]!;
+    final on = selected.contains(FilterGroup.on);
+    final primary = Theme.of(context).colorScheme.primary;
+    return MergeSemantics(
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(group.title, style: Theme.of(context).textTheme.bodyLarge),
+          ),
+          Switch(
+            key: ValueKey('filter_toggle_${group.id}'),
+            value: on,
+            onChanged: (v) => setState(() {
+              selected.clear();
+              if (v) selected.add(FilterGroup.on);
+            }),
+            // Encendido: verde oscuro (naranja en emergencia). Apagado: blanco.
+            thumbColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? Colors.white
+                  : AppPalette.filterIcon,
+            ),
+            trackColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? primary
+                  : AppPalette.card,
+            ),
+            trackOutlineColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? primary
+                  : AppPalette.pillBorder,
+            ),
+          ),
+        ],
       ),
     );
   }

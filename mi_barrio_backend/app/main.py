@@ -19,6 +19,10 @@ from app.features.solidarity_network.router import router as solidarity_router
 from app.features.chat.router import realtime_router, router as chat_router
 from app.features.proximity_services.router import endorsement_router, router as services_router
 from app.features.emergency_support.router import router as emergency_router
+from app.features.moderation.router import (
+    platform_router as platform_reports_router,
+    router as moderation_router,
+)
 from app.features.auth_barrio.router import router as tenants_router
 from app.features.auth_barrio.profile_router import router as profile_router
 from app.features.auth_barrio.account_router import router as account_router
@@ -54,6 +58,8 @@ app.include_router(realtime_router)
 app.include_router(services_router)
 app.include_router(endorsement_router)
 app.include_router(emergency_router)
+app.include_router(moderation_router)
+app.include_router(platform_reports_router)
 app.include_router(tenants_router)
 app.include_router(profile_router)
 app.include_router(auth_router)
