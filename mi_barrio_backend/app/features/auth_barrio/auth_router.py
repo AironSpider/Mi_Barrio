@@ -7,10 +7,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
-from app.core import rate_limit
+from app.core import email_sender, rate_limit
 from app.core.auth_security import create_access_token, hash_password, verify_password
 from app.core.database import get_db_session
 from app.core.tenant_middleware import require_role
+from app.features.auth_barrio import account_codes
 from app.features.auth_barrio.models import PlatformAdmin, Tenant, User
 from app.features.auth_barrio.schemas import (
     AuthResponse,
@@ -65,6 +66,7 @@ def _user_response(user: User, tenant: Tenant) -> AuthUserResponse:
         email=user.email,
         role=user.role,
         is_approved=user.is_approved,
+        email_verified=user.email_verified,
         tenant=TenantResponse.model_validate(tenant),
     )
 
@@ -115,6 +117,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
         password_hash=await _hash(payload.password),
         role=payload.role,
         is_approved=True,  # sin aprobación de la junta: publica al instante
+        email_verified=False,  # se confirma con el código que llega al correo
         phone="",
         home_lat=tenant.center_lat,
         home_lng=tenant.center_lng,
@@ -130,6 +133,14 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
             detail="Ya existe una cuenta con ese correo",
         ) from exc
     await db.refresh(user)
+    # El código de verificación sale en segundo plano: si el correo falla,
+    # la cuenta igual se crea y el vecino puede pedir otro código.
+    try:
+        code = await account_codes.issue_code(db, email, account_codes.PURPOSE_VERIFY)
+        await db.commit()
+        await email_sender.send_verification_code(email, user.full_name, code)
+    except HTTPException:
+        await db.rollback()
     return _auth_response(user, tenant)
 
 

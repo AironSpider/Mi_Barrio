@@ -7,6 +7,8 @@ import '../../../../core/ui_kit/app_theme.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/account_widgets.dart';
+import '../widgets/auth_validators.dart';
 
 /// Busca el nombre del barrio de un código (null = no existe).
 typedef NeighborhoodLookup = Future<String?> Function(String joinCode);
@@ -20,6 +22,8 @@ class RegisterScreen extends ConsumerStatefulWidget {
   static const joinCodeStatusKey = ValueKey('register_join_code_status');
   static const vecinoCardKey = ValueKey('register_role_vecino');
   static const comercianteCardKey = ValueKey('register_role_comerciante');
+  static const confirmFieldKey = ValueKey('register_confirm_password');
+  static const submitKey = ValueKey('register_submit');
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
@@ -30,9 +34,46 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _confirm = TextEditingController();
   final _joinCode = TextEditingController();
+  final _joinCodeField = GlobalKey<FormFieldState<String>>();
   UserRole _role = UserRole.vecino;
   bool _obscurePassword = true;
+  bool _googleBusy = false;
+  String? _googleError;
+
+  @override
+  void initState() {
+    super.initState();
+    _password.addListener(() => setState(() {}));
+  }
+
+  /// Con Google no hace falta nombre, correo ni contraseña: solo el barrio y el rol.
+  Future<void> _google() async {
+    if (!(_joinCodeField.currentState?.validate() ?? false)) {
+      setState(() => _googleError = 'Primero escribe el código de tu barrio.');
+      return;
+    }
+    setState(() {
+      _googleBusy = true;
+      _googleError = null;
+    });
+    final error = await continueWithGoogle(
+      context,
+      ref,
+      joinCode: _joinCode.text,
+      role: _role,
+    );
+    if (!mounted) return;
+    if (error == null && ref.read(authProvider).user != null) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    setState(() {
+      _googleBusy = false;
+      _googleError = error;
+    });
+  }
 
   // Confirmación del barrio mientras se escribe el código.
   late final NeighborhoodLookup _lookup =
@@ -80,6 +121,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _name.dispose();
     _email.dispose();
     _password.dispose();
+    _confirm.dispose();
     _joinCode.dispose();
     super.dispose();
   }
@@ -105,7 +147,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
-    final loading = auth.status == AuthStatus.loading;
+    final loading = auth.status == AuthStatus.loading || _googleBusy;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Crear cuenta')),
@@ -133,6 +175,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     const SizedBox(height: 20),
                     TextFormField(
+                      key: _joinCodeField,
                       controller: _joinCode,
                       enabled: !loading,
                       textCapitalization: TextCapitalization.characters,
@@ -143,9 +186,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         prefixIcon: Icon(Icons.vpn_key_outlined),
                         border: OutlineInputBorder(),
                       ),
-                      validator: (value) => (value?.trim().length ?? 0) >= 3
-                          ? null
-                          : 'Ingresa el código de invitación del barrio',
+                      validator: AuthValidators.joinCode,
                     ),
                     const SizedBox(height: 6),
                     _JoinCodeStatus(
@@ -154,43 +195,86 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       neighborhoodName: _neighborhoodName,
                     ),
                     const SizedBox(height: 14),
+                    Text(
+                      '¿Cómo vas a usar Mi Barrio?',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    RoleChoice(
+                      role: _role,
+                      vecinoKey: RegisterScreen.vecinoCardKey,
+                      comercianteKey: RegisterScreen.comercianteCardKey,
+                      onChanged: loading
+                          ? null
+                          : (role) => setState(() => _role = role),
+                    ),
+                    ...[
+                      const SizedBox(height: 20),
+                      GoogleSignInButton(
+                        label: 'Registrarme con Google',
+                        busy: _googleBusy,
+                        onPressed: loading ? null : _google,
+                      ),
+                      if (_googleError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _googleError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      const OrDivider(),
+                      const SizedBox(height: 4),
+                      Text(
+                        'O crea tu cuenta con correo y contraseña:',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                    const SizedBox(height: 14),
                     TextFormField(
                       controller: _name,
                       enabled: !loading,
                       textCapitalization: TextCapitalization.words,
+                      autofillHints: const [AutofillHints.name],
                       decoration: const InputDecoration(
                         labelText: 'Nombre completo',
                         prefixIcon: Icon(Icons.person_outline_rounded),
                         border: OutlineInputBorder(),
                       ),
-                      validator: (value) => (value?.trim().length ?? 0) >= 2
-                          ? null
-                          : 'Ingresa tu nombre completo',
+                      validator: AuthValidators.fullName,
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _email,
                       enabled: !loading,
                       keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      autofillHints: const [AutofillHints.email],
                       decoration: const InputDecoration(
                         labelText: 'Correo electrónico',
+                        helperText: 'Te enviaremos un código para confirmarlo',
                         prefixIcon: Icon(Icons.mail_outline_rounded),
                         border: OutlineInputBorder(),
                       ),
-                      validator: (value) => (value?.contains('@') ?? false)
-                          ? null
-                          : 'Correo inválido',
+                      validator: AuthValidators.email,
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _password,
                       enabled: !loading,
                       obscureText: _obscurePassword,
+                      autofillHints: const [AutofillHints.newPassword],
                       decoration: InputDecoration(
-                        labelText: 'Contraseña (mínimo 8 caracteres)',
+                        labelText: 'Contraseña',
+                        helperText: '8 o más caracteres, con letras y números',
                         prefixIcon: const Icon(Icons.lock_outline_rounded),
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
+                          tooltip: _obscurePassword
+                              ? 'Mostrar contraseña'
+                              : 'Ocultar contraseña',
                           onPressed: () => setState(
                             () => _obscurePassword = !_obscurePassword,
                           ),
@@ -201,37 +285,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                         ),
                       ),
-                      validator: (value) => (value?.length ?? 0) >= 8
-                          ? null
-                          : 'Usa al menos 8 caracteres',
+                      validator: AuthValidators.newPassword,
                     ),
+                    PasswordStrengthMeter(password: _password.text),
                     const SizedBox(height: 14),
-                    const SizedBox(height: 14),
-                    Text(
-                      '¿Cómo vas a usar Mi Barrio?',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    _RoleCard(
-                      key: RegisterScreen.vecinoCardKey,
-                      icon: Icons.home_rounded,
-                      title: 'Soy vecino',
-                      subtitle: 'Pido y ofrezco ayuda, y encuentro oficios.',
-                      selected: _role == UserRole.vecino,
-                      onTap: loading
-                          ? null
-                          : () => setState(() => _role = UserRole.vecino),
-                    ),
-                    const SizedBox(height: 10),
-                    _RoleCard(
-                      key: RegisterScreen.comercianteCardKey,
-                      icon: Icons.storefront_rounded,
-                      title: 'Tengo un oficio o negocio',
-                      subtitle: 'Ofrezco mis servicios a mis vecinos.',
-                      selected: _role == UserRole.comerciante,
-                      onTap: loading
-                          ? null
-                          : () => setState(() => _role = UserRole.comerciante),
+                    TextFormField(
+                      key: RegisterScreen.confirmFieldKey,
+                      controller: _confirm,
+                      enabled: !loading,
+                      obscureText: _obscurePassword,
+                      decoration: const InputDecoration(
+                        labelText: 'Repite la contraseña',
+                        prefixIcon: Icon(Icons.lock_outline_rounded),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: AuthValidators.confirmPassword(
+                        () => _password.text,
+                      ),
                     ),
                     if (auth.message != null) ...[
                       const SizedBox(height: 12),
@@ -244,6 +314,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ],
                     const SizedBox(height: 20),
                     FilledButton(
+                      key: RegisterScreen.submitKey,
                       onPressed: loading ? null : _register,
                       child: loading
                           ? const SizedBox(
@@ -255,97 +326,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                   ],
                 ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Tarjeta grande y tocable para elegir el tipo de cuenta (en vez de un
-/// desplegable): se entiende sin leer mucho y es fácil de tocar.
-class _RoleCard extends StatelessWidget {
-  const _RoleCard({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final texto = Theme.of(context).textTheme;
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: Material(
-        color: selected ? scheme.primaryContainer : scheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: selected ? scheme.primary : scheme.outline,
-            width: selected ? 2.5 : 1,
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 72),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Icon(
-                    icon,
-                    size: 36,
-                    color: selected
-                        ? scheme.onPrimaryContainer
-                        : scheme.primary,
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: texto.titleMedium?.copyWith(
-                            color: selected ? scheme.onPrimaryContainer : null,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: texto.bodyMedium?.copyWith(
-                            color: selected
-                                ? scheme.onPrimaryContainer
-                                : scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    selected
-                        ? Icons.check_circle_rounded
-                        : Icons.radio_button_unchecked_rounded,
-                    color: selected ? scheme.primary : scheme.outline,
-                  ),
-                ],
               ),
             ),
           ),

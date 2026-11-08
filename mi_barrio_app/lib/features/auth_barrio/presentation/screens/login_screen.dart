@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui_kit/app_theme.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/account_widgets.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
 /// Inicio de sesión.
@@ -22,6 +24,8 @@ class LoginScreen extends ConsumerStatefulWidget {
   static const submitKey = ValueKey('login_submit');
   static const errorKey = ValueKey('login_error');
   static const slowServerKey = ValueKey('login_slow_server');
+  static const forgotPasswordKey = ValueKey('login_forgot_password');
+  static const googleErrorKey = ValueKey('login_google_error');
 
   /// Después de este tiempo cargando se muestra el aviso de servidor lento.
   static const slowServerAfter = Duration(seconds: 5);
@@ -71,6 +75,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   /// El vecino volvió a escribir: el error anterior ya no aplica.
   bool _errorDismissed = false;
 
+  bool _googleBusy = false;
+  String? _googleError;
+
+  Future<void> _google() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _googleBusy = true;
+      _googleError = null;
+      _errorDismissed = true;
+    });
+    final error = await continueWithGoogle(context, ref);
+    if (!mounted) return;
+    setState(() {
+      _googleBusy = false;
+      _googleError = error;
+    });
+  }
+
   static final _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
 
   @override
@@ -93,6 +115,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_errorDismissed && ref.read(authProvider).message != null) {
       setState(() => _errorDismissed = true);
     }
+    if (_googleError != null) setState(() => _googleError = null);
   }
 
   Future<void> _login() async {
@@ -124,7 +147,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
-    final loading = auth.status == AuthStatus.loading;
+    final loading = auth.status == AuthStatus.loading || _googleBusy;
     final message = auth.message;
     final showError = message != null && !_errorDismissed && !loading;
     final theme = Theme.of(context);
@@ -227,6 +250,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   validator: _validatePassword,
                                   onFieldSubmitted: (_) => _login(),
                                 ),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    key: LoginScreen.forgotPasswordKey,
+                                    onPressed: loading
+                                        ? null
+                                        : () => Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) =>
+                                                  ForgotPasswordScreen(
+                                                    initialEmail: _email.text
+                                                        .trim(),
+                                                  ),
+                                            ),
+                                          ),
+                                    child: const Text(
+                                      '¿Olvidaste tu contraseña?',
+                                    ),
+                                  ),
+                                ),
                                 AnimatedSize(
                                   duration: const Duration(milliseconds: 200),
                                   child: showError
@@ -268,7 +311,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           ),
                                   ),
                                 ),
-                                if (loading) const _SlowServerHint(),
+                                if (loading && !_googleBusy)
+                                  const _SlowServerHint(),
+                                ...[
+                                  const SizedBox(height: 20),
+                                  const OrDivider(),
+                                  const SizedBox(height: 20),
+                                  GoogleSignInButton(
+                                    busy: _googleBusy,
+                                    onPressed: loading ? null : _google,
+                                  ),
+                                  if (_googleError != null) ...[
+                                    const SizedBox(height: 12),
+                                    KeyedSubtree(
+                                      key: LoginScreen.googleErrorKey,
+                                      child: _ErrorBox(message: _googleError!),
+                                    ),
+                                  ],
+                                ],
                                 const SizedBox(height: 28),
                                 Text(
                                   '¿Eres nuevo en Mi Barrio?',

@@ -47,6 +47,7 @@ class AuthUserResponse(BaseModel):
     email: str
     role: Literal["VECINO", "COMERCIANTE", "ADMIN_BARRIO", "SUPER_ADMIN"]
     is_approved: bool = True
+    email_verified: bool = True
     tenant: TenantResponse | None
 
 
@@ -54,6 +55,44 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     user: AuthUserResponse
+
+
+Email = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    ),
+]
+Code = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^\d{6}$")]
+
+
+class EmailRequest(BaseModel):
+    email: Email
+
+
+class VerifyEmailRequest(BaseModel):
+    email: Email
+    code: Code
+
+
+class ResetPasswordRequest(BaseModel):
+    email: Email
+    code: Code
+    new_password: Password
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str = Field(..., min_length=20, max_length=4096)
+    # Solo para crear la cuenta la primera vez: a qué barrio entra y con qué rol.
+    join_code: str | None = Field(default=None, min_length=3, max_length=20)
+    role: Literal["VECINO", "COMERCIANTE"] = "VECINO"
+
+
+class CodeSentResponse(BaseModel):
+    sent: bool = True
+    message: str
+    # Solo con AUTH_DEBUG_CODES=1 y sin correo configurado (pruebas locales).
+    debug_code: str | None = None
 
 
 class NeighborhoodAdminCreate(BaseModel):

@@ -19,6 +19,7 @@ import 'features/auth_barrio/domain/entities/user_entity.dart';
 import 'features/auth_barrio/presentation/screens/login_screen.dart';
 import 'features/auth_barrio/presentation/screens/neighborhood_admin_screen.dart';
 import 'features/auth_barrio/presentation/screens/platform_admin_screen.dart';
+import 'features/auth_barrio/presentation/screens/verify_email_screen.dart';
 import 'features/emergency_support/data/repositories/emergency_repository_impl.dart';
 import 'features/emergency_support/presentation/providers/emergency_provider.dart';
 import 'features/emergency_support/presentation/widgets/sos_sheet.dart';
@@ -171,6 +172,9 @@ class _AuthGate extends ConsumerWidget {
     return switch (user.role) {
       UserRole.superAdmin => PlatformAdminScreen(user: user),
       UserRole.adminBarrio => NeighborhoodAdminScreen(user: user),
+      // Cuenta nueva con contraseña: primero confirma el correo con el código.
+      UserRole.comerciante ||
+      UserRole.vecino when !user.emailVerified => VerifyEmailScreen(user: user),
       // La primera vez que una cuenta entra, ve el tutorial de 3 pasos.
       UserRole.comerciante || UserRole.vecino => TutorialGate(
         tenantId: user.tenantId ?? TenantSession.instance.tenantId,

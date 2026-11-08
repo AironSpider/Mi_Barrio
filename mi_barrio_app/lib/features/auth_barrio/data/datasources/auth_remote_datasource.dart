@@ -47,6 +47,56 @@ class AuthRemoteDatasource {
     'join_code': joinCode.trim().toUpperCase(),
   });
 
+  /// Entrar (o crear la cuenta) con el ID token de Google.
+  /// La primera vez el servidor responde 428 si falta el código del barrio.
+  Future<Map<String, dynamic>> googleLogin({
+    required String idToken,
+    String? joinCode,
+    String role = 'VECINO',
+  }) => _post('/api/v1/auth/google', {
+    'id_token': idToken,
+    if (joinCode != null && joinCode.trim().isNotEmpty)
+      'join_code': joinCode.trim().toUpperCase(),
+    'role': role,
+  });
+
+  /// Envía (otra vez) el código de 6 dígitos para confirmar el correo.
+  Future<String> sendVerificationCode(String email) async => _message(
+    await _post('/api/v1/auth/email/send-code', {
+      'email': email.trim().toLowerCase(),
+    }),
+  );
+
+  /// Confirma el correo con el código. Devuelve la sesión actualizada.
+  Future<Map<String, dynamic>> verifyEmail({
+    required String email,
+    required String code,
+  }) => _post('/api/v1/auth/email/verify', {
+    'email': email.trim().toLowerCase(),
+    'code': code.trim(),
+  });
+
+  /// "Olvidé mi contraseña": envía un código al correo (si la cuenta existe).
+  Future<String> requestPasswordReset(String email) async => _message(
+    await _post('/api/v1/auth/password/forgot', {
+      'email': email.trim().toLowerCase(),
+    }),
+  );
+
+  /// Cambia la contraseña con el código y deja la sesión iniciada.
+  Future<Map<String, dynamic>> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) => _post('/api/v1/auth/password/reset', {
+    'email': email.trim().toLowerCase(),
+    'code': code.trim(),
+    'new_password': newPassword,
+  });
+
+  static String _message(Map<String, dynamic> body) =>
+      body['message']?.toString() ?? 'Te enviamos un código al correo.';
+
   /// Nombre del barrio de un código de invitación (ruta pública, sin sesión).
   /// null = el código no existe. Lanza [AuthException] si no hay conexión.
   Future<String?> lookupNeighborhoodName(String joinCode) async {

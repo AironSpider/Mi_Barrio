@@ -11,6 +11,8 @@ class UserModel extends UserEntity {
     required super.joinCode,
     required super.centerLat,
     required super.centerLng,
+    super.email,
+    super.emailVerified,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,10 @@ class UserModel extends UserEntity {
       joinCode: tenant['join_code']?.toString(),
       centerLat: _doubleValue(tenant['center_lat']),
       centerLng: _doubleValue(tenant['center_lng']),
+      email: json['email']?.toString(),
+      emailVerified: json['email_verified'] is bool
+          ? json['email_verified'] as bool
+          : true,
     );
   }
 
@@ -49,6 +55,8 @@ class UserModel extends UserEntity {
     'full_name': fullName,
     'role': role.apiValue,
     'token': token,
+    'email': email,
+    'email_verified': emailVerified,
     'tenant': tenantId == null
         ? null
         : {

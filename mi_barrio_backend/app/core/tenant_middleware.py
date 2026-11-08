@@ -35,6 +35,16 @@ EXEMPT_PATHS = {
     "/redoc",
     "/openapi.json",
 }
+# Rutas sin sesión: entrar, registrarse y las de cuentas reales (account_router).
+PUBLIC_AUTH_PATHS = {
+    "/api/v1/auth/login",
+    "/api/v1/auth/register",
+    "/api/v1/auth/email/send-code",
+    "/api/v1/auth/email/verify",
+    "/api/v1/auth/password/forgot",
+    "/api/v1/auth/password/reset",
+    "/api/v1/auth/google",
+}
 PLATFORM_ADMIN_PREFIX = "/api/v1/platform/"
 # Público: antes de registrarse, el vecino confirma a qué barrio pertenece el código.
 PUBLIC_TENANT_LOOKUP_PREFIX = "/api/v1/tenants/by-code/"
@@ -49,10 +59,9 @@ class TenantMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if request.url.path.startswith("/api/v1/"):
-            is_public_auth = request.url.path in {
-                "/api/v1/auth/login",
-                "/api/v1/auth/register",
-            } or request.url.path.startswith(PUBLIC_TENANT_LOOKUP_PREFIX)
+            is_public_auth = request.url.path in PUBLIC_AUTH_PATHS or request.url.path.startswith(
+                PUBLIC_TENANT_LOOKUP_PREFIX
+            )
             if not is_public_auth:
                 authorization = request.headers.get("Authorization", "")
                 scheme, _, token = authorization.partition(" ")

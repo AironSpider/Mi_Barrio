@@ -137,6 +137,30 @@ class _FakeAuthRepository implements AuthRepository {
   Future<UserEntity?> restoreSession() async => null;
 
   @override
+  Future<UserEntity> signInWithGoogle({
+    required String idToken,
+    String? joinCode,
+    UserRole role = UserRole.vecino,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<String> sendVerificationCode(String email) async => 'ok';
+
+  @override
+  Future<UserEntity> verifyEmail({required String email, required String code}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<String> requestPasswordReset(String email) async => 'ok';
+
+  @override
+  Future<UserEntity> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) => throw UnimplementedError();
+
+  @override
   Future<NeighborhoodProvisionEntity> createNeighborhood({
     required String neighborhoodName,
     String? existingJoinCode,

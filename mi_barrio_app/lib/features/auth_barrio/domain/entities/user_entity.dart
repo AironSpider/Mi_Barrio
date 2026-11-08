@@ -32,6 +32,8 @@ class UserEntity {
     this.joinCode,
     this.centerLat,
     this.centerLng,
+    this.email,
+    this.emailVerified = true,
   });
 
   final String id;
@@ -43,6 +45,13 @@ class UserEntity {
   final String? joinCode;
   final double? centerLat;
   final double? centerLng;
+
+  /// Correo de la cuenta (null en sesiones guardadas por versiones viejas).
+  final String? email;
+
+  /// false = cuenta nueva que aún no escribió el código del correo.
+  /// Las sesiones viejas y las cuentas que ya existían cuentan como verificadas.
+  final bool emailVerified;
 }
 
 class NeighborhoodProvisionEntity {

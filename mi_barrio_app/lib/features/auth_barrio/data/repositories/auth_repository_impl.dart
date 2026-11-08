@@ -77,6 +77,51 @@ class AuthRepositoryImpl implements AuthRepository {
     return _afterAuth(await _persistResponse(response), online: true);
   }
 
+  @override
+  Future<UserEntity> signInWithGoogle({
+    required String idToken,
+    String? joinCode,
+    UserRole role = UserRole.vecino,
+  }) async {
+    final response = await _remote.googleLogin(
+      idToken: idToken,
+      joinCode: joinCode,
+      role: role.apiValue,
+    );
+    return _afterAuth(await _persistResponse(response), online: true);
+  }
+
+  @override
+  Future<String> sendVerificationCode(String email) =>
+      _remote.sendVerificationCode(email);
+
+  @override
+  Future<UserEntity> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    final response = await _remote.verifyEmail(email: email, code: code);
+    return _afterAuth(await _persistResponse(response), online: true);
+  }
+
+  @override
+  Future<String> requestPasswordReset(String email) =>
+      _remote.requestPasswordReset(email);
+
+  @override
+  Future<UserEntity> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    final response = await _remote.resetPassword(
+      email: email,
+      code: code,
+      newPassword: newPassword,
+    );
+    return _afterAuth(await _persistResponse(response), online: true);
+  }
+
   Future<UserModel> _persistResponse(Map<String, dynamic> response) async {
     final userData = response['user'];
     if (userData is! Map<String, dynamic>) {
@@ -162,7 +207,8 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> keepPendingDataFor({
     required String tenantId,
     required String userId,
-  }) => SyncOutboxDao().rememberPendingOwner(tenantId: tenantId, userId: userId);
+  }) =>
+      SyncOutboxDao().rememberPendingOwner(tenantId: tenantId, userId: userId);
 
   @override
   Future<void> reconcilePendingData(UserEntity user) async {

@@ -21,6 +21,7 @@ from app.features.proximity_services.router import endorsement_router, router as
 from app.features.emergency_support.router import router as emergency_router
 from app.features.auth_barrio.router import router as tenants_router
 from app.features.auth_barrio.profile_router import router as profile_router
+from app.features.auth_barrio.account_router import router as account_router
 from app.features.auth_barrio.auth_router import (
     platform_router,
     router as auth_router,
@@ -56,6 +57,7 @@ app.include_router(emergency_router)
 app.include_router(tenants_router)
 app.include_router(profile_router)
 app.include_router(auth_router)
+app.include_router(account_router)
 app.include_router(platform_router)
 
 

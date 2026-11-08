@@ -11,6 +11,30 @@ abstract interface class AuthRepository {
     required String joinCode,
   });
 
+  /// Entra o crea la cuenta con Google. Lanza `AuthException` con
+  /// statusCode 428 si es una cuenta nueva y falta el código del barrio.
+  Future<UserEntity> signInWithGoogle({
+    required String idToken,
+    String? joinCode,
+    UserRole role = UserRole.vecino,
+  });
+
+  /// Envía otra vez el código de verificación. Devuelve el mensaje para mostrar.
+  Future<String> sendVerificationCode(String email);
+
+  /// Confirma el correo con el código y devuelve la sesión actualizada.
+  Future<UserEntity> verifyEmail({required String email, required String code});
+
+  /// "Olvidé mi contraseña": envía un código al correo.
+  Future<String> requestPasswordReset(String email);
+
+  /// Cambia la contraseña con el código y deja la sesión iniciada.
+  Future<UserEntity> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  });
+
   Future<UserEntity?> restoreSession();
 
   Future<NeighborhoodProvisionEntity> createNeighborhood({
