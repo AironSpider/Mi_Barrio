@@ -151,7 +151,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _list({required String empty, required List<Widget> children}) {
-    if (children.isEmpty) return _Message(icon: Icons.inbox_outlined, text: empty);
+    if (children.isEmpty) {
+      return _Message(icon: Icons.inbox_outlined, text: empty);
+    }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 32), children: children),

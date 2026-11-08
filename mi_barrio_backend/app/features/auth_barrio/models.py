@@ -43,6 +43,7 @@ class User(Base, BarrioBaseMixin):
     )
     tutorial_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email: Mapped[str | None] = mapped_column(String(254), nullable=True)
+    email_contacto: Mapped[str | None] = mapped_column(String(254), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
     # Migración B (Sprint 9): redes de contacto y perfil de publicador (todo opcional).
     whatsapp: Mapped[str | None] = mapped_column(String(20), nullable=True)

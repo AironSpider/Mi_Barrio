@@ -67,8 +67,9 @@ _RULES: dict[str, dict[str, tuple[str, object]]] = {
         "home_lng": ("lng", None),
         # Migración B: mismas reglas que la app (profile_local_storage.dart).
         "whatsapp": ("phone_opt", None),
-        "facebook_url": ("url_opt", 300),
-        "instagram_url": ("url_opt", 300),
+        "facebook_url": ("https_url_opt", 300),
+        "instagram_url": ("https_url_opt", 300),
+        "email_contacto": ("text_opt", (0, 254)),
         "photo_b64": ("text_opt", (0, 110_000)),
         "publisher_type": ("enum_opt", _one_of(PublisherType)),
         "publisher_category": ("text_opt", (0, 50)),
@@ -77,7 +78,7 @@ _RULES: dict[str, dict[str, tuple[str, object]]] = {
 }
 
 _PHONE = re.compile(r"^\+?[0-9 ]{6,20}$")
-_URL = re.compile(r"^https?://[^\s]+$")
+_HTTPS_URL = re.compile(r"^https://[^\s]+$")
 
 _BOOL_FIELDS = {"is_deleted", "is_emergency_context", "is_available_in_emergency", "tutorial_completed"}
 
@@ -119,11 +120,15 @@ def validate_payload(table: str, payload: dict) -> None:
                 continue
             if not isinstance(value, str) or not _PHONE.match(value):
                 raise ValueError(f"{field} inválido: usa solo dígitos (6 a 20), con + opcional")
-        elif rule == "url_opt":
+        elif rule == "https_url_opt":
             if value is None:
                 continue
-            if not isinstance(value, str) or len(value) > param or not _URL.match(value):
-                raise ValueError(f"{field} debe ser un enlace http:// o https:// de hasta {param} caracteres")
+            if (
+                not isinstance(value, str)
+                or len(value) > param
+                or not _HTTPS_URL.match(value)
+            ):
+                raise ValueError(f"{field} debe ser un enlace https:// de hasta {param} caracteres")
         elif rule == "rating":
             if value is None:
                 continue

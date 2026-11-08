@@ -110,6 +110,7 @@ class UserProfileResponse(BaseModel):
     role: str
     is_approved: bool = True
     phone: str
+    email_contacto: str | None = None
     address_reference: str | None = None
     home_lat: float
     home_lng: float

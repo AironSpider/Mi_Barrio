@@ -94,7 +94,27 @@ def main() -> int:
     demo = register(BASE, "BARRIO-01", "VECINO")
     s, demo_groups = http(BASE, "GET", "/api/v1/emergency/support-groups",
                           tenant="a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d", token=demo["token"])
-    check("BARRIO-01 tiene sus 3 grupos demo", s == 200 and len(demo_groups) >= 3, f"{s} {demo_groups}")
+    expected_demo_names = {
+        "Brigada de primeros auxilios",
+        "Albergue parroquial",
+        "Olla común Mi Barrio",
+    }
+    demo_ids = {
+        group["id"] for group in demo_groups
+        if group["name"] in expected_demo_names
+    } if s == 200 else set()
+    check("BARRIO-01 lista los 3 grupos del seed",
+          s == 200 and len(demo_ids) == len(expected_demo_names), f"{s} {demo_groups}")
+    s, demo_pull = http(
+        BASE, "GET", "/api/v1/sync/pull",
+        tenant="a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d",
+        token=demo["token"],
+    )
+    pulled_demo_ids = {
+        group["id"] for group in demo_pull.get("delta", {}).get("support_groups", [])
+    } if s == 200 else set()
+    check("el pull de BARRIO-01 incluye los 3 grupos del seed",
+          s == 200 and demo_ids <= pulled_demo_ids, f"{s} {pulled_demo_ids}")
 
     failed = [r for r in results if not r[0]]
     print(f"\n{len(results) - len(failed)}/{len(results)} pruebas OK")

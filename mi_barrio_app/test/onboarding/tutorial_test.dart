@@ -47,18 +47,30 @@ void main() {
     const child = Text('Pestañas de la app');
 
     Future<void> openGate(String userId) async {
-      await tester.pumpWidget(app(TutorialGate(key: ValueKey(userId), tenantId: tenant, userId: userId, child: child)));
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
-      await tester.pumpAndSettle();
+      await tester.pumpWidget(app(TutorialGate(
+        key: ValueKey(userId),
+        tenantId: tenant,
+        userId: userId,
+        child: child,
+      )));
+      for (var attempt = 0; attempt < 20; attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+        if (find.byKey(TutorialScreen.skipKey).evaluate().isNotEmpty ||
+            find.text('Pestañas de la app').evaluate().isNotEmpty) {
+          return;
+        }
+      }
     }
 
     await openGate(vecina);
     expect(find.byType(TutorialScreen), findsOneWidget);
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(TutorialScreen.skipKey));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
+    await tester.tap(find.byKey(TutorialScreen.skipKey));
     await tester.pumpAndSettle();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pump();
     expect(find.text('Pestañas de la app'), findsOneWidget);
 
     // Reabrir la app con la misma cuenta: ya no aparece.

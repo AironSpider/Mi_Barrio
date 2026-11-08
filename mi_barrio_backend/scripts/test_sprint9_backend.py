@@ -77,17 +77,20 @@ def main() -> int:
     # ── Perfil propio ──
     s, me = call("GET", "/api/v1/users/me")
     check("GET /users/me trae el perfil propio", s == 200 and me.get("id") == vecino["id"]
-          and me.get("full_name") == "Rosa Quispe" and me.get("whatsapp") is None, f"{s} {me}")
+          and me.get("full_name") == "Rosa Quispe" and me.get("whatsapp") is None
+          and me.get("email_contacto") is None, f"{s} {me}")
 
     s, ok, b = push_profile(
-        vecino["token"], vecino["id"], whatsapp="+51 987 654 321",
+        vecino["token"], vecino["id"], email_contacto="rosa.contacto@example.test",
+        whatsapp="+51 987 654 321",
         facebook_url="https://facebook.com/rosa.quispe", instagram_url="https://instagram.com/rosa",
         publisher_type="EMPRENDEDOR", publisher_category="GASFITERIA", publisher_name="Gasfitería Rosa",
         photo_b64="/9j/" + "A" * 1000, role="ADMIN_BARRIO", email="hack@pruebas.test")
     check("sube redes y perfil de publicador por sync", ok == [vecino["id"]], b)
     s, me = call("GET", "/api/v1/users/me")
     check("GET /users/me devuelve las redes guardadas",
-          s == 200 and me["whatsapp"] == "+51 987 654 321" and me["instagram_url"] == "https://instagram.com/rosa"
+          s == 200 and me["email_contacto"] == "rosa.contacto@example.test"
+          and me["whatsapp"] == "+51 987 654 321" and me["instagram_url"] == "https://instagram.com/rosa"
           and me["publisher_name"] == "Gasfitería Rosa" and me["photo_b64"].startswith("/9j/"), me)
     check("el sync no deja cambiar el rol ni el correo",
           me.get("role") == "VECINO" and me.get("email") == vecino["email"], me)
@@ -95,6 +98,8 @@ def main() -> int:
     invalid = {
         "WhatsApp con letras": {"whatsapp": "llámame"},
         "Facebook que no es enlace": {"facebook_url": "facebook.com/rosa"},
+        "Facebook con HTTP": {"facebook_url": "http://facebook.com/rosa"},
+        "Instagram con HTTP": {"instagram_url": "http://instagram.com/rosa"},
         "enlace javascript:": {"instagram_url": "javascript:alert(1)"},
         "tipo de publicador inválido": {"publisher_type": "MULTINACIONAL"},
         "nombre de negocio de 121 caracteres": {"publisher_name": "x" * 121},
@@ -104,9 +109,12 @@ def main() -> int:
         s, ok, b = push_profile(vecino["token"], vecino["id"], **fields)
         check(f"sync rechaza {name}", s == 200 and not ok, b)
 
-    s, ok, b = push_profile(vecino["token"], vecino["id"], whatsapp=None, facebook_url=None)
+    s, ok, b = push_profile(
+        vecino["token"], vecino["id"], email_contacto=None, whatsapp=None, facebook_url=None
+    )
     s2, me = call("GET", "/api/v1/users/me")
-    check("se pueden borrar redes (null)", ok == [vecino["id"]] and me["whatsapp"] is None
+    check("se pueden borrar datos de contacto (null)", ok == [vecino["id"]]
+          and me["email_contacto"] is None and me["whatsapp"] is None
           and me["facebook_url"] is None and me["instagram_url"] == "https://instagram.com/rosa", me)
 
     s, ok, b = push_profile(otro["token"], vecino["id"], full_name="Me adueño", whatsapp="+51 900 000 000")
