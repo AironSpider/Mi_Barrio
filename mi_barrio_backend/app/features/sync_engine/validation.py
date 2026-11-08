@@ -9,6 +9,8 @@ import re
 from typing import get_args
 
 from app.shared.contract_values import (
+    MAX_PHOTO_B64,
+    MAX_SERVICE_PHOTOS,
     FlowType,
     Modality,
     PostStatus,
@@ -45,6 +47,8 @@ _RULES: dict[str, dict[str, tuple[str, object]]] = {
         "description": ("text_opt", (0, 2000)),
         "publisher_type": ("enum_opt", _one_of(PublisherType)),
         "publisher_name": ("text_opt", (0, 120)),
+        "price_text": ("text_opt", (0, 60)),
+        "photos": ("photos", None),
         "lat": ("lat", None),
         "lng": ("lng", None),
     },
@@ -138,6 +142,17 @@ def validate_payload(table: str, payload: dict) -> None:
                 or not _HTTPS_URL.match(value)
             ):
                 raise ValueError(f"{field} debe ser un enlace https:// de hasta {param} caracteres")
+        elif rule == "photos":
+            if value is None:
+                continue
+            if (
+                not isinstance(value, list)
+                or len(value) > MAX_SERVICE_PHOTOS
+                or any(not isinstance(p, str) or not p or len(p) > MAX_PHOTO_B64 for p in value)
+            ):
+                raise ValueError(
+                    f"photos debe ser una lista de hasta {MAX_SERVICE_PHOTOS} fotos (máx. {MAX_PHOTO_B64} caracteres c/u)"
+                )
         elif rule == "rating":
             if value is None:
                 continue

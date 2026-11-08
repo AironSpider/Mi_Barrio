@@ -176,9 +176,6 @@ void main() {
       expect((await loadMerchantProfile(luis.id, tenantId: luis.tenant)).isMerchant, isTrue,
           reason: 'el comerciante debe ver "Ofrecer servicio"');
 
-      // La junta aprueba al comerciante (regla nueva del Dev 1).
-      final (s, b) = await rest('PATCH', '/api/v1/users/${luis.id}/approve-merchant', token: adminToken);
-      expect(s, 200, reason: '$b');
     });
 
     test('2. ONLINE: Luis publica un servicio y Rosa lo ve tras sincronizar', () async {
@@ -337,7 +334,7 @@ void main() {
       expect(EmergencyModeProvider.instance.isActive.value, isFalse);
     });
 
-    test('12. Comerciante AÚN NO aprobado: su servicio espera y sube cuando la junta lo aprueba', () async {
+    test('12. Comerciante recién registrado: su servicio sube al instante (sin esperar a la junta)', () async {
       final nuevo = _Phone('Ana', '${dir.path}${Platform.pathSeparator}ana.db', base);
       await nuevo.use();
       nuevo.user = await nuevo.auth.register(
@@ -348,19 +345,10 @@ void main() {
         tenantId: nuevo.tenant, providerUserId: nuevo.id, category: ServiceCategory.clases,
         title: 'Clases de Ana', lat: -5.1945, lng: -80.6328);
 
-      final waiting = await nuevo.sync.pushLocalChanges(nuevo.tenant);
-      expect(waiting.waitingCount, 1, reason: 'todavía no está aprobada: queda esperando');
-      expect(waiting.success, isTrue, reason: 'esperar la aprobación no es un error de sync');
-      Future<Map<String, Object?>> row() async =>
-          (await (await db()).query('local_services', where: 'id = ?', whereArgs: [svc.id])).single;
-      expect((await row())['sync_status'], SqliteTables.syncPending, reason: 'no debe quedar "Sin enviar"');
-      expect(await PendingChanges.count(nuevo.tenant), 1, reason: 'sigue en la cola para reintentar');
-
-      final (s, b) = await rest('PATCH', '/api/v1/users/${nuevo.id}/approve-merchant', token: adminToken);
-      expect(s, 200, reason: '$b');
       final sent = await nuevo.sync.pushLocalChanges(nuevo.tenant);
       expect(sent.success, isTrue, reason: sent.message);
-      expect((await row())['sync_status'], SqliteTables.syncSynced);
+      final row = (await (await db()).query('local_services', where: 'id = ?', whereArgs: [svc.id])).single;
+      expect(row['sync_status'], SqliteTables.syncSynced);
     });
 
     test('13. Teléfono compartido: Rosa cierra sesión y entra Luis → ve los favores publicados y no queda basura', () async {

@@ -50,9 +50,6 @@ def main():
     vecino = register(BASE, hood["join_code"], "VECINO", "Vecina smoke")
     vecino2 = register(BASE, hood["join_code"], "VECINO", "Vecino smoke dos")
     comerciante = register(BASE, hood["join_code"], "COMERCIANTE", "Comerciante smoke")
-    comerciante_rechazado = register(
-        BASE, hood["join_code"], "COMERCIANTE", "Comerciante rechazado smoke"
-    )
     ajeno = register(BASE, other["join_code"], "VECINO", "Vecino de otro barrio")
     ME, PROVIDER = vecino["id"], comerciante["id"]
 
@@ -80,78 +77,26 @@ def main():
         "provider_user_id": ME, "category": "GASFITERIA", "title": "Vecina intenta ofrecer",
         "description": "x", "lat": LAT, "lng": LNG})
     check("un VECINO no puede publicar servicios -> 403", s == 403, f"{s} {b}")
-    check("comerciante nuevo espera aprobación del admin",
-          comerciante["is_approved"] is False)
-    s, b = call("POST", "/api/v1/services", {
-        "provider_user_id": PROVIDER, "category": "GASFITERIA",
-        "title": "Gasfitero 24h", "description": "Prueba de humo",
-        "is_available_in_emergency": True, "lat": LAT, "lng": LNG,
-        "publisher_type": "EMPRENDEDOR", "publisher_name": "Gasfitería Smoke",
-    }, who=comerciante)
-    check("comerciante pendiente no puede publicar servicio -> 403",
-          s == 403 and "pendiente" in str(b).lower(), f"{s} {b}")
-    pending_sync_service_id = str(uuid.uuid4())
-    s, pending_sync = call(
-        "POST",
-        "/api/v1/sync/push",
-        {
-            "client_sync_timestamp": now(),
-            "mutations": [{
-                "target_table": "local_services",
-                "record_id": pending_sync_service_id,
-                "operation": "UPSERT",
-                "payload": {
-                    "id": pending_sync_service_id,
-                    "provider_user_id": PROVIDER,
-                    "category": "GASFITERIA",
-                    "title": "Servicio antes de aprobación",
-                    "description": "Debe ser rechazado",
-                    "lat": LAT,
-                    "lng": LNG,
-                    "updated_at": now(),
-                },
-            }],
-        },
-        who=comerciante,
-    )
-    check("sync tampoco permite publicar servicios antes de aprobación",
-          s == 200 and not pending_sync["processed_record_ids"]
-          and "pendiente de aprobación" in pending_sync["rejected"][0]["reason"],
-          f"{s} {pending_sync}")
-    s, pending_post = call("POST", "/api/v1/solidarity", {
-        "author_user_id": PROVIDER, "flow_type": "OFREZCO_AYUDA",
-        "modality": "AYUDA_TEMPORAL", "title": "Comerciante ofrece ayuda",
-        "lat": LAT, "lng": LNG,
-    }, who=comerciante)
-    check("comerciante pendiente conserva funciones de vecino",
-          s == 201 and pending_post.get("author_user_id") == PROVIDER, f"{s} {pending_post}")
-    s, pending_merchants = call(
-        "GET", "/api/v1/users/pending-merchants", who=hood["admin_token"]
-    )
-    check("GET /users/pending-merchants solo admin lista comerciantes pendientes",
-          s == 200 and any(m["id"] == PROVIDER for m in pending_merchants), f"{s} {pending_merchants}")
-    s, b = call("GET", "/api/v1/users/pending-merchants")
-    check("vecino no puede listar comerciantes pendientes -> 403", s == 403, f"{s} {b}")
-    s, b = call("PATCH", f"/api/v1/users/{PROVIDER}/approve-merchant")
-    check("vecino no puede aprobar comerciantes -> 403", s == 403, f"{s} {b}")
-    s, approval = call(
-        "PATCH", f"/api/v1/users/{PROVIDER}/approve-merchant",
-        who=hood["admin_token"],
-    )
-    check("admin aprueba comerciante", s == 200 and approval.get("is_approved") is True, f"{s} {approval}")
-    s, b = call(
-        "PATCH", f"/api/v1/users/{comerciante_rechazado['id']}/reject-merchant",
-        who=hood["admin_token"],
-    )
-    check("admin puede rechazar comerciante", s == 200 and b.get("is_deleted") is True, f"{s} {b}")
-
+    # Sin aprobación de la junta: el comerciante recién registrado publica al instante.
+    check("comerciante nuevo queda activo al registrarse", comerciante["is_approved"] is True)
     s, svc = call("POST", "/api/v1/services", {
         "provider_user_id": PROVIDER, "category": "GASFITERIA",
         "title": "Gasfitero 24h", "description": "Prueba de humo",
         "is_available_in_emergency": True, "lat": LAT, "lng": LNG,
         "publisher_type": "EMPRENDEDOR", "publisher_name": "Gasfitería Smoke",
     }, who=comerciante)
-    check("comerciante aprobado puede publicar servicio", s == 201 and svc.get("publisher_type") == "EMPRENDEDOR", f"{s} {svc}")
+    check("comerciante recién registrado publica su servicio",
+          s == 201 and svc.get("publisher_type") == "EMPRENDEDOR", f"{s} {svc}")
+    sync_service_id = str(uuid.uuid4())
+    s, synced = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": now(), "mutations": [{
+        "target_table": "local_services", "record_id": sync_service_id, "operation": "UPSERT",
+        "payload": {"id": sync_service_id, "provider_user_id": PROVIDER, "category": "CERRAJERIA",
+                    "title": "Cerrajero sin esperar", "description": "", "lat": LAT, "lng": LNG,
+                    "updated_at": now()}}]}, who=comerciante)
+    check("...y también por sync (sin internet), sin esperar a la junta",
+          s == 200 and synced["processed_record_ids"] == [sync_service_id], f"{s} {synced}")
+    s, b = call("GET", "/api/v1/users/pending-merchants", who=hood["admin_token"])
+    check("ya no existe la lista de comerciantes por aprobar", s in (404, 405, 422), f"{s}")
     sid = svc.get("id") if isinstance(svc, dict) else None
 
     s, my_services = call("GET", "/api/v1/services/mine", who=comerciante)
@@ -181,6 +126,44 @@ def main():
           and endorsements[0]["short_comment"] == "Excelente"
           and "photo_b64" not in endorsements[0], f"{s} {endorsements}")
     endorsement_id = endorsements[0]["id"] if s == 200 and endorsements else str(uuid.uuid4())
+    check("cada reseña dice quién la publicó",
+          s == 200 and endorsements and endorsements[0].get("endorser_name") == "Vecina s.", f"{endorsements}")
+
+    # ── Servicio completo: rubro nuevo, precio, fotos, edición ──
+    full_id, foto = str(uuid.uuid4()), "/9j/4AAQSkZJRgABAQ"
+    full = {"id": full_id, "provider_user_id": PROVIDER, "category": "ALBANILERIA",
+            "title": "Albañilería y tarrajeo", "description": "Muros y pisos",
+            "price_text": "S/ 80 el día", "photos": [foto, foto + "B"],
+            "lat": LAT + 0.001, "lng": LNG, "updated_at": now()}
+    s, b = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": now(), "mutations": [
+        {"target_table": "local_services", "record_id": full_id, "operation": "UPSERT", "payload": full}]},
+        who=comerciante)
+    check("servicio con rubro nuevo, precio y 2 fotos", s == 200 and b["processed_record_ids"] == [full_id], f"{s} {b}")
+    s, b = call("GET", "/api/v1/sync/pull")
+    row = next((x for x in b["delta"]["local_services"] if x["id"] == full_id), {}) if s == 200 else {}
+    check("el pull trae precio y cuántas fotos (sin las fotos)",
+          row.get("price_text") == "S/ 80 el día" and row.get("photo_count") == 2 and "photos" not in row, f"{row}")
+    s, b = call("GET", f"/api/v1/services/{full_id}/photos")
+    check("GET /services/{id}/photos", s == 200 and b.get("photos") == [foto, foto + "B"], f"{s}")
+    edited = dict(full, title="Albañilería, tarrajeo y enchape", price_text="A tratar",
+                  photos=[foto], updated_at=now(5))
+    s, b = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": now(), "mutations": [
+        {"target_table": "local_services", "record_id": full_id, "operation": "UPSERT", "payload": edited}]},
+        who=comerciante)
+    s, b = call("GET", "/api/v1/services/mine", who=comerciante)
+    row = next((x for x in b if x["id"] == full_id), {}) if s == 200 else {}
+    check("el comerciante EDITA su servicio publicado",
+          row.get("title") == "Albañilería, tarrajeo y enchape" and row.get("price_text") == "A tratar"
+          and row.get("photo_count") == 1, f"{row}")
+    s, b = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": now(), "mutations": [
+        {"target_table": "local_services", "record_id": full_id, "operation": "UPSERT",
+         "payload": dict(edited, title="Hackeado", updated_at=now(9))}]})
+    check("un vecino NO puede editar el servicio de otro", s == 200 and not b["processed_record_ids"], f"{b}")
+    s, b = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": now(), "mutations": [
+        {"target_table": "local_services", "record_id": str(uuid.uuid4()), "operation": "UPSERT",
+         "payload": dict(full, id=None, photos=[foto] * 5, updated_at=now())}]}, who=comerciante)
+    check("más de 4 fotos se rechaza con motivo",
+          s == 200 and b["rejected"] and "photos" in b["rejected"][0]["reason"], f"{b}")
     check("GET /services/{id}/endorsements marca has_photo (sin mandar la foto)",
           s == 200 and endorsements and endorsements[0].get("has_photo") is True, f"{endorsements}")
     s, photo = call("GET", f"/api/v1/endorsements/{endorsement_id}/photo")
@@ -453,22 +436,22 @@ def main():
     import json as _json
     ws_url = BASE.replace("http", "ws", 1) + f"/api/v1/ws/chat?token={vecino['token']}&tenant={TENANT}"
     VEC2 = vecino2["id"]
-    s, b = call("POST", f"/api/v1/solidarity/{fav_id}/conversations/{VEC2}/messages", {"body": "Hola"})
+    s, b = call("POST", f"/api/v1/chat/favor/{fav_id}/conversations/{VEC2}/messages", {"body": "Hola"})
     check("la autora no puede iniciar el chat -> 409", s == 409, f"{s} {b}")
     with ws_connect(ws_url, open_timeout=10) as ws:
         ws.send("ping")
         check("WebSocket conecta y responde pong", ws.recv(timeout=5) == "pong")
-        s, m = call("POST", f"/api/v1/solidarity/{fav_id}/conversations/{VEC2}/messages",
+        s, m = call("POST", f"/api/v1/chat/favor/{fav_id}/conversations/{VEC2}/messages",
                     {"body": "Te lo presto hoy"}, who=vecino2)
         check("el vecino escribe por el favor", s == 201, f"{s} {m}")
         pushed = _json.loads(ws.recv(timeout=5))
         check("la autora lo recibe AL INSTANTE por WebSocket",
-              pushed.get("type") == "favor_message" and pushed["message"]["body"] == "Te lo presto hoy", f"{pushed}")
-    s, b = call("POST", f"/api/v1/solidarity/{fav_id}/conversations/{VEC2}/messages", {"body": "¡Gracias!"})
+              pushed.get("type") == "chat_message" and pushed["message"]["body"] == "Te lo presto hoy", f"{pushed}")
+    s, b = call("POST", f"/api/v1/chat/favor/{fav_id}/conversations/{VEC2}/messages", {"body": "¡Gracias!"})
     check("la autora responde", s == 201, f"{s} {b}")
-    s, b = call("GET", f"/api/v1/solidarity/{fav_id}/conversations")
+    s, b = call("GET", f"/api/v1/chat/favor/{fav_id}/conversations")
     check("la autora ve la conversación", s == 200 and b and b[0]["message_count"] == 2, f"{s} {b}")
-    s, b = call("GET", f"/api/v1/solidarity/{fav_id}/conversations/{VEC2}/messages", who=comerciante)
+    s, b = call("GET", f"/api/v1/chat/favor/{fav_id}/conversations/{VEC2}/messages", who=comerciante)
     check("un tercero no lee el chat -> 403", s == 403, f"{s}")
     try:
         with ws_connect(BASE.replace("http", "ws", 1) + f"/api/v1/ws/chat?token=malo&tenant={TENANT}",
@@ -478,6 +461,25 @@ def main():
     except Exception:
         ws_rejected = True
     check("WebSocket con token inválido se rechaza", ws_rejected)
+
+    # Chat con el comerciante (por su servicio) + bandeja "Mis mensajes"
+    s, m = call("POST", f"/api/v1/chat/service/{sid}/conversations/{ME}/messages",
+                {"body": "¿Atiende el domingo?"})
+    check("el vecino escribe al comerciante por su servicio", s == 201 and m.get("kind") == "service", f"{s} {m}")
+    s, b = call("GET", f"/api/v1/chat/service/{sid}/conversations", who=comerciante)
+    check("el comerciante ve la conversación con su nombre público",
+          s == 200 and b and b[0]["other_name"] == "Vecina s." and b[0]["context_title"].startswith("Gasfitería Smoke"),
+          f"{s} {b}")
+    s, b = call("POST", f"/api/v1/chat/service/{sid}/conversations/{ME}/messages",
+                {"body": "Sí, de 9 a 1"}, who=comerciante)
+    check("el comerciante responde", s == 201, f"{s} {b}")
+    s, b = call("GET", "/api/v1/chat/inbox")
+    kinds = {x["kind"] for x in b} if s == 200 else set()
+    check("Mis mensajes junta favores y servicios, el más reciente primero",
+          s == 200 and kinds == {"favor", "service"} and b[0]["kind"] == "service"
+          and b[0]["last_message"] == "Sí, de 9 a 1", f"{s} {b}")
+    s, b = call("GET", f"/api/v1/chat/service/{sid}/conversations/{ME}/messages", who=vecino2)
+    check("un tercero no lee el chat del servicio -> 403", s == 403, f"{s}")
 
     # Coordinar → completar → reseñas
     s, b = call("POST", f"/api/v1/solidarity/{fav_id}/reviews", {"rating": 5})

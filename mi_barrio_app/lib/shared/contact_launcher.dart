@@ -25,15 +25,16 @@ class ContactLauncher {
     return n;
   }
 
-  static bool isDialable(String? raw) => raw != null && normalize(raw).replaceAll('+', '').length >= 3;
+  static bool isDialable(String? raw) =>
+      raw != null && normalize(raw).replaceAll('+', '').length >= 3;
 
   static Uri telUri(String raw) => Uri(scheme: 'tel', path: normalize(raw));
 
   static Uri whatsappUri(String raw, {String? text}) => Uri.https(
-        'wa.me',
-        '/${international(raw)}',
-        text == null || text.isEmpty ? null : {'text': text},
-      );
+    'wa.me',
+    '/${international(raw)}',
+    text == null || text.isEmpty ? null : {'text': text},
+  );
 
   /// Abre el marcador. Devuelve false si el teléfono no pudo (ej. tablet sin SIM).
   static Future<bool> call(String raw) => _open(telUri(raw));
@@ -41,6 +42,17 @@ class ContactLauncher {
   /// Abre WhatsApp (o el navegador si no está instalado).
   static Future<bool> whatsapp(String raw, {String? text}) =>
       _open(whatsappUri(raw, text: text));
+
+  /// Ruta "Cómo llegar" (a pie) hasta un punto. Abre Google Maps o la app de
+  /// mapas del teléfono; si no hay ninguna, el navegador.
+  static Uri directionsUri(double lat, double lng) => Uri.https(
+    'www.google.com',
+    '/maps/dir/',
+    {'api': '1', 'destination': '$lat,$lng', 'travelmode': 'walking'},
+  );
+
+  static Future<bool> directions(double lat, double lng) =>
+      _open(directionsUri(lat, lng));
 
   static Future<bool> _open(Uri uri) async {
     try {

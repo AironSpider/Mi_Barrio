@@ -15,6 +15,7 @@ class EndorsementModel {
     this.isDeleted = false,
     required this.updatedAt,
     this.syncStatus = SqliteTables.syncPending,
+    this.endorserName,
   });
 
   static const table = 'neighbor_endorsements';
@@ -46,33 +47,38 @@ class EndorsementModel {
   final String updatedAt;
   final String syncStatus;
 
+  /// Nombre público de quien calificó ("Rosa C."); lo manda el servidor.
+  final String? endorserName;
+
   bool get isPending => syncStatus == SqliteTables.syncPending;
 
   Map<String, Object?> toSqlite() => {
-        'id': id,
-        'tenant_id': tenantId,
-        'service_id': serviceId,
-        'endorser_user_id': endorserUserId,
-        'rating': rating,
-        'short_comment': shortComment,
-        'photo_b64': photoB64,
-        'is_deleted': isDeleted ? 1 : 0,
-        'updated_at': updatedAt,
-        'sync_status': syncStatus,
-      };
+    'id': id,
+    'tenant_id': tenantId,
+    'service_id': serviceId,
+    'endorser_user_id': endorserUserId,
+    'rating': rating,
+    'short_comment': shortComment,
+    'photo_b64': photoB64,
+    'is_deleted': isDeleted ? 1 : 0,
+    'updated_at': updatedAt,
+    'sync_status': syncStatus,
+    'endorser_name': endorserName,
+  };
 
   Map<String, Object?> toSyncPayload() => {
-        'id': id,
-        'service_id': serviceId,
-        'endorser_user_id': endorserUserId,
-        'rating': rating,
-        'short_comment': shortComment,
-        'photo_b64': photoB64,
-        'is_deleted': isDeleted,
-        'updated_at': updatedAt,
-      };
+    'id': id,
+    'service_id': serviceId,
+    'endorser_user_id': endorserUserId,
+    'rating': rating,
+    'short_comment': shortComment,
+    'photo_b64': photoB64,
+    'is_deleted': isDeleted,
+    'updated_at': updatedAt,
+  };
 
-  factory EndorsementModel.fromSqlite(Map<String, Object?> row) => EndorsementModel(
+  factory EndorsementModel.fromSqlite(Map<String, Object?> row) =>
+      EndorsementModel(
         id: row['id'] as String,
         tenantId: row['tenant_id'] as String,
         serviceId: row['service_id'] as String,
@@ -83,5 +89,6 @@ class EndorsementModel {
         isDeleted: (row['is_deleted'] as int? ?? 0) == 1,
         updatedAt: row['updated_at'] as String,
         syncStatus: row['sync_status'] as String? ?? SqliteTables.syncSynced,
+        endorserName: row['endorser_name'] as String?,
       );
 }

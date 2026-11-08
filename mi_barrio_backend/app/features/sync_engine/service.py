@@ -285,10 +285,6 @@ async def process_sync_push(
                     merchant = await db.get(User, principal_id)
                     if merchant is None or merchant.is_deleted:
                         raise ValueError("la cuenta del comerciante ya no está activa")
-                    if not merchant.is_approved:
-                        raise ValueError(
-                            "la cuenta de comerciante está pendiente de aprobación"
-                        )
                 if model_class is NeighborEndorsement:
                     touched_services.add(await _validate_endorsement(payload, tenant_uuid, db))
 

@@ -52,11 +52,10 @@ async def rating_avg_for_service(
 async def provider_contacts(
     db: AsyncSession, tenant_id: uuid.UUID, provider_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, dict]:
-    """Teléfono y WhatsApp de quien OFRECE un servicio en el barrio (solo cuentas
-    activas y aprobadas por la junta)."""
+    """Teléfono y WhatsApp de quien OFRECE un servicio en el barrio (cuentas activas)."""
     from app.features.auth_barrio.service import public_profiles  # evita import circular
 
-    return await public_profiles(db, tenant_id, provider_ids, only_approved=True)
+    return await public_profiles(db, tenant_id, provider_ids)
 
 
 async def recalculate_service_rating(db: AsyncSession, service_id: uuid.UUID) -> LocalService | None:

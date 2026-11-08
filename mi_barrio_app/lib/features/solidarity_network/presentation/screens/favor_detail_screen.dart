@@ -10,17 +10,22 @@ import '../../../../core/ui_kit/star_rating_display.dart';
 import '../../../../core/ui_kit/star_rating_input.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../../../shared/contact_launcher.dart';
+import '../../../chat/data/chat_models.dart';
+import '../../../chat/data/chat_remote_ds.dart';
+import '../../../chat/presentation/chat_screen.dart';
+import '../../../chat/presentation/conversations_screen.dart';
 import '../../data/datasources/solidarity_remote_ds.dart';
 import '../../data/datasources/solidarity_sqlite_ds.dart';
 import '../../data/models/favor_interactions.dart';
 import '../../data/models/solidarity_post_model.dart';
 import '../widgets/post_meta_label.dart';
-import 'favor_chat_screen.dart';
-import 'favor_conversations_screen.dart';
+import '../../../../core/ui_kit/safe_image.dart';
 
 /// Marca un favor ajeno como "en coordinación" (capa de datos: queda en el
 /// teléfono como PENDING y se encola).
-typedef CoordinateFavorCallback = Future<void> Function(SolidarityPostModel post);
+typedef CoordinateFavorCallback = Future<void> Function(
+  SolidarityPostModel post,
+);
 
 /// El autor cambia el estado de su favor (completado / disponible otra vez).
 typedef ChangeFavorStatusCallback = Future<SolidarityPostModel> Function(
@@ -39,6 +44,7 @@ class FavorDetailScreen extends StatefulWidget {
     this.onChangeStatus,
     this.remote,
     this.local,
+    this.chatRemote,
   });
 
   final SolidarityPostModel post;
@@ -48,6 +54,7 @@ class FavorDetailScreen extends StatefulWidget {
   final ChangeFavorStatusCallback? onChangeStatus;
   final SolidarityRemoteDatasource? remote;
   final SolidaritySqliteDatasource? local;
+  final ChatRemoteDatasource? chatRemote;
 
   static const coordinateKey = ValueKey('favor_coordinate_button');
   static const messagesKey = ValueKey('favor_messages_button');
@@ -64,8 +71,10 @@ class FavorDetailScreen extends StatefulWidget {
 }
 
 class _FavorDetailScreenState extends State<FavorDetailScreen> {
-  late final SolidarityRemoteDatasource _remote = widget.remote ?? SolidarityRemoteDatasource();
-  late final SolidaritySqliteDatasource _local = widget.local ?? SolidaritySqliteDatasource();
+  late final SolidarityRemoteDatasource _remote =
+      widget.remote ?? SolidarityRemoteDatasource();
+  late final SolidaritySqliteDatasource _local =
+      widget.local ?? SolidaritySqliteDatasource();
   late SolidarityPostModel _post = widget.post;
 
   Uint8List? _photo;
@@ -91,6 +100,13 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
   bool get _isOwn => _post.authorUserId == _me;
   bool get _iHelp => _post.coordinatorUserId == _me;
   String get _authorName => _isOwn ? 'Tú' : (_post.authorName ?? 'Un vecino');
+
+  ChatTarget get _chatTarget => ChatTarget(
+    kind: ChatKind.favor,
+    contextId: _post.id,
+    title: _post.title,
+    ownerUserId: _post.authorUserId,
+  );
 
   @override
   void initState() {
@@ -138,7 +154,10 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _commentsError = 'Los comentarios necesitan internet. Desliza para reintentar.');
+        setState(
+          () => _commentsError =
+              'Los comentarios necesitan internet. Desliza para reintentar.',
+        );
       }
     }
   }
@@ -179,7 +198,11 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
   Future<void> _deleteComment(PostComment c) async {
     try {
       await _remote.deleteComment(_tenant, _post.id, c.id);
-      if (mounted) setState(() => _comments = [...?_comments]..removeWhere((x) => x.id == c.id));
+      if (mounted) {
+        setState(
+          () => _comments = [...?_comments]..removeWhere((x) => x.id == c.id),
+        );
+      }
     } catch (_) {
       _snack('No se pudo borrar el comentario.');
     }
@@ -192,15 +215,23 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
       _reviewError = null;
     });
     try {
-      final r = await _remote.addReview(_tenant, _post.id, rating: _myStars, comment: _reviewComment.text);
+      final r = await _remote.addReview(
+        _tenant,
+        _post.id,
+        rating: _myStars,
+        comment: _reviewComment.text,
+      );
       if (mounted) setState(() => _reviews = [...?_reviews, r]);
     } catch (e) {
       final msg = e.toString().replaceFirst('Exception: ', '');
       if (mounted) {
-        setState(() => _reviewError = msg.contains('ya dejaste') || msg.contains('Ya dejaste')
-            ? msg
-            : 'No se pudo enviar la reseña. Si el favor se completó hace poco, '
-                'espera a que se sincronice e intenta de nuevo.');
+        setState(
+          () => _reviewError =
+              msg.contains('ya dejaste') || msg.contains('Ya dejaste')
+              ? msg
+              : 'No se pudo enviar la reseña. Si el favor se completó hace poco, '
+                    'espera a que se sincronice e intenta de nuevo.',
+        );
       }
     } finally {
       if (mounted) setState(() => _sendingReview = false);
@@ -219,8 +250,14 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
             'El favor sale del muro y podrán calificarse entre ustedes.',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Todavía no')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sí, completado')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Todavía no'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sí, completado'),
+            ),
           ],
         ),
       );
@@ -251,11 +288,13 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
       context: context,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (_) => _ContactOptionsSheet(post: _post, authorName: _authorName),
+      builder: (_) =>
+          _ContactOptionsSheet(post: _post, authorName: _authorName),
     );
     if (option == null || !mounted) return;
 
-    if (_post.status == SolidarityStatus.disponible && widget.onCoordinate != null) {
+    if (_post.status == SolidarityStatus.disponible &&
+        widget.onCoordinate != null) {
       setState(() {
         _busy = true;
         _error = null;
@@ -276,26 +315,31 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
       } on ArgumentError catch (e) {
         if (mounted) setState(() => _error = '${e.message}');
       } catch (_) {
-        if (mounted) setState(() => _error = 'No se pudo coordinar. Intenta de nuevo.');
+        if (mounted) {
+          setState(() => _error = 'No se pudo coordinar. Intenta de nuevo.');
+        }
       } finally {
         if (mounted) setState(() => _busy = false);
       }
     }
     if (!mounted) return;
 
-    final greeting = 'Hola ${_post.authorName ?? ''}, te escribo por tu publicación '
-            '"${_post.title}" en Mi Barrio.'
-        .replaceAll('Hola ,', 'Hola,');
+    final greeting =
+        'Hola ${_post.authorName ?? ''}, te escribo por tu publicación '
+                '"${_post.title}" en Mi Barrio.'
+            .replaceAll('Hola ,', 'Hola,');
     switch (option) {
       case _ContactOption.chat:
-        await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => FavorChatScreen(
-            post: _post,
-            neighborUserId: _me,
-            otherName: _authorName,
-            remote: _remote,
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ChatScreen(
+              target: _chatTarget,
+              neighborUserId: _me,
+              otherName: _authorName,
+              remote: widget.chatRemote,
+            ),
           ),
-        ));
+        );
       case _ContactOption.whatsapp:
         final number = _post.contactWhatsapp ?? _post.contactPhone!;
         if (!await ContactLauncher.whatsapp(number, text: greeting)) {
@@ -332,7 +376,11 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
             if (_post.hasPhoto) ...[
-              _PhotoView(photo: _photo, loading: _photoLoading, title: _post.title),
+              _PhotoView(
+                photo: _photo,
+                loading: _photoLoading,
+                title: _post.title,
+              ),
               const SizedBox(height: 16),
             ],
             Wrap(
@@ -347,7 +395,11 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
                   ),
                   label: Text(isOffer ? 'Ofrezco ayuda' : 'Necesito ayuda'),
                 ),
-                Chip(label: Text(SolidarityModality.labels[_post.modality] ?? _post.modality)),
+                Chip(
+                  label: Text(
+                    SolidarityModality.labels[_post.modality] ?? _post.modality,
+                  ),
+                ),
                 if (_post.isEmergencyContext)
                   const Chip(
                     avatar: Icon(Icons.emergency_rounded, size: 18),
@@ -357,7 +409,10 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            Semantics(header: true, child: Text(_post.title, style: texto.headlineSmall)),
+            Semantics(
+              header: true,
+              child: Text(_post.title, style: texto.headlineSmall),
+            ),
             if (_post.description?.trim().isNotEmpty ?? false) ...[
               const SizedBox(height: 8),
               Text(_post.description!, style: texto.bodyLarge),
@@ -376,13 +431,19 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
             ..._actions(context),
             if (_notice != null) ...[
               const SizedBox(height: 8),
-              Semantics(liveRegion: true, child: Text(_notice!, style: texto.bodyMedium)),
+              Semantics(
+                liveRegion: true,
+                child: Text(_notice!, style: texto.bodyMedium),
+              ),
             ],
             if (_error != null) ...[
               const SizedBox(height: 8),
               Semantics(
                 liveRegion: true,
-                child: Text(_error!, style: texto.bodyMedium?.copyWith(color: esquema.error)),
+                child: Text(
+                  _error!,
+                  style: texto.bodyMedium?.copyWith(color: esquema.error),
+                ),
               ),
             ],
             if (_post.status == SolidarityStatus.completado) ...[
@@ -403,10 +464,17 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
       return [
         OutlinedButton.icon(
           key: FavorDetailScreen.messagesKey,
-          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => FavorConversationsScreen(post: _post, remote: _remote),
-          )),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(52),
+          ),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ConversationsScreen(
+                target: _chatTarget,
+                remote: widget.chatRemote,
+              ),
+            ),
+          ),
           icon: const Icon(Icons.forum_rounded),
           label: const Text('Mensajes de vecinos'),
         ),
@@ -414,14 +482,20 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
           const SizedBox(height: 10),
           FilledButton.icon(
             key: FavorDetailScreen.completeKey,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-            onPressed: _busy ? null : () => _changeStatus(SolidarityStatus.completado),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+            ),
+            onPressed: _busy
+                ? null
+                : () => _changeStatus(SolidarityStatus.completado),
             icon: const Icon(Icons.task_alt_rounded),
             label: const Text('Marcar como completado'),
           ),
           if (_post.status == SolidarityStatus.enCoordinacion)
             TextButton.icon(
-              onPressed: _busy ? null : () => _changeStatus(SolidarityStatus.disponible),
+              onPressed: _busy
+                  ? null
+                  : () => _changeStatus(SolidarityStatus.disponible),
               icon: const Icon(Icons.undo_rounded),
               label: const Text('No se concretó: volver a disponible'),
             ),
@@ -435,14 +509,18 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
         style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
         onPressed: _busy ? null : _help,
         icon: _busy
-            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              )
             : const Icon(Icons.handshake_rounded),
         label: Text(
           _iHelp
               ? 'Contactar a ${_post.authorName ?? 'quien publicó'}'
               : _post.flowType == SolidarityFlowType.ofrezcoAyuda
-                  ? 'Me interesa'
-                  : 'Quiero ayudar',
+              ? 'Me interesa'
+              : 'Quiero ayudar',
         ),
       ),
     ];
@@ -458,10 +536,16 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
       children: [
         _SectionTitle(icon: Icons.star_rounded, text: 'Reseñas'),
         if (reviews == null)
-          const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()))
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Center(child: CircularProgressIndicator()),
+          )
         else ...[
           if (reviews.isEmpty)
-            Text('Todavía no hay reseñas de este favor.', style: texto.bodyLarge),
+            Text(
+              'Todavía no hay reseñas de este favor.',
+              style: texto.bodyLarge,
+            ),
           for (final r in reviews)
             Card(
               margin: const EdgeInsets.only(bottom: 8),
@@ -476,7 +560,11 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
                       style: texto.labelLarge,
                     ),
                     const SizedBox(height: 4),
-                    StarRatingDisplay(rating: r.rating.toDouble(), size: 20, showValue: false),
+                    StarRatingDisplay(
+                      rating: r.rating.toDouble(),
+                      size: 20,
+                      showValue: false,
+                    ),
                     if (r.comment != null) ...[
                       const SizedBox(height: 4),
                       Text(r.comment!, style: texto.bodyLarge),
@@ -508,7 +596,9 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
                       Center(
                         child: StarRatingInput(
                           value: _myStars,
-                          onChanged: _sendingReview ? null : (v) => setState(() => _myStars = v),
+                          onChanged: _sendingReview
+                              ? null
+                              : (v) => setState(() => _myStars = v),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -524,12 +614,21 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
                         ),
                       ),
                       if (_reviewError != null)
-                        Text(_reviewError!, style: texto.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error)),
+                        Text(
+                          _reviewError!,
+                          style: texto.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
                       const SizedBox(height: 8),
                       FilledButton.icon(
                         key: FavorDetailScreen.reviewSendKey,
-                        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-                        onPressed: _myStars == 0 || _sendingReview ? null : _sendReview,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                        ),
+                        onPressed: _myStars == 0 || _sendingReview
+                            ? null
+                            : _sendReview,
                         icon: const Icon(Icons.star_rounded),
                         label: const Text('Enviar reseña'),
                       ),
@@ -552,12 +651,20 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
       children: [
         _SectionTitle(
           icon: Icons.chat_bubble_outline_rounded,
-          text: comments == null ? 'Comentarios' : 'Comentarios (${comments.length})',
+          text: comments == null
+              ? 'Comentarios'
+              : 'Comentarios (${comments.length})',
         ),
         if (_commentsError != null)
-          Text(_commentsError!, style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant))
+          Text(
+            _commentsError!,
+            style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant),
+          )
         else if (comments == null)
-          const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()))
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Center(child: CircularProgressIndicator()),
+          )
         else if (comments.isEmpty)
           Text('Sé el primero en comentar.', style: texto.bodyLarge),
         if (comments != null)
@@ -567,7 +674,10 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Avatar(name: c.authorUserId == _me ? 'Tú' : c.authorName, radius: 18),
+                  _Avatar(
+                    name: c.authorUserId == _me ? 'Tú' : c.authorName,
+                    radius: 18,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Container(
@@ -588,7 +698,10 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
                                 ),
                               ),
                               Text(
-                                PostMetaLabel.timeAgo(c.createdAt.toUtc().toIso8601String()) ?? '',
+                                PostMetaLabel.timeAgo(
+                                      c.createdAt.toUtc().toIso8601String(),
+                                    ) ??
+                                    '',
                                 style: texto.labelSmall,
                               ),
                             ],
@@ -623,8 +736,13 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
                 decoration: InputDecoration(
                   hintText: 'Escribe un comentario público',
                   counterText: '',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ),
@@ -633,7 +751,9 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
               key: FavorDetailScreen.commentSendKey,
               tooltip: 'Publicar comentario',
               style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
-              onPressed: _commentInput.text.trim().isEmpty || _sendingComment ? null : _sendComment,
+              onPressed: _commentInput.text.trim().isEmpty || _sendingComment
+                  ? null
+                  : _sendComment,
               icon: const Icon(Icons.send_rounded),
             ),
           ],
@@ -665,29 +785,36 @@ class _ContactOptionsSheet extends StatelessWidget {
       required String title,
       required String subtitle,
       required _ContactOption? value,
-    }) =>
-        Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: ListTile(
-            key: key,
-            enabled: value != null,
-            minTileHeight: 72,
-            leading: CircleAvatar(
-              backgroundColor: color.withValues(alpha: value == null ? 0.08 : 0.15),
-              child: Icon(icon, color: value == null ? Theme.of(context).disabledColor : color),
-            ),
-            title: Text(title, style: texto.titleMedium),
-            subtitle: Text(subtitle),
-            trailing: value == null ? null : const Icon(Icons.chevron_right_rounded),
-            onTap: value == null ? null : () => Navigator.of(context).pop(value),
+    }) => Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        key: key,
+        enabled: value != null,
+        minTileHeight: 72,
+        leading: CircleAvatar(
+          backgroundColor: color.withValues(alpha: value == null ? 0.08 : 0.15),
+          child: Icon(
+            icon,
+            color: value == null ? Theme.of(context).disabledColor : color,
           ),
-        );
+        ),
+        title: Text(title, style: texto.titleMedium),
+        subtitle: Text(subtitle),
+        trailing: value == null
+            ? null
+            : const Icon(Icons.chevron_right_rounded),
+        onTap: value == null ? null : () => Navigator.of(context).pop(value),
+      ),
+    );
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('¿Cómo quieres coordinar con $authorName?', style: texto.titleLarge),
+          Text(
+            '¿Cómo quieres coordinar con $authorName?',
+            style: texto.titleLarge,
+          ),
           if (willCoordinate) ...[
             const SizedBox(height: 4),
             Text(
@@ -709,7 +836,9 @@ class _ContactOptionsSheet extends StatelessWidget {
             icon: Icons.chat_rounded,
             color: const Color(0xFF1B7F3B),
             title: 'WhatsApp',
-            subtitle: hasWa ? 'Se abre con un saludo ya escrito.' : '$authorName no agregó WhatsApp a su perfil.',
+            subtitle: hasWa
+                ? 'Se abre con un saludo ya escrito.'
+                : '$authorName no agregó WhatsApp a su perfil.',
             value: hasWa ? _ContactOption.whatsapp : null,
           ),
           option(
@@ -717,7 +846,9 @@ class _ContactOptionsSheet extends StatelessWidget {
             icon: Icons.call_rounded,
             color: AppPalette.daySecondary,
             title: 'Llamar',
-            subtitle: post.hasPhone ? 'Llamada directa a su teléfono.' : '$authorName no agregó teléfono a su perfil.',
+            subtitle: post.hasPhone
+                ? 'Llamada directa a su teléfono.'
+                : '$authorName no agregó teléfono a su perfil.',
             value: post.hasPhone ? _ContactOption.call : null,
           ),
         ],
@@ -738,35 +869,45 @@ class _StatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colores = MiBarrioColors.of(context);
-    final (IconData icon, String text, Color bg, Color fg) = switch (post.status) {
+    final (
+      IconData icon,
+      String text,
+      Color bg,
+      Color fg,
+    ) = switch (post.status) {
       SolidarityStatus.enCoordinacion => (
-          Icons.handshake_rounded,
-          post.coordinatorUserId == me
-              ? 'Tú estás coordinando este favor.'
-              : post.authorUserId == me
-                  ? '${post.coordinatorName ?? 'Un vecino'} está coordinando contigo.'
-                  : '${post.coordinatorName ?? 'Un vecino'} ya está ayudando. Igual puedes escribir.',
-          colores.accentSoft,
-          colores.accentText,
-        ),
+        Icons.handshake_rounded,
+        post.coordinatorUserId == me
+            ? 'Tú estás coordinando este favor.'
+            : post.authorUserId == me
+            ? '${post.coordinatorName ?? 'Un vecino'} está coordinando contigo.'
+            : '${post.coordinatorName ?? 'Un vecino'} ya está ayudando. Igual puedes escribir.',
+        colores.accentSoft,
+        colores.accentText,
+      ),
       SolidarityStatus.completado => (
-          Icons.task_alt_rounded,
-          _sentence('Favor completado${post.coordinatorName != null ? ' con ayuda de ${post.coordinatorUserId == me ? 'ti' : post.coordinatorName}' : ''}'),
-          colores.syncedBackground,
-          colores.syncSynced,
+        Icons.task_alt_rounded,
+        _sentence(
+          'Favor completado${post.coordinatorName != null ? ' con ayuda de ${post.coordinatorUserId == me ? 'ti' : post.coordinatorName}' : ''}',
         ),
+        colores.syncedBackground,
+        colores.syncSynced,
+      ),
       _ => (
-          Icons.radio_button_checked_rounded,
-          'Disponible: nadie lo está coordinando todavía.',
-          colores.pill,
-          colores.onPill,
-        ),
+        Icons.radio_button_checked_rounded,
+        'Disponible: nadie lo está coordinando todavía.',
+        colores.pill,
+        colores.onPill,
+      ),
     };
     return Semantics(
       liveRegion: true,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+        ),
         child: Row(
           children: [
             Icon(icon, color: fg),
@@ -774,7 +915,8 @@ class _StatusBanner extends StatelessWidget {
             Expanded(
               child: Text(
                 text,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: fg, fontWeight: FontWeight.w600),
+                style: Theme.of(context).textTheme.bodyLarge
+                    ?.copyWith(color: fg, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -802,7 +944,12 @@ class _PersonRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(name, style: texto.titleMedium),
-              Text(caption, style: texto.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text(
+                caption,
+                style: texto.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
           ),
         ),
@@ -825,7 +972,11 @@ class _Avatar extends StatelessWidget {
       backgroundColor: colores.accentSoft,
       child: Text(
         name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-        style: TextStyle(color: colores.accentText, fontWeight: FontWeight.w700, fontSize: radius * 0.8),
+        style: TextStyle(
+          color: colores.accentText,
+          fontWeight: FontWeight.w700,
+          fontSize: radius * 0.8,
+        ),
       ),
     );
   }
@@ -846,7 +997,10 @@ class _SectionTitle extends StatelessWidget {
           Icon(icon, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 8),
           Expanded(
-            child: Semantics(header: true, child: Text(text, style: Theme.of(context).textTheme.titleLarge)),
+            child: Semantics(
+              header: true,
+              child: Text(text, style: Theme.of(context).textTheme.titleLarge),
+            ),
           ),
         ],
       ),
@@ -856,7 +1010,11 @@ class _SectionTitle extends StatelessWidget {
 
 /// Foto del favor (16:10). Al tocarla se abre a pantalla completa con zoom.
 class _PhotoView extends StatelessWidget {
-  const _PhotoView({required this.photo, required this.loading, required this.title});
+  const _PhotoView({
+    required this.photo,
+    required this.loading,
+    required this.title,
+  });
 
   final Uint8List? photo;
   final bool loading;
@@ -875,14 +1033,24 @@ class _PhotoView extends StatelessWidget {
                 image: true,
                 label: 'Foto de: $title. Toca para ampliar.',
                 child: GestureDetector(
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => Scaffold(
-                      backgroundColor: Colors.black,
-                      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
-                      body: Center(child: InteractiveViewer(maxScale: 5, child: Image.memory(bytes))),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        backgroundColor: Colors.black,
+                        appBar: AppBar(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                        ),
+                        body: Center(
+                          child: InteractiveViewer(
+                            maxScale: 5,
+                            child: SafeMemoryImage(bytes),
+                          ),
+                        ),
+                      ),
                     ),
-                  )),
-                  child: Image.memory(bytes, fit: BoxFit.cover),
+                  ),
+                  child: SafeMemoryImage(bytes, fit: BoxFit.cover),
                 ),
               )
             : Container(
@@ -893,7 +1061,10 @@ class _PhotoView extends StatelessWidget {
                     : Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.image_not_supported_outlined, color: esquema.onSurfaceVariant),
+                          Icon(
+                            Icons.image_not_supported_outlined,
+                            color: esquema.onSurfaceVariant,
+                          ),
                           const SizedBox(height: 6),
                           const Text('La foto se verá cuando haya internet.'),
                         ],

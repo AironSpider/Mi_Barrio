@@ -125,6 +125,8 @@ async def pull_delta(
         db, tenant_uuid, {uuid.UUID(s["provider_user_id"]) for s in delta["local_services"]}
     )
     for svc in delta["local_services"]:
+        # Las fotos se piden aparte (GET /services/{id}/photos).
+        svc["photo_count"] = len(svc.pop("photos", None) or [])
         svc["rating_avg"] = averages.get(uuid.UUID(svc["id"]))
         contact = contacts.get(uuid.UUID(svc["provider_user_id"]), {})
         svc["contact_phone"] = contact.get("contact_phone")

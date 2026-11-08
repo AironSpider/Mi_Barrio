@@ -13,7 +13,7 @@ class SqliteTables {
 
   /// Versión actual del esquema. Súbela al agregar tablas o columnas
   /// y añade el paso correspondiente en [migrations].
-  static const int schemaVersion = 8;
+  static const int schemaVersion = 9;
 
   // ── Valores permitidos (idénticos al contrato del backend) ──
   static const syncPending = 'PENDING';
@@ -76,7 +76,21 @@ class SqliteTables {
       lng REAL NOT NULL,
       is_deleted INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL,
-      sync_status TEXT NOT NULL DEFAULT 'SYNCED'
+      sync_status TEXT NOT NULL DEFAULT 'SYNCED',
+      price_text TEXT,
+      photo_count INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
+
+  /// Fotos de servicios (aparte: el pull no las trae y reemplaza la fila del
+  /// servicio). Hasta 4 por servicio, en orden ([position] 0..3).
+  static const createServicePhotos = '''
+    CREATE TABLE IF NOT EXISTS service_photos (
+      service_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      tenant_id TEXT NOT NULL,
+      photo_b64 TEXT NOT NULL,
+      PRIMARY KEY (service_id, position)
     )
   ''';
 
@@ -94,6 +108,7 @@ class SqliteTables {
       is_deleted INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL,
       sync_status TEXT NOT NULL DEFAULT 'SYNCED',
+      endorser_name TEXT,
       UNIQUE (service_id, endorser_user_id)
     )
   ''';
@@ -239,6 +254,7 @@ class SqliteTables {
     createVulnerableReports,
     createSupportGroups,
     createPostPhotos,
+    createServicePhotos,
     ...indexes,
     ...indexesV3,
     ...indexesV4,
@@ -255,9 +271,15 @@ class SqliteTables {
   /// v7 (Sprint 12): + local_services.contact_phone / contact_whatsapp
   ///     (contacto del comerciante; lo manda el servidor en el pull).
   /// v8 (Sprint 13): favores con autor, contacto, foto y coordinador + post_photos.
+  /// v9 (Sprint 13): servicios con precio y fotos (service_photos); reseñas con nombre.
   static const Map<int, List<String>> migrations = {
     2: [createLocalServices, ...indexes],
-    3: [createNeighborEndorsements, createUsers, createAppSettings, ...indexesV3],
+    3: [
+      createNeighborEndorsements,
+      createUsers,
+      createAppSettings,
+      ...indexesV3,
+    ],
     4: [createVulnerableReports, ...indexesV4],
     5: [createSupportGroups, ...indexesV5],
     // v7: los servicios ya descargados no traían el contacto del comerciante.
@@ -267,6 +289,8 @@ class SqliteTables {
     // v8: favores con autor, contacto, foto y quién ayuda. Se baja todo de
     // nuevo UNA vez para completar los favores ya guardados.
     8: [createPostPhotos, 'DELETE FROM sync_state'],
+    // v9: servicios con precio y fotos; reseñas con el nombre de quien califica.
+    9: [createServicePhotos, 'DELETE FROM sync_state'],
   };
 
   /// Columnas nuevas en tablas existentes, por versión destino.
@@ -294,6 +318,13 @@ class SqliteTables {
         'coordinator_user_id': 'TEXT',
         'coordinator_name': 'TEXT',
       },
+    },
+    9: {
+      'local_services': {
+        'price_text': 'TEXT',
+        'photo_count': 'INTEGER NOT NULL DEFAULT 0',
+      },
+      'neighbor_endorsements': {'endorser_name': 'TEXT'},
     },
   };
 }

@@ -40,18 +40,8 @@ class ServicesDirectoryScreen extends StatefulWidget {
 }
 
 class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
-  // Todas las categorías: antes faltaban Cerrajería y Soporte en emergencia,
-  // así que esos servicios no se podían filtrar.
-  static const _categories = <String?>[
-    null,
-    ServiceCategory.gasfiteria,
-    ServiceCategory.carpinteria,
-    ServiceCategory.electricidad,
-    ServiceCategory.cerrajeria,
-    ServiceCategory.clases,
-    ServiceCategory.paseadorMascotas,
-    ServiceCategory.soporteEmergencia,
-  ];
+  /// "Todos" + todos los rubros (fila deslizable).
+  static final _categories = <String?>[null, ...ServiceCategory.labels.keys];
 
   late final String _tenantId;
   late final String _userId;
@@ -223,9 +213,7 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
     if (!published || !mounted) return;
     DoneConfirmation.show(
       messenger,
-      TenantSession.instance.isApproved
-          ? 'Tu servicio ya está publicado. Se enviará solo cuando haya señal.'
-          : 'Tu servicio quedó guardado. Lo verán tus vecinos cuando la junta apruebe tu cuenta.',
+      'Tu servicio ya está publicado. Se enviará solo cuando haya señal.',
     );
   }
 
@@ -264,7 +252,9 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
           ),
           const SizedBox(height: 16),
           // Bajo estrés la atención se estrecha: lo urgente va antes que buscar.
-          if (_emergency && _loadError == null && _visibleServices.isNotEmpty) ...[
+          if (_emergency &&
+              _loadError == null &&
+              _visibleServices.isNotEmpty) ...[
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
               child: Column(
@@ -285,10 +275,6 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
               icon: const Icon(Icons.storefront_rounded),
               label: const Text('Ofrecer servicio'),
             ),
-            if (!TenantSession.instance.isApproved) ...[
-              const SizedBox(height: 8),
-              const _ApprovalPendingNotice(),
-            ],
             const SizedBox(height: 16),
           ],
           TextField(
@@ -311,27 +297,29 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-              for (final category in _categories)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                  key: ValueKey('service_category_${category ?? 'all'}'),
-                  label: Text(
-                    category == null ? 'Todos' : ServiceCategoryUi.shortLabel(category),
+                for (final category in _categories)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      key: ValueKey('service_category_${category ?? 'all'}'),
+                      label: Text(
+                        category == null
+                            ? 'Todos'
+                            : ServiceCategoryUi.shortLabel(category),
+                      ),
+                      selected: _selectedCategory == category,
+                      selectedColor: theme.colorScheme.primary,
+                      labelStyle: TextStyle(
+                        color: _selectedCategory == category
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurface,
+                      ),
+                      onSelected: (_) {
+                        setState(() => _selectedCategory = category);
+                        unawaited(_loadServices());
+                      },
+                    ),
                   ),
-                  selected: _selectedCategory == category,
-                  selectedColor: theme.colorScheme.primary,
-                  labelStyle: TextStyle(
-                    color: _selectedCategory == category
-                        ? theme.colorScheme.onPrimary
-                        : theme.colorScheme.onSurface,
-                  ),
-                  onSelected: (_) {
-                    setState(() => _selectedCategory = category);
-                    unawaited(_loadServices());
-                  },
-                  ),
-                ),
               ],
             ),
           ),
@@ -374,7 +362,9 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
               child: Column(
-                key: ValueKey('services_list_${EmergencyModeProvider.instance.isActive.value}'),
+                key: ValueKey(
+                  'services_list_${EmergencyModeProvider.instance.isActive.value}',
+                ),
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: _buildServiceList(context),
               ),
@@ -398,17 +388,17 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
   /// En emergencia, las 3 primeras según el ranking, con el marco
   /// "Prioridad 1/2/3". Se muestran arriba de todo (ver build).
   List<Widget> _buildPodium(BuildContext context) => [
-        for (final r in _podiumRanked)
-          Semantics(
-            label: 'Prioridad ${r.priority} de 3',
-            container: true,
-            child: PodiumFrame(
-              key: ValueKey('podium_service_${r.item.id}'),
-              priority: r.priority!,
-              child: _buildServiceCard(context, r.item),
-            ),
-          ),
-      ];
+    for (final r in _podiumRanked)
+      Semantics(
+        label: 'Prioridad ${r.priority} de 3',
+        container: true,
+        child: PodiumFrame(
+          key: ValueKey('podium_service_${r.item.id}'),
+          priority: r.priority!,
+          child: _buildServiceCard(context, r.item),
+        ),
+      ),
+  ];
 
   /// El resto de los servicios (en emergencia, sin los del podio).
   List<Widget> _buildServiceList(BuildContext context) {
@@ -431,12 +421,15 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
       title: service.publisherName?.isNotEmpty == true
           ? '${service.publisherName}, ${service.title}'
           : service.title,
-      categoryLabel: ServiceCategory.labels[service.category] ?? service.category,
+      categoryLabel:
+          ServiceCategory.labels[service.category] ?? service.category,
       categoryIcon: ServiceCategoryUi.icon(service.category),
       description: service.description,
       endorsementsCount: service.endorsementsCount,
       ratingAvg: service.ratingAvg,
       isOwn: isOwnService,
+      priceText: service.priceText,
+      photoCount: service.photoCount,
       isEndorsed: endorsement != null,
       isPending: service.isPending || (endorsement?.isPending ?? false),
       isAvailableInEmergency: service.isAvailableInEmergency,
@@ -455,7 +448,6 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
     );
   }
 
-
   Widget _buildMessage(
     BuildContext context, {
     required IconData icon,
@@ -471,44 +463,6 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
             ?action,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Aviso junto a "Ofrecer servicio" mientras la junta no aprueba la cuenta:
-/// puede publicar igual, pero sus vecinos lo verán después de la aprobación.
-class _ApprovalPendingNotice extends StatelessWidget {
-  const _ApprovalPendingNotice();
-
-  static const noticeKey = ValueKey('offer_service_approval_notice');
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Semantics(
-      container: true,
-      child: Container(
-        key: noticeKey,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: scheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.hourglass_top_rounded, color: scheme.onSecondaryContainer),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Tu cuenta espera la aprobación de la junta. '
-                'Puedes preparar tu servicio; tus vecinos lo verán cuando te aprueben.',
-                style: TextStyle(color: scheme.onSecondaryContainer),
-              ),
-            ),
           ],
         ),
       ),

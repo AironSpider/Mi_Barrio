@@ -17,6 +17,8 @@ class ServiceCard extends StatelessWidget {
     this.isAvailableInEmergency = false,
     this.ratingAvg,
     this.isOwn = false,
+    this.priceText,
+    this.photoCount = 0,
     this.onEndorse,
     this.onTap,
   });
@@ -26,6 +28,10 @@ class ServiceCard extends StatelessWidget {
 
   /// true = es un servicio del propio vecino.
   final bool isOwn;
+
+  /// "S/ 30 la visita" (null = sin precio publicado).
+  final String? priceText;
+  final int photoCount;
 
   final String title;
   final String categoryLabel;
@@ -125,6 +131,22 @@ class ServiceCard extends StatelessWidget {
                     ),
                 ],
               ),
+              if (priceText != null || photoCount > 0) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    if (priceText != null)
+                      _Tag(icon: Icons.sell_rounded, text: priceText!),
+                    if (photoCount > 0)
+                      _Tag(
+                        icon: Icons.photo_library_rounded,
+                        text: photoCount == 1 ? '1 foto' : '$photoCount fotos',
+                      ),
+                  ],
+                ),
+              ],
               if (description != null && description!.trim().isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -191,6 +213,41 @@ class ServiceCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  const _Tag({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colores = MiBarrioColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colores.pill,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colores.onPill),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge
+                  ?.copyWith(color: colores.onPill),
+            ),
+          ),
+        ],
       ),
     );
   }

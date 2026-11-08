@@ -98,7 +98,7 @@ void main() {
     });
   });
 
-  group('Brecha 2: comerciante esperando aprobación', () {
+  group('Brecha 2: rechazos del servidor', () {
     Future<LocalServiceModel> offer() => ServicesSqliteDatasource().insertService(
         tenantId: tenant, providerUserId: me, category: ServiceCategory.clases,
         title: 'Clases', lat: lat, lng: lng);
@@ -117,37 +117,16 @@ void main() {
           );
         });
 
-    test('"pendiente de aprobación" → sigue en la cola (Pendiente), no es error', () async {
-      final svc = await offer();
-      final result = await SyncWorker(baseUrl: 'http://api',
-              client: rejectWith('ValueError: la cuenta de comerciante está pendiente de aprobación'))
-          .pushLocalChanges(tenant);
-
-      expect(result.success, isTrue);
-      expect(result.waitingCount, 1);
-      expect(result.message, contains('Esperando aprobación'));
-      expect(await (await db()).query('sync_outbox'), hasLength(1));
-      final row = (await (await db()).query('local_services', where: 'id = ?', whereArgs: [svc.id])).single;
-      expect(row['sync_status'], SqliteTables.syncPending);
-    });
-
-    test('un rechazo definitivo sigue saliendo como "Sin enviar"', () async {
+    test('un rechazo del servidor sale como "Sin enviar"', () async {
       final svc = await offer();
       final result = await SyncWorker(baseUrl: 'http://api',
               client: rejectWith('ValueError: solo un comerciante puede sincronizar servicios'))
           .pushLocalChanges(tenant);
 
       expect(result.success, isFalse);
-      expect(result.waitingCount, 0);
       expect(await (await db()).query('sync_outbox'), isEmpty);
       final row = (await (await db()).query('local_services', where: 'id = ?', whereArgs: [svc.id])).single;
       expect(row['sync_status'], SqliteTables.syncFailed);
-    });
-
-    test('isRetryableRejection reconoce solo el caso temporal', () {
-      expect(SyncWorker.isRetryableRejection('ValueError: la cuenta de comerciante está PENDIENTE DE APROBACIÓN'),
-          isTrue);
-      expect(SyncWorker.isRetryableRejection('ValueError: title inválido'), isFalse);
     });
   });
 

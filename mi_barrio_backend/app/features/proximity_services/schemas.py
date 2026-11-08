@@ -1,9 +1,9 @@
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from typing import Annotated, Optional
 from datetime import datetime
 import uuid
 
-from app.shared.contract_values import PublisherType, ServiceCategory
+from app.shared.contract_values import MAX_PHOTO_B64, MAX_SERVICE_PHOTOS, PublisherType, ServiceCategory
 
 class LocalServiceBase(BaseModel):
     provider_user_id: uuid.UUID
@@ -15,6 +15,7 @@ class LocalServiceBase(BaseModel):
     lng: float
     publisher_type: Optional[str] = Field(None, max_length=30)
     publisher_name: Optional[str] = Field(None, max_length=120)
+    price_text: Optional[str] = Field(None, max_length=60, examples=["S/ 30 la visita"])
 
 class LocalServiceCreate(LocalServiceBase):
     # Solo valores del contrato: Swagger los muestra como lista y rechaza "string".
@@ -23,6 +24,9 @@ class LocalServiceCreate(LocalServiceBase):
     publisher_type: Optional[PublisherType] = None
     lat: float = Field(..., ge=-90, le=90, examples=[-5.1945])
     lng: float = Field(..., ge=-180, le=180, examples=[-80.6328])
+    photos: Optional[list[Annotated[str, StringConstraints(min_length=1, max_length=MAX_PHOTO_B64)]]] = Field(
+        None, max_length=MAX_SERVICE_PHOTOS
+    )
 
 class LocalServiceResponse(LocalServiceBase):
     model_config = ConfigDict(from_attributes=True)
@@ -32,6 +36,8 @@ class LocalServiceResponse(LocalServiceBase):
     endorsements_count: int
     # Promedio de estrellas calculado por el servidor (null = sin calificaciones).
     rating_avg: Optional[float] = None
+    # Cuántas fotos tiene (se piden aparte en /services/{id}/photos).
+    photo_count: int = 0
     created_at: datetime
     updated_at: datetime
     is_deleted: bool
@@ -52,6 +58,8 @@ class NeighborEndorsementResponse(BaseModel):
     id: uuid.UUID
     service_id: uuid.UUID
     endorser_user_id: uuid.UUID
+    # Nombre público de quien califica ("Rosa C.").
+    endorser_name: str = "Vecino"
     rating: Optional[int]
     short_comment: Optional[str]
     provider_reply: Optional[str] = None
@@ -70,3 +78,9 @@ class EndorsementPhotoResponse(BaseModel):
 
 class EndorsementReplyRequest(BaseModel):
     reply: str = Field(..., min_length=1, max_length=1000)
+
+
+class ServicePhotosResponse(BaseModel):
+    id: uuid.UUID
+    photos: list[str]
+    content_type: str = "image/jpeg"

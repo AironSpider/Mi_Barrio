@@ -11,8 +11,8 @@ import 'user_profile_model.dart';
 /// "Guardar cambios" escribe con `PENDING` y encola un UPSERT para el sync.
 class ProfileLocalStorage {
   ProfileLocalStorage({LocalDatabase? database, SyncOutboxDao? outboxDao})
-      : _db = database ?? LocalDatabase.instance,
-        _outboxDao = outboxDao ?? SyncOutboxDao();
+    : _db = database ?? LocalDatabase.instance,
+      _outboxDao = outboxDao ?? SyncOutboxDao();
 
   final LocalDatabase _db;
   final SyncOutboxDao _outboxDao;
@@ -22,9 +22,42 @@ class ProfileLocalStorage {
 
   Future<UserProfileModel?> getProfile(String userId) async {
     final db = await _db.database;
-    final rows = await db.query(UserProfileModel.table,
-        where: 'id = ? AND is_deleted = 0', whereArgs: [userId], limit: 1);
+    final rows = await db.query(
+      UserProfileModel.table,
+      where: 'id = ? AND is_deleted = 0',
+      whereArgs: [userId],
+      limit: 1,
+    );
     return rows.isEmpty ? null : UserProfileModel.fromSqlite(rows.first);
+  }
+
+  /// Cambia SOLO la foto de perfil; todo lo demás se conserva tal cual.
+  /// Lanza [StateError] si todavía no hay perfil guardado.
+  Future<UserProfileModel> updatePhoto({
+    required String userId,
+    required String tenantId,
+    required String photoB64,
+  }) async {
+    final p = await getProfile(userId);
+    if (p == null) throw StateError('Primero guarda tu perfil');
+    return saveProfile(
+      userId: userId,
+      tenantId: tenantId,
+      fullName: p.fullName,
+      homeLat: p.homeLat,
+      homeLng: p.homeLng,
+      phone: p.phone,
+      addressReference: p.addressReference,
+      email: p.email,
+      emailContacto: p.emailContacto,
+      whatsapp: p.whatsapp,
+      facebookUrl: p.facebookUrl,
+      instagramUrl: p.instagramUrl,
+      photoB64: photoB64,
+      publisherType: p.publisherType,
+      publisherCategory: p.publisherCategory,
+      publisherName: p.publisherName,
+    );
   }
 
   /// Guarda el perfil (crear o editar). Lanza [ArgumentError] si hay datos inválidos.
@@ -50,9 +83,14 @@ class ProfileLocalStorage {
     RecordValidation.uuid(userId, 'userId');
     RecordValidation.uuid(tenantId, 'tenantId');
     RecordValidation.coordinates(homeLat, homeLng);
-    final name = RecordValidation.requiredText(fullName, 'fullName', maxLength: 150);
+    final name = RecordValidation.requiredText(
+      fullName,
+      'fullName',
+      maxLength: 150,
+    );
 
-    String? clean(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
+    String? clean(String? v) =>
+        (v == null || v.trim().isEmpty) ? null : v.trim();
     final cleanPhone = clean(phone) ?? '';
     if (cleanPhone.isNotEmpty && !_phone.hasMatch(cleanPhone)) {
       throw ArgumentError.value(phone, 'phone', 'Teléfono inválido');
@@ -63,28 +101,45 @@ class ProfileLocalStorage {
     }
     final cleanEmailContacto = clean(emailContacto);
     if (cleanEmailContacto != null &&
-        (cleanEmailContacto.length > 254 || !_email.hasMatch(cleanEmailContacto))) {
-      throw ArgumentError.value(emailContacto, 'emailContacto', 'Correo de contacto inválido');
+        (cleanEmailContacto.length > 254 ||
+            !_email.hasMatch(cleanEmailContacto))) {
+      throw ArgumentError.value(
+        emailContacto,
+        'emailContacto',
+        'Correo de contacto inválido',
+      );
     }
     final cleanWhatsapp = clean(whatsapp);
     if (cleanWhatsapp != null && !_phone.hasMatch(cleanWhatsapp)) {
       throw ArgumentError.value(whatsapp, 'whatsapp', 'WhatsApp inválido');
     }
-    for (final entry in {'facebookUrl': facebookUrl, 'instagramUrl': instagramUrl}.entries) {
+    for (final entry in {
+      'facebookUrl': facebookUrl,
+      'instagramUrl': instagramUrl,
+    }.entries) {
       final url = clean(entry.value);
       if (url != null && (!url.startsWith('https://') || url.length > 300)) {
         throw ArgumentError.value(
-            entry.value, entry.key, 'Debe empezar con https:// (máximo 300 caracteres)');
+          entry.value,
+          entry.key,
+          'Debe empezar con https:// (máximo 300 caracteres)',
+        );
       }
     }
     final type = clean(publisherType);
-    if (type != null) RecordValidation.oneOf(type, PublisherType.values, 'publisherType');
+    if (type != null) {
+      RecordValidation.oneOf(type, PublisherType.values, 'publisherType');
+    }
 
     final previous = await getProfile(userId);
     // Si ya vio el tutorial (aunque la fila no lo tenga), guardar el perfil no lo
     // "des-marca": el payload completo viaja al servidor.
-    final tutorialSeen = (previous?.tutorialCompleted ?? false) ||
-        await TutorialProgress(database: _db, outboxDao: _outboxDao).localFlag(userId);
+    final tutorialSeen =
+        (previous?.tutorialCompleted ?? false) ||
+        await TutorialProgress(
+          database: _db,
+          outboxDao: _outboxDao,
+        ).localFlag(userId);
     final profile = UserProfileModel(
       id: userId,
       tenantId: tenantId,
@@ -104,7 +159,9 @@ class ProfileLocalStorage {
       photoB64: photoB64 ?? previous?.photoB64,
       publisherType: type,
       publisherCategory: clean(publisherCategory),
-      publisherName: type == null || type == 'PERSONA_NATURAL' ? null : clean(publisherName),
+      publisherName: type == null || type == 'PERSONA_NATURAL'
+          ? null
+          : clean(publisherName),
       updatedAt: DateTime.now().toUtc().toIso8601String(),
       syncStatus: SqliteTables.syncPending,
     );

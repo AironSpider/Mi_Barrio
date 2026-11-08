@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import '../../features/solidarity_network/data/models/favor_interactions.dart';
+import '../../features/chat/data/chat_models.dart';
 import '../auth/auth_session_store.dart';
 import '../barrio_context/tenant_session.dart';
 import '../network/api_client.dart';
@@ -12,7 +12,7 @@ import '../network/api_client.dart';
 /// Estado de la conexión en tiempo real (para el aviso en el chat).
 enum RealtimeStatus { disconnected, connecting, connected }
 
-/// Canal en tiempo real del chat de favores (WebSocket `/api/v1/ws/chat`).
+/// Canal en tiempo real del chat (favores y servicios, WebSocket `/api/v1/ws/chat`).
 ///
 /// - Se conecta cuando hay al menos un chat abierto ([acquire]) y se cierra
 ///   cuando ya no ([release]).
@@ -21,16 +21,19 @@ enum RealtimeStatus { disconnected, connecting, connected }
 /// - Mantiene viva la conexión con un "ping" cada 25 s.
 /// - Los mensajes se ENVÍAN por REST (quedan guardados aunque el otro no
 ///   esté conectado); por aquí solo se RECIBEN al instante.
-class FavorChatSocket {
-  FavorChatSocket._();
-  static final FavorChatSocket instance = FavorChatSocket._();
+class ChatSocket {
+  ChatSocket._();
+  static final ChatSocket instance = ChatSocket._();
 
   /// Para los tests: reemplaza la conexión real.
   @visibleForTesting
-  static WebSocketChannel Function(Uri uri) connector = WebSocketChannel.connect;
+  static WebSocketChannel Function(Uri uri) connector =
+      WebSocketChannel.connect;
 
   final _messages = StreamController<ChatMessage>.broadcast();
-  final ValueNotifier<RealtimeStatus> status = ValueNotifier(RealtimeStatus.disconnected);
+  final ValueNotifier<RealtimeStatus> status = ValueNotifier(
+    RealtimeStatus.disconnected,
+  );
 
   /// Mensajes nuevos de cualquier chat del vecino.
   Stream<ChatMessage> get messages => _messages.stream;
@@ -82,8 +85,15 @@ class FavorChatSocket {
       _channel = channel;
       _attempt = 0;
       status.value = RealtimeStatus.connected;
-      _sub = channel.stream.listen(_onData, onDone: _onLost, onError: (_) => _onLost());
-      _ping = Timer.periodic(const Duration(seconds: 25), (_) => _channel?.sink.add('ping'));
+      _sub = channel.stream.listen(
+        _onData,
+        onDone: _onLost,
+        onError: (_) => _onLost(),
+      );
+      _ping = Timer.periodic(
+        const Duration(seconds: 25),
+        (_) => _channel?.sink.add('ping'),
+      );
     } catch (_) {
       _onLost();
     }
@@ -94,11 +104,15 @@ class FavorChatSocket {
     try {
       final json = jsonDecode(data);
       if (json is Map<String, dynamic> &&
-          json['type'] == 'favor_message' &&
+          json['type'] == 'chat_message' &&
           json['message'] is Map<String, dynamic>) {
-        _messages.add(ChatMessage.fromJson(json['message'] as Map<String, dynamic>));
+        _messages.add(
+          ChatMessage.fromJson(json['message'] as Map<String, dynamic>),
+        );
       }
-    } catch (_) {/* mensaje desconocido: se ignora */}
+    } catch (_) {
+      /* mensaje desconocido: se ignora */
+    }
   }
 
   void _onLost() {

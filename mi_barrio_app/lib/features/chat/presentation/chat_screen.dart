@@ -2,45 +2,46 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/barrio_context/tenant_session.dart';
-import '../../../../core/realtime/favor_chat_socket.dart';
-import '../../../../core/ui_kit/app_theme.dart';
-import '../../data/datasources/solidarity_remote_ds.dart';
-import '../../data/models/favor_interactions.dart';
-import '../../data/models/solidarity_post_model.dart';
+import '../../../core/barrio_context/tenant_session.dart';
+import '../../../core/realtime/chat_socket.dart';
+import '../../../core/ui_kit/app_theme.dart';
+import '../data/chat_models.dart';
+import '../data/chat_remote_ds.dart';
 
-/// Chat en tiempo real de un favor entre su autor y un vecino.
+/// Chat en tiempo real sobre un favor o un servicio, entre su dueño (autor o
+/// comerciante) y un vecino.
 ///
-/// Conversación = (favor, vecino que no es el autor): [neighborUserId].
+/// Conversación = (publicación, vecino que no es el dueño): [neighborUserId].
 /// Enviar = REST (queda guardado aunque el otro no esté); recibir = WebSocket.
-class FavorChatScreen extends StatefulWidget {
-  const FavorChatScreen({
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({
     super.key,
-    required this.post,
+    required this.target,
     required this.neighborUserId,
     required this.otherName,
     this.remote,
     this.socket,
   });
 
-  final SolidarityPostModel post;
+  final ChatTarget target;
   final String neighborUserId;
 
-  /// Con quién se habla (autor o vecino), para el título.
+  /// Con quién se habla (dueño o vecino), para el título.
   final String otherName;
-  final SolidarityRemoteDatasource? remote;
-  final FavorChatSocket? socket;
+  final ChatRemoteDatasource? remote;
+  final ChatSocket? socket;
 
-  static const inputKey = ValueKey('favor_chat_input');
-  static const sendKey = ValueKey('favor_chat_send');
+  static const inputKey = ValueKey('chat_input');
+  static const sendKey = ValueKey('chat_send');
 
   @override
-  State<FavorChatScreen> createState() => _FavorChatScreenState();
+  State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _FavorChatScreenState extends State<FavorChatScreen> {
-  late final SolidarityRemoteDatasource _remote = widget.remote ?? SolidarityRemoteDatasource();
-  late final FavorChatSocket _socket = widget.socket ?? FavorChatSocket.instance;
+class _ChatScreenState extends State<ChatScreen> {
+  late final ChatRemoteDatasource _remote =
+      widget.remote ?? ChatRemoteDatasource();
+  late final ChatSocket _socket = widget.socket ?? ChatSocket.instance;
   final _input = TextEditingController();
   final _scroll = ScrollController();
   StreamSubscription<ChatMessage>? _sub;
@@ -59,7 +60,12 @@ class _FavorChatScreenState extends State<FavorChatScreen> {
     _socket.acquire();
     _socket.status.addListener(_onStatus);
     _sub = _socket.messages.listen((m) {
-      if (m.postId != widget.post.id || m.neighborUserId != widget.neighborUserId) return;
+      final t = widget.target;
+      if (m.kind != t.kind ||
+          m.contextId != t.contextId ||
+          m.neighborUserId != widget.neighborUserId) {
+        return;
+      }
       _add(m);
     });
     _input.addListener(() => setState(() {}));
@@ -85,7 +91,11 @@ class _FavorChatScreenState extends State<FavorChatScreen> {
 
   Future<void> _load() async {
     try {
-      final list = await _remote.messages(_tenant, widget.post.id, widget.neighborUserId);
+      final list = await _remote.messages(
+        _tenant,
+        widget.target,
+        widget.neighborUserId,
+      );
       if (!mounted) return;
       setState(() {
         _messages = list;
@@ -97,7 +107,8 @@ class _FavorChatScreenState extends State<FavorChatScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'No pudimos cargar la conversación. El chat necesita internet.';
+        _error =
+            'No pudimos cargar la conversación. El chat necesita internet.';
       });
     }
   }
@@ -128,15 +139,22 @@ class _FavorChatScreenState extends State<FavorChatScreen> {
       _error = null;
     });
     try {
-      final sent = await _remote.sendMessage(_tenant, widget.post.id, widget.neighborUserId, text);
+      final sent = await _remote.sendMessage(
+        _tenant,
+        widget.target,
+        widget.neighborUserId,
+        text,
+      );
       _input.clear();
       _add(sent);
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString().replaceFirst('Exception: ', '');
-      setState(() => _error = msg.contains('todavía no te escribió')
-          ? msg
-          : 'No se pudo enviar. Revisa tu conexión e intenta de nuevo.');
+      setState(
+        () => _error = msg.contains('todavía no te escribió')
+            ? msg
+            : 'No se pudo enviar. Revisa tu conexión e intenta de nuevo.',
+      );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -151,9 +169,13 @@ class _FavorChatScreenState extends State<FavorChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.otherName, maxLines: 1, overflow: TextOverflow.ellipsis),
             Text(
-              widget.post.title,
+              widget.otherName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              widget.target.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: texto.bodySmall?.copyWith(color: esquema.onPrimary),
@@ -168,29 +190,37 @@ class _FavorChatScreenState extends State<FavorChatScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _messages.isEmpty
-                    ? _EmptyChat(isAuthor: widget.post.authorUserId == _me)
-                    : ListView.builder(
-                        controller: _scroll,
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, i) {
-                          final m = _messages[i];
-                          final showDay = i == 0 || !_sameDay(_messages[i - 1].createdAt, m.createdAt);
-                          return Column(
-                            children: [
-                              if (showDay) _DayDivider(date: m.createdAt),
-                              _Bubble(message: m, mine: m.senderUserId == _me),
-                            ],
-                          );
-                        },
-                      ),
+                ? _EmptyChat(
+                    isOwner: widget.target.ownerUserId == _me,
+                    kind: widget.target.kind,
+                  )
+                : ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, i) {
+                      final m = _messages[i];
+                      final showDay =
+                          i == 0 ||
+                          !_sameDay(_messages[i - 1].createdAt, m.createdAt);
+                      return Column(
+                        children: [
+                          if (showDay) _DayDivider(date: m.createdAt),
+                          _Bubble(message: m, mine: m.senderUserId == _me),
+                        ],
+                      );
+                    },
+                  ),
           ),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: Semantics(
                 liveRegion: true,
-                child: Text(_error!, style: texto.bodyMedium?.copyWith(color: esquema.error)),
+                child: Text(
+                  _error!,
+                  style: texto.bodyMedium?.copyWith(color: esquema.error),
+                ),
               ),
             ),
           SafeArea(
@@ -202,7 +232,7 @@ class _FavorChatScreenState extends State<FavorChatScreen> {
                 children: [
                   Expanded(
                     child: TextField(
-                      key: FavorChatScreen.inputKey,
+                      key: ChatScreen.inputKey,
                       controller: _input,
                       minLines: 1,
                       maxLines: 4,
@@ -215,18 +245,27 @@ class _FavorChatScreenState extends State<FavorChatScreen> {
                         counterText: '',
                         filled: true,
                         fillColor: esquema.surface,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   IconButton.filled(
-                    key: FavorChatScreen.sendKey,
+                    key: ChatScreen.sendKey,
                     tooltip: 'Enviar',
                     iconSize: 26,
-                    style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
-                    onPressed: _input.text.trim().isEmpty || _sending ? null : _send,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(52, 52),
+                    ),
+                    onPressed: _input.text.trim().isEmpty || _sending
+                        ? null
+                        : _send,
                     icon: _sending
                         ? const SizedBox(
                             width: 22,
@@ -265,7 +304,11 @@ class _ConnectionBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          const Icon(Icons.sync_rounded, size: 18, color: AppPalette.syncPending),
+          const Icon(
+            Icons.sync_rounded,
+            size: 18,
+            color: AppPalette.syncPending,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -280,9 +323,10 @@ class _ConnectionBanner extends StatelessWidget {
 }
 
 class _EmptyChat extends StatelessWidget {
-  const _EmptyChat({required this.isAuthor});
+  const _EmptyChat({required this.isOwner, required this.kind});
 
-  final bool isAuthor;
+  final bool isOwner;
+  final ChatKind kind;
 
   @override
   Widget build(BuildContext context) {
@@ -293,11 +337,17 @@ class _EmptyChat extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.forum_outlined, size: 48, color: Theme.of(context).colorScheme.primary),
+            Icon(
+              Icons.forum_outlined,
+              size: 48,
+              color: Theme.of(context).colorScheme.primary,
+            ),
             const SizedBox(height: 12),
             Text(
-              isAuthor
+              isOwner
                   ? 'Aún no hay mensajes en esta conversación.'
+                  : kind == ChatKind.service
+                  ? 'Pregunta lo que necesites: precio, horario o cuándo puede atenderte.'
                   : 'Escribe para coordinar: cuándo, dónde y cómo ayudar.',
               textAlign: TextAlign.center,
               style: texto.bodyLarge,
@@ -322,8 +372,8 @@ class _DayDivider extends StatelessWidget {
     final label = day == today
         ? 'Hoy'
         : day == today.subtract(const Duration(days: 1))
-            ? 'Ayer'
-            : '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+        ? 'Ayer'
+        : '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Center(
@@ -356,7 +406,9 @@ class _Bubble extends StatelessWidget {
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.78),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+        ),
         child: Semantics(
           label: '${mine ? 'Tú' : message.senderName}, $time: ${message.body}',
           excludeSemantics: true,
@@ -371,17 +423,27 @@ class _Bubble extends StatelessWidget {
                 bottomLeft: Radius.circular(mine ? 18 : 4),
                 bottomRight: Radius.circular(mine ? 4 : 18),
               ),
-              border: mine ? null : Border.all(color: esquema.outline.withValues(alpha: 0.3)),
+              border: mine
+                  ? null
+                  : Border.all(color: esquema.outline.withValues(alpha: 0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(message.body, style: texto.bodyLarge?.copyWith(color: fg)),
+                  child: Text(
+                    message.body,
+                    style: texto.bodyLarge?.copyWith(color: fg),
+                  ),
                 ),
                 const SizedBox(height: 2),
-                Text(time, style: texto.labelSmall?.copyWith(color: fg.withValues(alpha: 0.8))),
+                Text(
+                  time,
+                  style: texto.labelSmall?.copyWith(
+                    color: fg.withValues(alpha: 0.8),
+                  ),
+                ),
               ],
             ),
           ),

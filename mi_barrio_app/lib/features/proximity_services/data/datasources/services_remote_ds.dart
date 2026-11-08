@@ -35,7 +35,10 @@ class ServiceReviews {
 
   /// Promedio de lo que se ve en la lista (null si nadie puso estrellas).
   double? get average {
-    final stars = [for (final e in items) if (e.rating != null) e.rating!];
+    final stars = [
+      for (final e in items)
+        if (e.rating != null) e.rating!,
+    ];
     if (stars.isEmpty) return null;
     return stars.reduce((a, b) => a + b) / stars.length;
   }
@@ -56,9 +59,9 @@ class ServicesRemoteDatasource {
     ApiClient? api,
     LocalDatabase? database,
     EndorsementsSqliteDatasource? local,
-  })  : _api = api ?? ApiClient(),
-        _db = database ?? LocalDatabase.instance,
-        _local = local ?? EndorsementsSqliteDatasource();
+  }) : _api = api ?? ApiClient(),
+       _db = database ?? LocalDatabase.instance,
+       _local = local ?? EndorsementsSqliteDatasource();
 
   final ApiClient _api;
   final LocalDatabase _db;
@@ -76,7 +79,9 @@ class ServicesRemoteDatasource {
         '/api/v1/services/$serviceId/endorsements',
         tenantId,
       );
-      if (response.statusCode != 200) return await _offline(tenantId, serviceId);
+      if (response.statusCode != 200) {
+        return await _offline(tenantId, serviceId);
+      }
       remote = _rows(jsonDecode(response.body));
     } catch (_) {
       return _offline(tenantId, serviceId);
@@ -149,6 +154,29 @@ class ServicesRemoteDatasource {
     );
   }
 
+  /// Fotos de un servicio (base64). Vacío si no tiene o no hay red.
+  Future<List<String>> fetchServicePhotos({
+    required String tenantId,
+    required String serviceId,
+  }) async {
+    try {
+      final response = await _api.get(
+        '/api/v1/services/$serviceId/photos',
+        tenantId,
+      );
+      if (response.statusCode != 200) return const [];
+      final body = jsonDecode(response.body);
+      final photos = body is Map ? body['photos'] : null;
+      if (photos is! List) return const [];
+      return photos
+          .whereType<String>()
+          .where((p) => p.isNotEmpty)
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Foto de una calificación (base64) o null si no tiene / no hay red.
   Future<String?> fetchEndorsementPhoto({
     required String tenantId,
@@ -176,7 +204,10 @@ class ServicesRemoteDatasource {
     return ServiceReviews(
       items: local,
       fromServer: false,
-      withPhoto: {for (final e in local) if (e.photoB64 != null) e.id},
+      withPhoto: {
+        for (final e in local)
+          if (e.photoB64 != null) e.id,
+      },
     );
   }
 
@@ -195,11 +226,16 @@ class ServicesRemoteDatasource {
     final id = raw['id'];
     final endorser = raw['endorser_user_id'];
     final updatedAt = raw['updated_at'];
-    if (id is! String || endorser is! String || updatedAt is! String) return null;
-    if (raw['service_id'] != null && raw['service_id'] != serviceId) return null;
+    if (id is! String || endorser is! String || updatedAt is! String) {
+      return null;
+    }
+    if (raw['service_id'] != null && raw['service_id'] != serviceId) {
+      return null;
+    }
     if (raw['tenant_id'] != null && raw['tenant_id'] != tenantId) return null;
     final rating = raw['rating'];
     final comment = raw['short_comment'];
+    final name = raw['endorser_name'];
     return EndorsementModel(
       id: id,
       tenantId: tenantId,
@@ -210,6 +246,9 @@ class ServicesRemoteDatasource {
       isDeleted: raw['is_deleted'] == true,
       updatedAt: updatedAt,
       syncStatus: SqliteTables.syncSynced,
+      endorserName: name is String && name.trim().isNotEmpty
+          ? name.trim()
+          : null,
     );
   }
 
@@ -242,6 +281,7 @@ class ServicesRemoteDatasource {
               'short_comment': e.shortComment,
               'is_deleted': e.isDeleted ? 1 : 0,
               'updated_at': e.updatedAt,
+              'endorser_name': e.endorserName,
             },
             where: 'id = ?',
             whereArgs: [e.id],

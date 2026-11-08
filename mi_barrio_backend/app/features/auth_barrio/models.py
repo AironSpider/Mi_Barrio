@@ -38,6 +38,8 @@ class User(Base, BarrioBaseMixin):
     home_lat: Mapped[float] = mapped_column(Float, nullable=False)
     home_lng: Mapped[float] = mapped_column(Float, nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="VECINO", nullable=False)
+    # Histórico: los comerciantes ya no esperan aprobación (siempre true).
+    # Se conserva para no romper las apps instaladas que aún lo leen.
     is_approved: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False
     )

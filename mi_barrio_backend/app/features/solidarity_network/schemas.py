@@ -77,29 +77,3 @@ class ReviewResponse(BaseModel):
     rating: int
     comment: Optional[str] = None
     created_at: datetime
-
-
-# ── Chat del favor ──
-class MessageCreate(BaseModel):
-    body: str = Field(..., min_length=1, max_length=1000)
-
-
-class MessageResponse(BaseModel):
-    id: uuid.UUID
-    post_id: uuid.UUID
-    neighbor_user_id: uuid.UUID
-    sender_user_id: uuid.UUID
-    sender_name: str
-    body: str
-    created_at: datetime
-
-
-class ConversationSummary(BaseModel):
-    """Una conversación del favor (autor ↔ un vecino)."""
-    post_id: uuid.UUID
-    neighbor_user_id: uuid.UUID
-    neighbor_name: str
-    last_message: str
-    last_sender_user_id: uuid.UUID
-    last_at: datetime
-    message_count: int

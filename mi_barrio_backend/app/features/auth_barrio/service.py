@@ -19,8 +19,6 @@ async def public_profiles(
     db: AsyncSession,
     tenant_id: uuid.UUID,
     user_ids: set[uuid.UUID],
-    *,
-    only_approved: bool = False,
 ) -> dict[uuid.UUID, dict]:
     """Nombre público y contacto (teléfono / WhatsApp que el vecino cargó en su
     perfil) de cuentas activas del barrio. Nunca correo ni datos de otro barrio."""
@@ -31,8 +29,6 @@ async def public_profiles(
         User.tenant_id == tenant_id,
         User.is_deleted.is_(False),
     ]
-    if only_approved:
-        conditions.append(User.is_approved.is_(True))
     rows = (await db.execute(
         select(User.id, User.full_name, User.phone, User.whatsapp).where(*conditions)
     )).all()

@@ -18,7 +18,7 @@ import 'package:mi_barrio_app/features/solidarity_network/presentation/widgets/p
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-/// Sprint 13 · Dev 3 · Bloque A: registro con 2 tarjetas, aviso de aprobación,
+/// Sprint 13 · Dev 3 · Bloque A: registro con 2 tarjetas, comerciante sin espera,
 /// "¡Listo!", "hace 2 h · a 300 m" y sin interruptor 🐞 en la demo.
 void main() {
   final local = LocalDatabase.instance;
@@ -27,13 +27,12 @@ void main() {
   const lat = -5.1945;
   const lng = -80.6328;
 
-  void login({String role = 'VECINO', bool approved = true}) {
+  void login({String role = 'VECINO'}) {
     TenantSession.instance.applyAuthenticatedUser(
       authenticatedTenantId: tenant,
       authenticatedUserId: me,
       authenticatedTenantName: 'Barrio',
       authenticatedRole: role,
-      authenticatedIsApproved: approved,
       authenticatedCenterLat: lat,
       authenticatedCenterLng: lng,
     );
@@ -117,13 +116,13 @@ void main() {
       await tester.pump();
       expect(selected(RegisterScreen.vecinoCardKey), isFalse);
       expect(selected(RegisterScreen.comercianteCardKey), isTrue);
-      expect(find.textContaining('La junta aprueba mi cuenta'), findsOneWidget);
+      expect(find.text('Ofrezco mis servicios a mis vecinos.'), findsOneWidget);
     });
   });
 
-  group('Aviso de aprobación junto a "Ofrecer servicio"', () {
-    Future<void> pumpMerchant(WidgetTester tester, {required bool approved}) async {
-      login(role: 'COMERCIANTE', approved: approved);
+  group('Comerciante recién registrado', () {
+    testWidgets('ve "Ofrecer servicio" sin avisos de aprobación', (tester) async {
+      login(role: 'COMERCIANTE');
       await tester.runAsync(() async {
         await (await local.database).insert('users', {
           'id': me,
@@ -141,25 +140,8 @@ void main() {
         app(Scaffold(body: ServicesDirectoryScreen(tenantId: tenant, userId: me))),
       );
       await settle(tester);
-    }
-
-    testWidgets('comerciante sin aprobar ve el aviso', (tester) async {
-      await pumpMerchant(tester, approved: false);
       expect(find.text('Ofrecer servicio'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('offer_service_approval_notice')),
-        findsOneWidget,
-      );
-      expect(find.textContaining('espera la aprobación de la junta'), findsOneWidget);
-    });
-
-    testWidgets('comerciante aprobado no ve el aviso', (tester) async {
-      await pumpMerchant(tester, approved: true);
-      expect(find.text('Ofrecer servicio'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('offer_service_approval_notice')),
-        findsNothing,
-      );
+      expect(find.textContaining('aprobación'), findsNothing);
     });
   });
 

@@ -227,8 +227,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       key: RegisterScreen.comercianteCardKey,
                       icon: Icons.storefront_rounded,
                       title: 'Tengo un oficio o negocio',
-                      subtitle:
-                          'Ofrezco mis servicios. La junta aprueba mi cuenta.',
+                      subtitle: 'Ofrezco mis servicios a mis vecinos.',
                       selected: _role == UserRole.comerciante,
                       onTap: loading
                           ? null

@@ -70,14 +70,6 @@ void main() {
     expect(UserRole.fromApi('ADMIN_BARRIO'), UserRole.adminBarrio);
   });
 
-  test('unapproved merchant status survives local session persistence', () {
-    final merchant = UserModel.fromJson({...userJson, 'is_approved': false});
-    final restored = UserModel.fromStoredJson(merchant.toJson());
-
-    expect(merchant.isApproved, isFalse);
-    expect(restored.isApproved, isFalse);
-  });
-
   test(
     'AuthState maps each role to the corresponding authenticated status',
     () {

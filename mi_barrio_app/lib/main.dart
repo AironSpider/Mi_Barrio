@@ -140,7 +140,6 @@ class _AuthGate extends ConsumerWidget {
             authenticatedTenantName: user.tenantName ?? '',
             authenticatedRole: user.role.apiValue,
             authenticatedInviteCode: user.joinCode,
-            authenticatedIsApproved: user.isApproved,
             authenticatedCenterLat: user.centerLat ?? 0,
             authenticatedCenterLng: user.centerLng ?? 0,
           );
@@ -174,20 +173,20 @@ class _AuthGate extends ConsumerWidget {
       UserRole.adminBarrio => NeighborhoodAdminScreen(user: user),
       // La primera vez que una cuenta entra, ve el tutorial de 3 pasos.
       UserRole.comerciante || UserRole.vecino => TutorialGate(
-          tenantId: user.tenantId ?? TenantSession.instance.tenantId,
-          userId: user.id,
-          child: MainNavigationShell(
-            isEmergencyMode: isEmergencyMode,
-            // En emergencia el botón principal es "Pedir ayuda" (SOS en 3 clics).
-            onPublish: () => isEmergencyMode
-                ? showSosSheet(context)
-                : QuickPublishLauncher.open(
-                    context,
-                    isEmergencyMode: isEmergencyMode,
-                  ),
-            onEmergencyPreviewChanged: onEmergencyPreviewChanged,
-          ),
+        tenantId: user.tenantId ?? TenantSession.instance.tenantId,
+        userId: user.id,
+        child: MainNavigationShell(
+          isEmergencyMode: isEmergencyMode,
+          // En emergencia el botón principal es "Pedir ayuda" (SOS en 3 clics).
+          onPublish: () => isEmergencyMode
+              ? showSosSheet(context)
+              : QuickPublishLauncher.open(
+                  context,
+                  isEmergencyMode: isEmergencyMode,
+                ),
+          onEmergencyPreviewChanged: onEmergencyPreviewChanged,
         ),
+      ),
     };
   }
 }

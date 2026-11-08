@@ -28,7 +28,6 @@ class UserEntity {
     required this.fullName,
     required this.role,
     required this.token,
-    this.isApproved = true,
     this.tenantName,
     this.joinCode,
     this.centerLat,
@@ -40,7 +39,6 @@ class UserEntity {
   final String fullName;
   final UserRole role;
   final String token;
-  final bool isApproved;
   final String? tenantName;
   final String? joinCode;
   final double? centerLat;

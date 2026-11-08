@@ -114,7 +114,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
         email=email,
         password_hash=await _hash(payload.password),
         role=payload.role,
-        is_approved=payload.role != "COMERCIANTE",
+        is_approved=True,  # sin aprobación de la junta: publica al instante
         phone="",
         home_lat=tenant.center_lat,
         home_lng=tenant.center_lng,

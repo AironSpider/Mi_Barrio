@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mi_barrio_app/core/barrio_context/tenant_session.dart';
 import 'package:mi_barrio_app/core/network/api_client.dart';
-import 'package:mi_barrio_app/core/realtime/favor_chat_socket.dart';
+import 'package:mi_barrio_app/core/realtime/chat_socket.dart';
+import 'package:mi_barrio_app/features/chat/data/chat_models.dart';
+import 'package:mi_barrio_app/features/chat/data/chat_remote_ds.dart';
+import 'package:mi_barrio_app/features/chat/presentation/chat_screen.dart';
 import 'package:mi_barrio_app/core/ui_kit/app_theme.dart';
 import 'package:mi_barrio_app/features/solidarity_network/data/datasources/solidarity_remote_ds.dart';
 import 'package:mi_barrio_app/features/solidarity_network/data/datasources/solidarity_sqlite_ds.dart';
 import 'package:mi_barrio_app/features/solidarity_network/data/models/favor_interactions.dart';
 import 'package:mi_barrio_app/features/solidarity_network/data/models/solidarity_post_model.dart';
-import 'package:mi_barrio_app/features/solidarity_network/presentation/screens/favor_chat_screen.dart';
 import 'package:mi_barrio_app/features/solidarity_network/presentation/screens/favor_detail_screen.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -20,8 +22,6 @@ class _FakeRemote extends SolidarityRemoteDatasource {
 
   final commentList = <PostComment>[];
   final reviewsList = <FavorReview>[];
-  final sent = <ChatMessage>[];
-
   @override
   Future<String?> fetchPhoto(String tenantId, String postId) async => null;
 
@@ -59,15 +59,23 @@ class _FakeRemote extends SolidarityRemoteDatasource {
     reviewsList.add(r);
     return r;
   }
+}
+
+/// Chat falso: guarda lo enviado en memoria.
+class _FakeChat extends ChatRemoteDatasource {
+  _FakeChat() : super(api: ApiClient(baseUrl: 'http://fake'));
+
+  final sent = <ChatMessage>[];
 
   @override
-  Future<List<ChatMessage>> messages(String tenantId, String postId, String neighborId) async => [...sent];
+  Future<List<ChatMessage>> messages(String tenantId, ChatTarget target, String neighborId) async => [...sent];
 
   @override
-  Future<ChatMessage> sendMessage(String tenantId, String postId, String neighborId, String text) async {
+  Future<ChatMessage> sendMessage(String tenantId, ChatTarget target, String neighborId, String text) async {
     final m = ChatMessage(
       id: 'm${sent.length}',
-      postId: postId,
+      kind: target.kind,
+      contextId: target.contextId,
       neighborUserId: neighborId,
       senderUserId: TenantSession.instance.userId,
       senderName: 'Yo',
@@ -108,7 +116,7 @@ void main() {
 
   setUpAll(() {
     // Sin servidor de WebSocket en los tests: la conexión falla y reintenta.
-    FavorChatSocket.connector = (_) => throw WebSocketChannelException('sin red');
+    ChatSocket.connector = (_) => throw WebSocketChannelException('sin red');
   });
   setUp(() => remote = _FakeRemote());
 
@@ -127,6 +135,7 @@ void main() {
         post: post,
         remote: remote,
         local: _NoPhotos(),
+        chatRemote: _FakeChat(),
         onCoordinate: onCoordinate,
         onChangeStatus: onChangeStatus,
       ),
@@ -163,18 +172,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(coordinated, 1);
-    expect(find.byType(FavorChatScreen), findsOneWidget);
+    expect(find.byType(ChatScreen), findsOneWidget);
 
-    await tester.enterText(find.byKey(FavorChatScreen.inputKey), 'Te lo presto hoy');
+    await tester.enterText(find.byKey(ChatScreen.inputKey), 'Te lo presto hoy');
     await tester.pump();
-    await tester.tap(find.byKey(FavorChatScreen.sendKey));
+    await tester.tap(find.byKey(ChatScreen.sendKey));
     await tester.pumpAndSettle();
     expect(find.text('Te lo presto hoy'), findsOneWidget);
 
     // Llega la respuesta de la autora por el canal en tiempo real.
-    FavorChatSocket.instance.injectForTesting(ChatMessage(
+    ChatSocket.instance.injectForTesting(ChatMessage(
       id: 'srv-1',
-      postId: 'post-1',
+      kind: ChatKind.favor,
+      contextId: 'post-1',
       neighborUserId: TenantSession.instance.userId,
       senderUserId: _author,
       senderName: 'Rosa C.',
@@ -185,9 +195,10 @@ void main() {
     expect(find.text('¡Gracias! Paso a las 5'), findsOneWidget);
 
     // Mensajes de OTRA conversación no se mezclan.
-    FavorChatSocket.instance.injectForTesting(ChatMessage(
+    ChatSocket.instance.injectForTesting(ChatMessage(
       id: 'srv-2',
-      postId: 'otro-favor',
+      kind: ChatKind.favor,
+      contextId: 'otro-favor',
       neighborUserId: TenantSession.instance.userId,
       senderUserId: _author,
       senderName: 'Rosa C.',

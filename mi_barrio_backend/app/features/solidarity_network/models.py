@@ -48,13 +48,3 @@ class FavorReview(Base, BarrioBaseMixin):
     reviewed_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     comment: Mapped[str | None] = mapped_column(String(300), nullable=True)
-
-
-class FavorMessage(Base, BarrioBaseMixin):
-    """Mensaje del chat de un favor. Conversación = (favor, vecino que no es el autor)."""
-    __tablename__ = "favor_messages"
-
-    post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("solidarity_posts.id"), nullable=False)
-    neighbor_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    sender_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    body: Mapped[str] = mapped_column(String(1000), nullable=False)

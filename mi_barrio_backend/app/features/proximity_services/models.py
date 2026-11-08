@@ -4,7 +4,7 @@ from sqlalchemy import (
     String, Float, Boolean, Text, Integer, SmallInteger, ForeignKey,
     UniqueConstraint, CheckConstraint, DateTime,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from app.shared.base_model import BarrioBaseMixin
@@ -24,6 +24,9 @@ class LocalService(Base, BarrioBaseMixin):
     # Perfil de publicador (v3, aditivo).
     publisher_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     publisher_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Precio en texto libre ("S/ 30 la visita") y hasta 4 fotos (base64).
+    price_text: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    photos: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
 class NeighborEndorsement(Base, BarrioBaseMixin):
     __tablename__ = "neighbor_endorsements"

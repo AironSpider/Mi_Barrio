@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../features/solidarity_network/data/datasources/solidarity_sqlite_ds.dart';
 import '../../features/solidarity_network/data/models/solidarity_post_model.dart';
 import 'icon_scale.dart';
+import 'photo_picker.dart';
+import 'safe_image.dart';
 
 class QuickPublishData {
   const QuickPublishData({
@@ -24,22 +26,6 @@ class QuickPublishData {
   /// Foto opcional (JPEG comprimido en base64).
   final String? photoB64;
 }
-
-/// Elige una foto ya comprimida (máx. 800 px, calidad 60). Los tests la reemplazan.
-typedef PhotoPicker = Future<List<int>?> Function(ImageSource source);
-
-Future<List<int>?> _defaultPicker(ImageSource source) async {
-  final file = await ImagePicker().pickImage(
-    source: source,
-    maxWidth: 800,
-    maxHeight: 800,
-    imageQuality: 60,
-  );
-  return file?.readAsBytes();
-}
-
-/// Reemplazable en pruebas.
-PhotoPicker quickPublishPhotoPicker = _defaultPicker;
 
 typedef QuickPublishCallback = Future<void> Function(QuickPublishData data);
 
@@ -91,11 +77,14 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
 
   Future<void> _elegirFoto(ImageSource source) async {
     try {
-      final bytes = await quickPublishPhotoPicker(source);
+      final bytes = await appPhotoPicker(source);
       if (bytes == null || !mounted) return;
       final b64 = base64Encode(bytes);
       if (b64.length > SolidaritySqliteDatasource.maxPhotoB64Length) {
-        setState(() => _error = 'La foto es muy pesada. Prueba con otra o tómala de más lejos.');
+        setState(
+          () => _error =
+              'La foto es muy pesada. Prueba con otra o tómala de más lejos.',
+        );
         return;
       }
       setState(() {
@@ -103,7 +92,9 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
         _error = null;
       });
     } catch (_) {
-      if (mounted) setState(() => _error = 'No se pudo abrir la cámara o la galería.');
+      if (mounted) {
+        setState(() => _error = 'No se pudo abrir la cámara o la galería.');
+      }
     }
   }
 
@@ -226,7 +217,8 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
                 const gap = 12.0;
                 final escala = MediaQuery.textScalerOf(context).scale(1);
                 final columnas = escala > 1.3 ? 1 : 2;
-                final ancho = (constraints.maxWidth - gap * (columnas - 1)) / columnas;
+                final ancho =
+                    (constraints.maxWidth - gap * (columnas - 1)) / columnas;
                 return Wrap(
                   spacing: gap,
                   runSpacing: gap,
@@ -351,7 +343,11 @@ class _CategoriaTile extends StatelessWidget {
               child: Row(
                 children: [
                   // El ícono crece con la letra (hasta 1,6 veces).
-                  Icon(categoria.icon, size: 28 * escalaIcono(context), color: contenido),
+                  Icon(
+                    categoria.icon,
+                    size: 28 * escalaIcono(context),
+                    color: contenido,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -395,7 +391,12 @@ class _FotoOpcional extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.memory(base64Decode(foto), width: 72, height: 72, fit: BoxFit.cover),
+            child: SafeMemoryImage(
+              base64Decode(foto),
+              width: 72,
+              height: 72,
+              fit: BoxFit.cover,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(child: Text('Foto agregada', style: texto.bodyLarge)),

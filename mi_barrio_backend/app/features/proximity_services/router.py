@@ -19,7 +19,9 @@ from app.features.proximity_services.schemas import (
     NeighborEndorsementResponse,
     EndorsementPhotoResponse,
     EndorsementReplyRequest,
+    ServicePhotosResponse,
 )
+from app.features.auth_barrio.service import public_profiles
 from app.features.proximity_services.service import (
     rating_avg_by_service,
     rating_avg_for_service,
@@ -34,6 +36,8 @@ endorsement_router = APIRouter(prefix="/api/v1/endorsements", tags=["Proximity S
 def _to_response(service: LocalService, rating_avg: float | None) -> dict:
     data = {c.name: getattr(service, c.name) for c in service.__table__.columns}
     data["rating_avg"] = None if rating_avg is None else round(float(rating_avg), 1)
+    # Las fotos pesan: la lista solo dice cuántas hay.
+    data["photo_count"] = len(data.pop("photos") or [])
     return data
 
 
@@ -52,11 +56,6 @@ async def create_service(
     provider = await db.get(User, provider_id)
     if provider is None or provider.is_deleted:
         raise HTTPException(status_code=401, detail="La cuenta ya no está activa")
-    if not provider.is_approved:
-        raise HTTPException(
-            status_code=403,
-            detail="Tu cuenta de comerciante está pendiente de aprobación del administrador del barrio",
-        )
     new_service = LocalService(
         tenant_id=tenant_uuid,
         provider_user_id=provider_id,
@@ -68,6 +67,8 @@ async def create_service(
         lng=payload.lng,
         publisher_type=payload.publisher_type,
         publisher_name=payload.publisher_name,
+        price_text=(payload.price_text or "").strip() or None,
+        photos=payload.photos or None,
     )
     db.add(new_service)
     await db.commit()
@@ -204,12 +205,33 @@ async def list_service_endorsements(
             NeighborEndorsement.is_deleted.is_(False),
         ).order_by(NeighborEndorsement.created_at.desc())
     )).scalars().all()
+    profiles = await public_profiles(db, tenant_uuid, {e.endorser_user_id for e in endorsements})
     return [
         NeighborEndorsementResponse.model_validate(e).model_copy(
-            update={"has_photo": e.photo_b64 is not None}
+            update={
+                "has_photo": e.photo_b64 is not None,
+                "endorser_name": profiles.get(e.endorser_user_id, {}).get("name", "Vecino"),
+            }
         )
         for e in endorsements
     ]
+
+
+@router.get("/{service_id}/photos", response_model=ServicePhotosResponse)
+async def get_service_photos(
+    service_id: uuid.UUID,
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Fotos del servicio (aparte, para que la lista y el pull pesen poco)."""
+    service = await db.scalar(select(LocalService).where(
+        LocalService.id == service_id,
+        LocalService.tenant_id == tenant_uuid,
+        LocalService.is_deleted.is_(False),
+    ))
+    if service is None:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    return ServicePhotosResponse(id=service.id, photos=list(service.photos or []))
 
 
 @router.post("/{service_id}/recommendations/{rec_id}/reply", response_model=NeighborEndorsementResponse)

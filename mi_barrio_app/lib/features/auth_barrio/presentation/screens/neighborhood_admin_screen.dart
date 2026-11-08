@@ -6,7 +6,6 @@ import 'package:share_plus/share_plus.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/neighborhood_emergency_card.dart';
-import '../../../proximity_services/presentation/widgets/admin_merchant_approval_panel.dart';
 
 class NeighborhoodAdminScreen extends ConsumerWidget {
   const NeighborhoodAdminScreen({super.key, required this.user});
@@ -41,8 +40,6 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
             NeighborhoodEmergencyCard(tenantId: user.tenantId!),
             const SizedBox(height: 16),
           ],
-          const AdminMerchantApprovalPanel(),
-          const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),

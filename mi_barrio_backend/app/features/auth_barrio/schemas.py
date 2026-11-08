@@ -114,18 +114,3 @@ class UserProfileResponse(BaseModel):
     publisher_category: str | None = None
     publisher_name: str | None = None
     updated_at: datetime
-
-
-class PendingMerchantResponse(BaseModel):
-    id: uuid.UUID
-    full_name: str
-    email: str | None
-    role: Literal["COMERCIANTE"]
-    is_approved: bool
-    created_at: datetime
-
-
-class MerchantApprovalResponse(BaseModel):
-    user_id: uuid.UUID
-    is_approved: bool
-    is_deleted: bool

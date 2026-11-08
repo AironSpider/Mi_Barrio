@@ -20,10 +20,6 @@ class PushResult {
   /// Cuántos envíos a `/sync/push` se hicieron (lotes de [SyncWorker.maxBatch]).
   final int batchCount;
 
-  /// Cambios que el servidor dejó "para después" (ej. comerciante esperando
-  /// la aprobación de la junta). Siguen en la cola como Pendiente.
-  final int waitingCount;
-
   /// Falla TEMPORAL (servidor caído o lento, sin respuesta): vale la pena
   /// reintentar pronto. Un 401 o un dato rechazado no se arreglan reintentando.
   final bool retryable;
@@ -35,7 +31,6 @@ class PushResult {
     this.message,
     this.unauthorized = false,
     this.batchCount = 0,
-    this.waitingCount = 0,
     this.retryable = false,
   });
 }
@@ -45,7 +40,6 @@ class _BatchOutcome {
   const _BatchOutcome({
     required this.sentCount,
     this.processedCount = 0,
-    this.waitingCount = 0,
     this.message,
     this.httpFailed = false,
     this.unauthorized = false,
@@ -54,7 +48,6 @@ class _BatchOutcome {
 
   final int sentCount;
   final int processedCount;
-  final int waitingCount;
   final String? message;
 
   /// El servidor no respondió 200: se detienen los lotes siguientes.
@@ -86,7 +79,8 @@ class PullResult {
 
 /// Respuestas HTTP que suelen arreglarse solas: 408 (tiempo agotado),
 /// 429 (demasiadas peticiones) y 5xx (el servidor falló o se está reiniciando).
-bool isTransientHttpStatus(int status) => status == 408 || status == 429 || status >= 500;
+bool isTransientHttpStatus(int status) =>
+    status == 408 || status == 429 || status >= 500;
 
 class SyncWorker {
   final String baseUrl;
@@ -142,6 +136,8 @@ class SyncWorker {
       'publisher_name',
       'contact_phone', // contacto del comerciante (solo bajada)
       'contact_whatsapp',
+      'price_text',
+      'photo_count', // las fotos se piden aparte (solo bajada)
       'lat',
       'lng',
       'is_deleted',
@@ -204,7 +200,6 @@ class SyncWorker {
     var sent = 0;
     var processed = 0;
     var batches = 0;
-    var waiting = 0;
     final problems = <String>[];
     try {
       final pending = await _outboxDao.getPendingMutations(tenantId);
@@ -220,7 +215,6 @@ class SyncWorker {
         batches++;
         sent += batch.sentCount;
         processed += batch.processedCount;
-        waiting += batch.waitingCount;
         if (batch.message != null) problems.add(batch.message!);
         if (batch.httpFailed) {
           return PushResult(
@@ -235,19 +229,12 @@ class SyncWorker {
         }
       }
 
-      // Esperar la aprobación de la junta NO es un error: lo demás se envió bien
-      // y lo que espera sigue en la cola (Pendiente) para el próximo sync.
       return PushResult(
         success: problems.isEmpty,
         sentCount: sent,
         processedCount: processed,
         batchCount: batches,
-        waitingCount: waiting,
-        message: problems.isNotEmpty
-            ? problems.join(' | ')
-            : waiting > 0
-            ? 'Esperando aprobación de la junta: $waiting cambio(s) se enviarán después'
-            : null,
+        message: problems.isNotEmpty ? problems.join(' | ') : null,
       );
     } catch (e) {
       // Sin internet o timeout: lo que no se confirmó queda intacto en la cola.
@@ -300,32 +287,27 @@ class SyncWorker {
         .toSet();
     final rejectedItems = ((data['rejected'] as List?) ?? const [])
         .whereType<Map>()
-        .where((item) =>
-            item['record_id'] is String && item['target_table'] is String)
+        .where(
+          (item) =>
+              item['record_id'] is String && item['target_table'] is String,
+        )
         .toList(growable: false);
-    final allRejected = <String, String>{
+    // Un rechazo es definitivo (dato inválido): sale de la cola como "Sin enviar".
+    final rejectedReasons = <String, String>{
       for (final item in rejectedItems)
         '${item['target_table']}:${item['record_id']}':
             item['reason']?.toString() ?? 'Rechazado por el servidor',
     };
-    // Rechazo TEMPORAL ("todavía no"): se queda en la cola como Pendiente y se
-    // reintenta en cada sync. Rechazo definitivo ("nunca"): sale como Sin enviar.
-    final waiting = {
-      for (final e in allRejected.entries)
-        if (isRetryableRejection(e.value)) e.key: e.value,
-    };
-    final rejectedReasons = {
-      for (final e in allRejected.entries)
-        if (!waiting.containsKey(e.key)) e.key: e.value,
-    };
 
     // Confirmed changes and terminal rejections are both removed from outbox.
     final toClean = pending
-        .where((m) =>
-            confirmed.contains(m['record_id']) ||
-            rejectedReasons.containsKey(
-              '${m['target_table']}:${m['record_id']}',
-            ))
+        .where(
+          (m) =>
+              confirmed.contains(m['record_id']) ||
+              rejectedReasons.containsKey(
+                '${m['target_table']}:${m['record_id']}',
+              ),
+        )
         .toList();
 
     final db = await LocalDatabase.instance.database;
@@ -366,24 +348,12 @@ class SyncWorker {
       processedCount: pending
           .where((m) => confirmed.contains(m['record_id']))
           .length,
-      waitingCount: pending
-          .where((m) => waiting.containsKey('${m['target_table']}:${m['record_id']}'))
-          .length,
       message: rejectedReasons.isNotEmpty
           ? 'El servidor rechazó ${rejectedReasons.length} cambio(s): ${rejectedReasons.values.join('; ')}'
-          : toClean.length + waiting.length >= pending.length
+          : toClean.length >= pending.length
           ? null
           : 'El servidor no confirmó ${pending.length - toClean.length} cambio(s)',
     );
-  }
-
-  /// Motivos de rechazo que se resuelven solos con el tiempo (no son datos
-  /// inválidos). Hoy: comerciante esperando la aprobación de la junta.
-  static const _retryableReasons = ['pendiente de aprobación'];
-
-  static bool isRetryableRejection(String reason) {
-    final text = reason.toLowerCase();
-    return _retryableReasons.any(text.contains);
   }
 
   /// Descarga lo que cambió en el servidor desde la última vez y lo guarda en SQLite.
@@ -458,10 +428,13 @@ class SyncWorker {
             }
             if (pendingIds.contains(record['id'])) {
               skipped++;
-              final stamp = DateTime.tryParse('${record['server_updated_at'] ?? ''}');
+              final stamp = DateTime.tryParse(
+                '${record['server_updated_at'] ?? ''}',
+              );
               if (stamp == null) {
                 skippedWithoutStamp = true;
-              } else if (oldestSkipped == null || stamp.isBefore(oldestSkipped!)) {
+              } else if (oldestSkipped == null ||
+                  stamp.isBefore(oldestSkipped!)) {
                 oldestSkipped = stamp;
               }
               continue;
@@ -531,7 +504,9 @@ class SyncWorker {
   }) {
     if (skippedWithoutStamp) return previous;
     final server = DateTime.tryParse(serverTimestamp);
-    if (oldestSkipped != null && server != null && oldestSkipped.isBefore(server)) {
+    if (oldestSkipped != null &&
+        server != null &&
+        oldestSkipped.isBefore(server)) {
       return oldestSkipped.toUtc().toIso8601String();
     }
     return serverTimestamp;

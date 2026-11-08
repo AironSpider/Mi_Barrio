@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
@@ -16,11 +16,21 @@ import '../../../../core/ui_kit/star_rating_input.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../data/datasources/endorsements_sqlite_ds.dart';
 import '../../data/datasources/services_remote_ds.dart';
+import '../../data/datasources/services_sqlite_ds.dart';
+import 'offer_service_sheet.dart';
 import '../../data/models/endorsement_model.dart';
 import '../../data/models/service_model.dart';
 import '../../../../shared/contact_launcher.dart';
 import '../../../../shared/local_distance.dart';
+import '../../../solidarity_network/presentation/widgets/post_meta_label.dart';
+import '../../../../core/ui_kit/location_map.dart';
+import '../../../chat/data/chat_models.dart';
+import '../../../chat/data/chat_remote_ds.dart';
+import '../../../chat/presentation/chat_screen.dart';
+import '../../../chat/presentation/conversations_screen.dart';
+import '../../../emergency_support/presentation/providers/emergency_provider.dart';
 import 'service_category_ui.dart';
+import '../../../../core/ui_kit/safe_image.dart';
 
 /// Abre el detalle de un servicio en una hoja inferior.
 Future<void> showServiceDetailSheet(
@@ -59,7 +69,11 @@ class ServiceDetailSheet extends StatefulWidget {
     this.centerLat,
     this.centerLng,
     this.syncPhase,
+    this.chatRemote,
   });
+
+  /// Chat con el comerciante (los tests pasan uno falso).
+  final ChatRemoteDatasource? chatRemote;
 
   final LocalServiceModel service;
   final String? tenantId;
@@ -79,6 +93,10 @@ class ServiceDetailSheet extends StatefulWidget {
   static const saveKey = ValueKey('service_rating_save');
   static const commentKey = ValueKey('service_rating_comment');
   static const mapKey = ValueKey('service_mini_map');
+  static const directionsKey = ValueKey('service_directions');
+  static const editKey = ValueKey('service_edit');
+  static const chatKey = ValueKey('service_chat');
+  static const messagesKey = ValueKey('service_messages');
   static const callButtonKey = ValueKey('service_call');
   static const whatsappButtonKey = ValueKey('service_whatsapp');
   static const maxComment = 140;
@@ -119,6 +137,8 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
   String? _notice;
   String? _error;
   int _loadVersion = 0;
+  HelpLocation? _myLocation;
+  List<String> _photos = const [];
 
   bool get _isOwn => widget.service.providerUserId == _userId;
 
@@ -146,6 +166,20 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
       if (!mounted) return;
       unawaited(_load(loadContact: true));
       unawaited(_refreshFromServer());
+      unawaited(
+        ServicesSqliteDatasource()
+            .localPhotos(widget.service.id)
+            .then((p) {
+              if (mounted && p.isNotEmpty) setState(() => _photos = p);
+            })
+            .catchError((_) {}),
+      );
+      // Tu ubicación (GPS o centro del barrio) para "A 350 m de ti".
+      unawaited(
+        HelpLocator.resolve().then((loc) {
+          if (mounted) setState(() => _myLocation = loc);
+        }),
+      );
     });
   }
 
@@ -167,7 +201,8 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
   /// lista. Sin red o con error, se queda con lo guardado en el teléfono.
   Future<void> _refreshFromServer() async {
     try {
-      final remote = widget.remoteDatasource ??
+      final remote =
+          widget.remoteDatasource ??
           (Platform.environment.containsKey('FLUTTER_TEST')
               ? null
               : ServicesRemoteDatasource());
@@ -177,6 +212,22 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
         serviceId: widget.service.id,
       );
       if (mounted) await _load();
+      // Fotos: las guardadas en el teléfono primero; si faltan, del servidor.
+      if (widget.service.photoCount > 0 &&
+          _photos.length < widget.service.photoCount) {
+        final photos = await remote.fetchServicePhotos(
+          tenantId: _tenantId,
+          serviceId: widget.service.id,
+        );
+        if (photos.isNotEmpty) {
+          await ServicesSqliteDatasource().cachePhotos(
+            _tenantId,
+            widget.service.id,
+            photos,
+          );
+          if (mounted) setState(() => _photos = photos);
+        }
+      }
     } catch (_) {
       // Sin red: la lista local ya está en pantalla.
     }
@@ -187,7 +238,8 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
   /// el perfil del dueño de ESTE teléfono: sirve para ver el propio servicio.
   Future<_Contact?> _loadContact() async {
     final service = widget.service;
-    String? clean(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
+    String? clean(String? v) =>
+        (v == null || v.trim().isEmpty) ? null : v.trim();
     final fromService = _Contact(
       name: clean(service.publisherName),
       phone: clean(service.contactPhone),
@@ -287,7 +339,9 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
       setState(() => _error = '${error.message}');
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'No se pudo quitar la calificación. Intenta de nuevo.');
+      setState(
+        () => _error = 'No se pudo quitar la calificación. Intenta de nuevo.',
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -312,8 +366,7 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
       await _load();
       if (!mounted) return;
       setState(() {
-        _notice =
-            'Calificación guardada en tu teléfono. Se sincronizará en segundo plano.';
+        _notice = 'Calificación guardada en tu teléfono. Se sincronizará en segundo plano.';
       });
     } on ArgumentError catch (error) {
       if (!mounted) return;
@@ -344,11 +397,48 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildHeader(context, title),
+            if (_photos.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _PhotoStrip(photos: _photos, title: service.title),
+            ],
             const SizedBox(height: 12),
-            StarRatingDisplay(
-              rating: service.ratingAvg ?? 0,
-              count: service.endorsementsCount,
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                StarRatingDisplay(
+                  rating: service.ratingAvg ?? 0,
+                  count: service.endorsementsCount,
+                ),
+                if (service.priceText != null)
+                  Chip(
+                    avatar: const Icon(Icons.sell_rounded, size: 18),
+                    label: Text(service.priceText!),
+                  ),
+              ],
             ),
+            if (_isOwn) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                key: ServiceDetailSheet.editKey,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                onPressed: () async {
+                  final navigator = Navigator.of(context);
+                  final saved = await showOfferServiceSheet(
+                    context,
+                    tenantId: _tenantId,
+                    userId: _userId,
+                    existing: service,
+                  );
+                  if (saved) navigator.maybePop();
+                },
+                icon: const Icon(Icons.edit_rounded),
+                label: const Text('Editar servicio'),
+              ),
+            ],
             if (service.description.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(service.description, style: texto.bodyLarge),
@@ -358,9 +448,18 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
             const SizedBox(height: 8),
             _buildMap(context),
             const SizedBox(height: 20),
-            Text('Contacto', style: texto.titleMedium),
+            Text(
+              _isOwn ? 'Tus clientes' : 'Contacto',
+              style: texto.titleMedium,
+            ),
             const SizedBox(height: 8),
-            _buildContact(context),
+            if (_isOwn)
+              _buildOwnMessages(context)
+            else ...[
+              _buildChatButton(context),
+              const SizedBox(height: 12),
+              _buildContact(context),
+            ],
             const SizedBox(height: 20),
             if (_isOwn)
               Text(
@@ -416,7 +515,8 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  SyncStatusChip.fromPending(service.isPending),
+                  // "Sincronizado" no le dice nada al vecino: solo se avisa lo pendiente.
+                  if (service.isPending) SyncStatusChip.fromPending(true),
                   if (service.isAvailableInEmergency)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -459,72 +559,120 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
     );
   }
 
+  /// Dónde atiende: mapa real, distancia desde ti y "Cómo llegar".
   Widget _buildMap(BuildContext context) {
-    final esquema = Theme.of(context).colorScheme;
     final texto = Theme.of(context).textTheme;
-    final colores = MiBarrioColors.of(context);
-    final centerLat = widget.centerLat ?? TenantSession.instance.centerLat;
-    final centerLng = widget.centerLng ?? TenantSession.instance.centerLng;
+    final esquema = Theme.of(context).colorScheme;
+    final service = widget.service;
+    final me = _myLocation;
+    final fromLat =
+        me?.lat ?? widget.centerLat ?? TenantSession.instance.centerLat;
+    final fromLng =
+        me?.lng ?? widget.centerLng ?? TenantSession.instance.centerLng;
     final distance = LocalDistance.label(
-      LocalDistance.km(centerLat, centerLng, widget.service.lat, widget.service.lng),
+      LocalDistance.km(fromLat, fromLng, service.lat, service.lng),
     );
+    final fromText = me != null && me.fromGps
+        ? 'de ti'
+        : 'del centro del barrio';
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Semantics(
-          label: 'Mapa del barrio. El servicio está a $distance del centro.',
-          image: true,
-          excludeSemantics: true,
-          child: SizedBox(
-            key: ServiceDetailSheet.mapKey,
-            height: 160,
-            width: double.infinity,
-            child: CustomPaint(
-              painter: _MiniMapPainter(
-                serviceLat: widget.service.lat,
-                serviceLng: widget.service.lng,
-                centerLat: centerLat,
-                centerLng: centerLng,
-                background: colores.accentSoft,
-                grid: esquema.outline.withValues(alpha: 0.35),
-                serviceColor: colores.brand,
-                centerColor: esquema.onSurfaceVariant,
-                ring: esquema.surface,
-              ),
-            ),
-          ),
+        LocationMap(
+          key: ServiceDetailSheet.mapKey,
+          lat: service.lat,
+          lng: service.lng,
+          myLat: me != null && me.fromGps ? me.lat : null,
+          myLng: me != null && me.fromGps ? me.lng : null,
+          label: 'Mapa: ${service.title} está a $distance $fromText.',
+          icon: ServiceCategoryUi.icon(service.category),
         ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 16,
-          runSpacing: 4,
+        const SizedBox(height: 10),
+        Row(
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.place_rounded, size: 20, color: colores.brand),
-                const SizedBox(width: 4),
-                Text('Servicio', style: texto.bodyMedium),
-              ],
+            Icon(
+              Icons.near_me_rounded,
+              size: 20,
+              color: esquema.onSurfaceVariant,
             ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.radio_button_unchecked_rounded,
-                  size: 20,
-                  color: esquema.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                Text('Centro del barrio', style: texto.bodyMedium),
-              ],
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text('A $distance $fromText.', style: texto.bodyLarge),
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        Text('A $distance del centro del barrio.', style: texto.bodyMedium),
+        const SizedBox(height: 10),
+        FilledButton.tonalIcon(
+          key: ServiceDetailSheet.directionsKey,
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+          onPressed: () async {
+            final messenger = ScaffoldMessenger.of(context);
+            if (!await ContactLauncher.directions(service.lat, service.lng)) {
+              messenger
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  const SnackBar(
+                    content: Text('No se pudo abrir el mapa del teléfono.'),
+                  ),
+                );
+            }
+          },
+          icon: const Icon(Icons.directions_walk_rounded),
+          label: const Text('Cómo llegar'),
+        ),
       ],
+    );
+  }
+
+  ChatTarget get _chatTarget {
+    final s = widget.service;
+    final name = s.publisherName?.trim();
+    return ChatTarget(
+      kind: ChatKind.service,
+      contextId: s.id,
+      title: name != null && name.isNotEmpty ? '$name, ${s.title}' : s.title,
+      ownerUserId: s.providerUserId,
+    );
+  }
+
+  /// Chat en la app con el comerciante (sin compartir números).
+  Widget _buildChatButton(BuildContext context) {
+    final name =
+        _contact?.name ?? widget.service.publisherName ?? 'el comerciante';
+    return FilledButton.icon(
+      key: ServiceDetailSheet.chatKey,
+      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56)),
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ChatScreen(
+            target: _chatTarget,
+            neighborUserId: _userId,
+            otherName: name,
+            remote: widget.chatRemote,
+          ),
+        ),
+      ),
+      icon: const Icon(Icons.forum_rounded),
+      label: const Text('Escribir por Mi Barrio'),
+    );
+  }
+
+  /// El comerciante ve aquí las conversaciones de sus clientes.
+  Widget _buildOwnMessages(BuildContext context) {
+    return OutlinedButton.icon(
+      key: ServiceDetailSheet.messagesKey,
+      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ConversationsScreen(
+            target: _chatTarget,
+            remote: widget.chatRemote,
+          ),
+        ),
+      ),
+      icon: const Icon(Icons.forum_rounded),
+      label: const Text('Mensajes de clientes'),
     );
   }
 
@@ -545,16 +693,26 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
     ];
     final callNumber = contact.phone ?? contact.whatsapp;
     final waNumber = contact.whatsapp ?? contact.phone;
-    final who = (contact.name?.isNotEmpty ?? false) ? contact.name! : widget.service.title;
+    final who = (contact.name?.isNotEmpty ?? false)
+        ? contact.name!
+        : widget.service.title;
 
-    Future<void> open(Future<bool> Function(String) action, String number, String label) async {
+    Future<void> open(
+      Future<bool> Function(String) action,
+      String number,
+      String label,
+    ) async {
       final messenger = ScaffoldMessenger.of(context);
       if (await action(number)) return;
       // Sin app de teléfono / WhatsApp (ej. tablet): al menos queda copiado.
       await Clipboard.setData(ClipboardData(text: number));
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('No se pudo abrir $label. Copiamos el número.')));
+        ..showSnackBar(
+          SnackBar(
+            content: Text('No se pudo abrir $label. Copiamos el número.'),
+          ),
+        );
     }
 
     return Column(
@@ -575,8 +733,11 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
                 excludeSemantics: true,
                 child: FilledButton.icon(
                   key: ServiceDetailSheet.callButtonKey,
-                  style: FilledButton.styleFrom(minimumSize: const Size(140, 56)),
-                  onPressed: () => open(ContactLauncher.call, callNumber, 'el teléfono'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(140, 56),
+                  ),
+                  onPressed: () =>
+                      open(ContactLauncher.call, callNumber, 'el teléfono'),
                   icon: const Icon(Icons.call_rounded),
                   label: const Text('Llamar'),
                 ),
@@ -588,8 +749,11 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
                 excludeSemantics: true,
                 child: OutlinedButton.icon(
                   key: ServiceDetailSheet.whatsappButtonKey,
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(140, 56)),
-                  onPressed: () => open(ContactLauncher.whatsapp, waNumber, 'WhatsApp'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(140, 56),
+                  ),
+                  onPressed: () =>
+                      open(ContactLauncher.whatsapp, waNumber, 'WhatsApp'),
                   icon: const Icon(Icons.chat_rounded),
                   label: const Text('WhatsApp'),
                 ),
@@ -608,9 +772,7 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
                   await Clipboard.setData(ClipboardData(text: value));
                   messenger
                     ..hideCurrentSnackBar()
-                    ..showSnackBar(
-                      SnackBar(content: Text('$label copiado.')),
-                    );
+                    ..showSnackBar(SnackBar(content: Text('$label copiado.')));
                 },
                 icon: const Icon(Icons.copy_rounded),
                 label: const Text('Copiar'),
@@ -708,7 +870,6 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
   }
 
   Widget _buildRatingsList(BuildContext context) {
-    final esquema = Theme.of(context).colorScheme;
     final texto = Theme.of(context).textTheme;
     final shown = _endorsements.take(_maxShownRatings).toList();
 
@@ -723,45 +884,14 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
           Text('Todavía nadie calificó este servicio.', style: texto.bodyLarge)
         else
           for (final item in shown)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        item.endorserUserId == _userId ? 'Tú' : 'Un vecino',
-                        style: texto.labelLarge,
-                      ),
-                      if (item.rating != null)
-                        StarRatingDisplay(
-                          rating: item.rating!.toDouble(),
-                          size: 20,
-                          showValue: false,
-                        )
-                      else
-                        Text('Visto bueno', style: texto.bodyMedium),
-                      if (item.endorserUserId == _userId)
-                        if (item.isPending) SyncStatusChip.fromPending(true),
-                    ],
-                  ),
-                  if (item.shortComment != null &&
-                      item.shortComment!.trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        item.shortComment!,
-                        style: texto.bodyLarge?.copyWith(
-                          color: esquema.onSurface,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+            _ReviewTile(
+              name: item.endorserUserId == _userId
+                  ? 'Tú'
+                  : (item.endorserName ?? 'Un vecino'),
+              rating: item.rating,
+              comment: item.shortComment,
+              when: PostMetaLabel.timeAgo(item.updatedAt),
+              pending: item.endorserUserId == _userId && item.isPending,
             ),
         if (_endorsements.length > _maxShownRatings)
           Text(
@@ -773,89 +903,139 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
   }
 }
 
-/// Mini mapa dibujado a mano: no necesita internet ni mapas externos.
-/// El centro del barrio queda en el medio y el servicio se ubica a escala.
-class _MiniMapPainter extends CustomPainter {
-  const _MiniMapPainter({
-    required this.serviceLat,
-    required this.serviceLng,
-    required this.centerLat,
-    required this.centerLng,
-    required this.background,
-    required this.grid,
-    required this.serviceColor,
-    required this.centerColor,
-    required this.ring,
+/// Una reseña: quién la publicó, sus estrellas, cuándo y su comentario.
+class _ReviewTile extends StatelessWidget {
+  const _ReviewTile({
+    required this.name,
+    required this.rating,
+    required this.comment,
+    required this.when,
+    required this.pending,
   });
 
-  final double serviceLat;
-  final double serviceLng;
-  final double centerLat;
-  final double centerLng;
-  final Color background;
-  final Color grid;
-  final Color serviceColor;
-  final Color centerColor;
-  final Color ring;
+  final String name;
+  final int? rating;
+  final String? comment;
+  final String? when;
+  final bool pending;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(14)),
-      Paint()..color = background,
+  Widget build(BuildContext context) {
+    final texto = Theme.of(context).textTheme;
+    final colores = MiBarrioColors.of(context);
+    final hasComment = comment != null && comment!.trim().isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: colores.accentSoft,
+            child: Text(
+              name.characters.first.toUpperCase(),
+              style: TextStyle(
+                color: colores.accentText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text(name, style: texto.titleSmall)),
+                    if (when != null) Text(when!, style: texto.labelSmall),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (rating != null)
+                      StarRatingDisplay(
+                        rating: rating!.toDouble(),
+                        size: 18,
+                        showValue: false,
+                      )
+                    else
+                      Text('Visto bueno', style: texto.bodyMedium),
+                    if (pending) SyncStatusChip.fromPending(true),
+                  ],
+                ),
+                if (hasComment) ...[
+                  const SizedBox(height: 4),
+                  Text(comment!, style: texto.bodyLarge),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
-
-    canvas.save();
-    canvas.clipRRect(RRect.fromRectAndRadius(rect, const Radius.circular(14)));
-    final gridPaint = Paint()
-      ..color = grid
-      ..strokeWidth = 1;
-    for (var i = 1; i < 4; i++) {
-      final x = size.width * i / 4;
-      final y = size.height * i / 4;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final midLat = (serviceLat + centerLat) / 2;
-    final dx = (serviceLng - centerLng) * math.cos(midLat * math.pi / 180);
-    final dy = serviceLat - centerLat;
-    final span = math.max(math.max(dx.abs(), dy.abs()) * 2.4, 0.0016);
-    final scale = math.min(size.width, size.height) / span;
-    final center = Offset(size.width / 2, size.height / 2);
-    final service = center + Offset(dx * scale, -dy * scale);
-
-    canvas.drawLine(
-      center,
-      service,
-      Paint()
-        ..color = centerColor.withValues(alpha: 0.6)
-        ..strokeWidth = 2,
-    );
-    canvas.drawCircle(
-      center,
-      8,
-      Paint()
-        ..color = centerColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
-    );
-    canvas.drawCircle(service, 13, Paint()..color = ring);
-    canvas.drawCircle(service, 10, Paint()..color = serviceColor);
-    canvas.drawCircle(service, 4, Paint()..color = ring);
-    canvas.restore();
   }
+}
+
+/// Fotos del servicio en tira horizontal; al tocar una se abre con zoom.
+class _PhotoStrip extends StatelessWidget {
+  const _PhotoStrip({required this.photos, required this.title});
+
+  final List<String> photos;
+  final String title;
 
   @override
-  bool shouldRepaint(covariant _MiniMapPainter old) =>
-      old.serviceLat != serviceLat ||
-      old.serviceLng != serviceLng ||
-      old.centerLat != centerLat ||
-      old.centerLng != centerLng ||
-      old.background != background ||
-      old.grid != grid ||
-      old.serviceColor != serviceColor ||
-      old.centerColor != centerColor ||
-      old.ring != ring;
+  Widget build(BuildContext context) {
+    final images = [for (final p in photos) base64Decode(p)];
+    return SizedBox(
+      height: 150,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: images.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, i) => Semantics(
+          image: true,
+          button: true,
+          label:
+              'Foto ${i + 1} de ${images.length} de $title. Toca para ampliar.',
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => Scaffold(
+                  backgroundColor: Colors.black,
+                  appBar: AppBar(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                  ),
+                  body: PageView(
+                    controller: PageController(initialPage: i),
+                    children: [
+                      for (final img in images)
+                        Center(
+                          child: InteractiveViewer(
+                            maxScale: 5,
+                            child: SafeMemoryImage(img),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SafeMemoryImage(
+                images[i],
+                width: images.length == 1 ? 260 : 200,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -16,7 +16,6 @@ class TenantSession {
   /// Rol de API actual: VECINO, COMERCIANTE, ADMIN_BARRIO o SUPER_ADMIN.
   String role = 'VECINO';
   String? inviteCode;
-  bool isApproved = true;
 
   /// true si hay un vecino con barrio en sesión.
   bool get hasNeighborhood => tenantId.isNotEmpty;
@@ -29,7 +28,6 @@ class TenantSession {
     required String authenticatedTenantName,
     required String authenticatedRole,
     String? authenticatedInviteCode,
-    bool authenticatedIsApproved = true,
     required double authenticatedCenterLat,
     required double authenticatedCenterLng,
   }) {
@@ -38,7 +36,6 @@ class TenantSession {
     tenantName = authenticatedTenantName;
     role = authenticatedRole;
     inviteCode = authenticatedInviteCode;
-    isApproved = authenticatedIsApproved;
     centerLat = authenticatedCenterLat;
     centerLng = authenticatedCenterLng;
   }
@@ -56,7 +53,6 @@ class TenantSession {
     tenantName = '';
     role = 'VECINO';
     inviteCode = null;
-    isApproved = true;
     centerLat = 0;
     centerLng = 0;
   }
