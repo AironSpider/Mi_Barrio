@@ -10,13 +10,21 @@ Variables de entorno (en Render → Environment):
     SMTP_PORT       por defecto 587 (STARTTLS)
     SMTP_FROM_NAME  por defecto "Mi Barrio"
 
-Si SMTP_USER o SMTP_PASSWORD faltan, el correo NO se envía: el código se
+Render (plan gratis) BLOQUEA el SMTP ("Network is unreachable"). Por eso, si existe
+BREVO_API_KEY, se envía por la API HTTPS de Brevo (gratis, 300 correos/día):
+    BREVO_API_KEY       la clave de API de Brevo (SMTP & API → API Keys)
+    BREVO_SENDER_EMAIL  remitente verificado en Brevo (por defecto SMTP_USER)
+
+Si no hay ni Brevo ni SMTP, el correo NO se envía: el código se
 escribe en los logs del servidor (útil en desarrollo) y la función devuelve False.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
+import urllib.error
+import urllib.request
 import smtplib
 import ssl
 from email.message import EmailMessage
@@ -27,8 +35,42 @@ from starlette.concurrency import run_in_threadpool
 logger = logging.getLogger("mi_barrio.email")
 
 
+BREVO_URL = "https://api.brevo.com/v3/smtp/email"
+
+
+def _brevo_configured() -> bool:
+    return bool(os.getenv("BREVO_API_KEY") and _brevo_sender())
+
+
+def _brevo_sender() -> str:
+    return os.getenv("BREVO_SENDER_EMAIL") or os.getenv("SMTP_USER") or ""
+
+
 def is_configured() -> bool:
-    return bool(os.getenv("SMTP_USER") and os.getenv("SMTP_PASSWORD"))
+    return _brevo_configured() or bool(os.getenv("SMTP_USER") and os.getenv("SMTP_PASSWORD"))
+
+
+def _send_brevo_sync(to: str, subject: str, text: str, html: str) -> None:
+    body = {
+        "sender": {"name": os.getenv("SMTP_FROM_NAME", "Mi Barrio"), "email": _brevo_sender()},
+        "to": [{"email": to}],
+        "subject": subject,
+        "textContent": text,
+        "htmlContent": html,
+    }
+    request = urllib.request.Request(
+        BREVO_URL,
+        data=json.dumps(body).encode("utf-8"),
+        method="POST",
+        headers={
+            "api-key": os.environ["BREVO_API_KEY"].strip(),
+            "content-type": "application/json",
+            "accept": "application/json",
+        },
+    )
+    # urlopen lanza HTTPError si Brevo responde 4xx/5xx (p. ej. remitente sin verificar).
+    with urllib.request.urlopen(request, timeout=15) as response:
+        response.read()
 
 
 def _send_sync(to: str, subject: str, text: str, html: str) -> None:
@@ -62,9 +104,15 @@ async def send_email(to: str, subject: str, text: str, html: str) -> bool:
     if not is_configured():
         logger.warning("SMTP sin configurar: no se envió '%s' a %s", subject, to)
         return False
+    sender = _send_brevo_sync if _brevo_configured() else _send_sync
     try:
-        await run_in_threadpool(_send_sync, to, subject, text, html)
+        await run_in_threadpool(sender, to, subject, text, html)
         return True
+    except urllib.error.HTTPError as error:
+        # Brevo explica el motivo en el cuerpo (clave mala, remitente sin verificar…).
+        detail = error.read().decode("utf-8", "replace")[:300]
+        logger.error("Brevo rechazó el correo '%s' a %s: %s %s", subject, to, error.code, detail)
+        return False
     except Exception:  # noqa: BLE001 - se registra y se sigue
         logger.exception("No se pudo enviar el correo '%s' a %s", subject, to)
         return False
