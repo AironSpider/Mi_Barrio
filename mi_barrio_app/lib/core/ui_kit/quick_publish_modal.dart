@@ -116,7 +116,7 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
     ),
     const _Categoria(
       SolidarityModality.ayudaTemporal,
-      'Compañía o cuidado',
+      'Soporte',
       Icons.volunteer_activism_rounded,
     ),
     if (widget.isEmergencyMode)

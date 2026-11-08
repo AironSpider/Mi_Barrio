@@ -71,6 +71,11 @@ class AppPalette {
   static const Color starFilled = Color(0xFFC46A00);
   static const Color starEmpty = Color(0xFF7B8798);
 
+  // ── Botón de filtros (igual en Servicios y Apoyo) ──
+  static const Color filterIcon = syncPending; // Gris oscuro (7.6:1 sobre blanco)
+  static const Color filterActiveBackground = Color(0xFFE2E8F0); // Gris claro: hay filtros
+  static const Color pillBorder = Color(0xFFCBD5E1); // Borde gris de píldoras sin elegir
+
   // ── Nombres anteriores (compatibilidad: no rompen código existente) ──
   static const Color accent = brandOrange;
   static const Color orangeText = emergencyOnPrimaryContainer;

@@ -189,7 +189,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      for (final label in ['Herramienta', 'Habilidad', 'Cosas o materiales', 'Compañía o cuidado']) {
+      for (final label in ['Herramienta', 'Habilidad', 'Cosas o materiales', 'Soporte']) {
         final text = find.text(label);
         expect(text, findsOneWidget, reason: label);
         final paragraph = tester.renderObject<RenderParagraph>(text);
