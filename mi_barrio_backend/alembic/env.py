@@ -24,12 +24,12 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Leer la URL desde .env o usar la de por defecto
-database_url = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/mi_barrio_db"
-)
-config.set_main_option("sqlalchemy.url", database_url)
+# Misma URL que la API (app.core.database), ya convertida a postgresql+asyncpg://.
+# Render entrega "postgresql://…": sin convertirla, las migraciones fallan al
+# arrancar el contenedor. El "%" se duplica porque alembic.ini usa configparser.
+from app.core.database import DATABASE_URL  # noqa: E402
+
+config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
