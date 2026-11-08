@@ -20,6 +20,20 @@ docker build -t mi-barrio-api . && docker run --rm -p 8000:8000 --env-file .env 
 Comprobar: abre <http://localhost:8000/health> → `"migrations_up_to_date": true`.
 Documentación interactiva: <http://localhost:8000/docs>.
 
+## Despliegue público para la demo
+
+En la raíz del repositorio hay un `render.yaml` que crea la API Docker y una
+base PostgreSQL en Render. Despliega el Blueprint desde el panel de Render. El
+archivo genera `MI_BARRIO_JWT_SECRET` en el proveedor y conecta la base mediante
+`DATABASE_URL`; no copies ni subas tu `.env`.
+
+Al finalizar, comprueba la URL HTTPS del servicio en `/health`. Render gratuito
+puede dormir el servicio por inactividad y su PostgreSQL gratuito expira. Sube
+ambos a planes pagos si necesitas API siempre activa o persistencia más allá de
+la prueba. Para inicializar el barrio demo y el SUPER_ADMIN, usa los comandos
+de bootstrap/seed contra la base del despliegue una sola vez; conserva esos
+secretos solo en el panel o en tu entorno local.
+
 ## Sin Docker (desarrollo)
 
 ```

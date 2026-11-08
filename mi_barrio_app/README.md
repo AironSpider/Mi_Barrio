@@ -15,7 +15,7 @@ openssl rand -hex 32
 # Pega el resultado en MI_BARRIO_JWT_SECRET dentro de .env.
 .venv/bin/alembic upgrade head
 .venv/bin/python -m app.features.auth_barrio.platform_admin_bootstrap
-.venv/bin/uvicorn app.main:app --reload --port 8000
+.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 El backend y Alembic leen `.env` al arrancar. Cada integrante del equipo crea
@@ -55,8 +55,39 @@ define la URL de la computadora accesible desde el teléfono, por ejemplo:
 flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000
 ```
 
+Para un teléfono Android físico, conecta la computadora y el teléfono a la misma
+red Wi-Fi, inicia Uvicorn con `--host 0.0.0.0` como arriba y reemplaza la IP del
+ejemplo por la IP local de la computadora. `10.0.2.2` es solo para emuladores
+Android. No expongas el puerto de desarrollo a redes públicas.
+
 `API_BASE_URL` es una variable de compilación de Flutter, no se carga desde el
 `.env` del backend.
+
+### Demo desde cualquier red
+
+El repositorio incluye `render.yaml` para desplegar la API y PostgreSQL en
+Render. Conecta el repositorio a Render y crea un Blueprint desde ese archivo.
+Cuando termine el despliegue, Render mostrará una URL HTTPS fija para
+`mi-barrio-api`; comprueba que `https://TU-URL/health` indique
+`"migrations_up_to_date": true`.
+
+Compila o ejecuta la app una vez con esa URL:
+
+```bash
+flutter run --dart-define=API_BASE_URL=https://TU-URL
+# Para generar un APK de demo:
+flutter build apk --release --dart-define=API_BASE_URL=https://TU-URL
+```
+
+La URL queda incluida en ese build: el APK podrá conectarse desde cualquier
+red sin cambiar la IP de la computadora ni recompilar para cada lugar. No
+compartas el archivo `.env` ni pongas secretos en `--dart-define`.
+
+El Blueprint usa planes gratuitos para facilitar la primera prueba. Render
+puede suspender la API tras inactividad y su PostgreSQL gratuito expira; puede
+haber demora en la primera solicitud y no se debe usar para datos duraderos.
+Para una demo sin espera ni expiración, cambia ambos servicios a planes pagos
+antes de cargar cuentas o datos reales.
 
 ## Pruebas
 

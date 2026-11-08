@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -61,6 +62,32 @@ void main() {
               'message',
               'Correo o contraseña incorrectos',
             ),
+      ),
+    );
+  });
+
+  test('timeout reports useful network setup guidance', () async {
+    final datasource = AuthRemoteDatasource(
+      baseUrl: 'http://192.168.1.20:8000',
+      client: MockClient((_) async {
+        throw TimeoutException('request timed out');
+      }),
+    );
+
+    await expectLater(
+      datasource.register(
+        fullName: 'Vecina',
+        email: 'vecina@example.com',
+        password: 'password123',
+        role: 'VECINO',
+        joinCode: 'BARRIO-01',
+      ),
+      throwsA(
+        isA<AuthException>().having(
+          (error) => error.message,
+          'message',
+          contains('misma red Wi-Fi'),
+        ),
       ),
     );
   });

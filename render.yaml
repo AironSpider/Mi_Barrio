@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: mi-barrio-api
+    runtime: docker
+    plan: free
+    region: ohio
+    dockerfilePath: ./mi_barrio_backend/Dockerfile
+    dockerContext: ./mi_barrio_backend
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mi-barrio-db
+          property: connectionString
+      - key: MI_BARRIO_JWT_SECRET
+        generateValue: true
+
+databases:
+  - name: mi-barrio-db
+    databaseName: mi_barrio
+    user: mi_barrio
+    plan: free
+    region: ohio

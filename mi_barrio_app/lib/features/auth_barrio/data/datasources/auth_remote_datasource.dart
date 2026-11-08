@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -128,6 +129,12 @@ class AuthRemoteDatasource {
       return await request();
     } on AuthException {
       rethrow;
+    } on TimeoutException {
+      throw const AuthException(
+        'No pudimos contactar al servidor. Verifica que esté encendido, '
+        'que tu celular y la computadora estén en la misma red Wi-Fi y '
+        'que la app use la IP de la computadora.',
+      );
     } catch (error) {
       throw AuthException('No se pudo conectar con el servidor: $error');
     }
