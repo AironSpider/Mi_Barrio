@@ -73,9 +73,11 @@ void main() {
         password: 'Clave123',
         role: 'VECINO',
         joinCode: ' barrio-01 ',
+        acceptedTerms: true,
       );
       expect(body['full_name'], 'Rosa Calle');
       expect(body['join_code'], 'BARRIO-01');
+      expect(body['accept_terms'], isTrue, reason: 'sin esto el servidor no crea la cuenta');
     });
 
     test('credenciales malas: el mensaje del servidor y su código', () async {
