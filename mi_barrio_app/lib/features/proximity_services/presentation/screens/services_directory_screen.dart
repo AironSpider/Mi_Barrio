@@ -6,6 +6,7 @@ import '../../../../core/barrio_context/emergency_mode_provider.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
+import '../../../../core/ui_kit/done_confirmation.dart';
 import '../../../../core/ui_kit/podium_frame.dart';
 import '../../../../core/ui_kit/star_rating_display.dart';
 import '../../../../shared/emergency_ranking.dart';
@@ -224,13 +225,12 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
       profile: _merchant,
     );
     if (!published || !mounted) return;
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Servicio publicado. Se sincronizará en segundo plano.'),
-        ),
-      );
+    DoneConfirmation.show(
+      messenger,
+      TenantSession.instance.isApproved
+          ? 'Tu servicio ya está publicado. Se enviará solo cuando haya señal.'
+          : 'Tu servicio quedó guardado. Lo verán tus vecinos cuando la junta apruebe tu cuenta.',
+    );
   }
 
   List<LocalServiceModel> get _visibleServices {
@@ -289,6 +289,10 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
               icon: const Icon(Icons.storefront_rounded),
               label: const Text('Ofrecer servicio'),
             ),
+            if (!TenantSession.instance.isApproved) ...[
+              const SizedBox(height: 8),
+              const _ApprovalPendingNotice(),
+            ],
             const SizedBox(height: 16),
           ],
           TextField(
@@ -504,4 +508,42 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
     ServiceCategory.paseadorMascotas => 'Mascotas',
     _ => ServiceCategory.labels[category] ?? category,
   };
+}
+
+/// Aviso junto a "Ofrecer servicio" mientras la junta no aprueba la cuenta:
+/// puede publicar igual, pero sus vecinos lo verán después de la aprobación.
+class _ApprovalPendingNotice extends StatelessWidget {
+  const _ApprovalPendingNotice();
+
+  static const noticeKey = ValueKey('offer_service_approval_notice');
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      container: true,
+      child: Container(
+        key: noticeKey,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: scheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.hourglass_top_rounded, color: scheme.onSecondaryContainer),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Tu cuenta espera la aprobación de la junta. '
+                'Puedes preparar tu servicio; tus vecinos lo verán cuando te aprueben.',
+                style: TextStyle(color: scheme.onSecondaryContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

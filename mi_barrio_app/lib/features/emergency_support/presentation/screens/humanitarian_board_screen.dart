@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/barrio_context/tenant_session.dart';
+import '../../../../core/ui_kit/dev_tools.dart';
 import '../../../../shared/local_distance.dart';
 import '../../domain/entities/vulnerable_report_entity.dart';
 import '../../domain/repositories/emergency_repository.dart';
@@ -159,7 +159,7 @@ class _HumanitarianBoardScreenState extends State<HumanitarianBoardScreen> {
             ),
             const SizedBox(height: 12),
           ],
-          if (kDebugMode && EmergencyReports.isTemporary)
+          if (DevTools.enabled && EmergencyReports.isTemporary)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../barrio_context/tenant_session.dart';
 import '../../features/solidarity_network/data/datasources/solidarity_sqlite_ds.dart';
+import 'done_confirmation.dart';
 import 'quick_publish_modal.dart';
 
 class QuickPublishLauncher {
@@ -29,15 +30,10 @@ class QuickPublishLauncher {
           flowType: datos.flowType,
           isEmergencyContext: datos.isEmergencyContext,
         );
-        messenger
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Publicación agregada al muro. Se sincronizará en segundo plano.',
-              ),
-            ),
-          );
+        DoneConfirmation.show(
+          messenger,
+          'Tu publicación ya está en el muro. Se enviará sola cuando haya señal.',
+        );
       },
     );
   }

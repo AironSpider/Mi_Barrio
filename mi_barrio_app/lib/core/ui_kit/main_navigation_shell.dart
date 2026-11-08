@@ -7,6 +7,7 @@ import '../../features/proximity_services/presentation/screens/services_director
 import '../../features/proximity_services/presentation/screens/merchant_business_screen.dart';
 import '../../features/solidarity_network/presentation/screens/collaborative_wall_screen.dart';
 import 'app_theme.dart';
+import 'dev_tools.dart';
 import 'global_sync_status_bar.dart';
 import 'quick_publish_fab.dart';
 import '../barrio_context/tenant_session.dart';
@@ -173,7 +174,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           ],
         ),
         actions: [
-          if (kDebugMode && previewChanged != null)
+          if (DevTools.enabled && previewChanged != null)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Tooltip(

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -11,6 +10,7 @@ import 'core/barrio_context/tenant_session.dart';
 import 'core/network/connectivity_monitor.dart';
 import 'core/sync_manager/sync_coordinator.dart';
 import 'core/ui_kit/app_theme.dart';
+import 'core/ui_kit/dev_tools.dart';
 import 'core/ui_kit/main_navigation_shell.dart';
 import 'core/ui_kit/quick_publish_launcher.dart';
 import 'features/auth_barrio/presentation/providers/auth_provider.dart';
@@ -93,7 +93,7 @@ class _MiBarrioAppState extends State<MiBarrioApp> {
       theme: AppTheme.of(isEmergency: _isEmergencyMode),
       home: _AuthGate(
         isEmergencyMode: _isEmergencyMode,
-        onEmergencyPreviewChanged: kDebugMode
+        onEmergencyPreviewChanged: DevTools.enabled
             ? (value) => setState(() => _isEmergencyMode = value)
             : null,
       ),

@@ -97,10 +97,8 @@ void main() {
 
     expect(find.text('Crear cuenta'), findsNWidgets(2));
     expect(find.text('Código de tu barrio'), findsOneWidget);
-    expect(find.text('Vecino'), findsOneWidget);
-    await tester.tap(find.byType(DropdownButtonFormField<UserRole>));
-    await tester.pumpAndSettle();
-    expect(find.text('Comerciante'), findsOneWidget);
+    expect(find.text('Soy vecino'), findsOneWidget);
+    expect(find.text('Tengo un oficio o negocio'), findsOneWidget);
   });
 
   testWidgets('el superadministrador ve el formulario de alta de barrios', (

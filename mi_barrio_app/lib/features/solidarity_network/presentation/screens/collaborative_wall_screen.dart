@@ -9,9 +9,11 @@ import '../../../../core/sync_manager/sync_coordinator.dart';
 import '../../../../core/ui_kit/podium_frame.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../../../shared/emergency_ranking.dart';
+import '../../../../shared/local_distance.dart';
 import '../../data/datasources/solidarity_sqlite_ds.dart';
 import '../../data/models/solidarity_post_model.dart';
 import '../widgets/favor_detail_sheet.dart';
+import '../widgets/post_meta_label.dart';
 import '../widgets/support_groups_section.dart';
 
 class CollaborativeWallScreen extends StatefulWidget {
@@ -311,6 +313,18 @@ class _PostCard extends StatelessWidget {
   final SolidarityPostModel post;
   final VoidCallback onTap;
 
+  /// "hace 2 h · a 300 m" desde el punto de referencia del vecino.
+  String? _metaLabel() {
+    final session = TenantSession.instance;
+    final km = LocalDistance.km(
+      session.centerLat,
+      session.centerLng,
+      post.lat,
+      post.lng,
+    );
+    return PostMetaLabel.build(updatedAtIso: post.updatedAt, distanceKm: km);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -359,6 +373,28 @@ class _PostCard extends StatelessWidget {
               SolidarityModality.labels[post.modality] ?? post.modality,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            if (_metaLabel() case final meta?) ...[
+              const SizedBox(height: 4),
+              Row(
+                key: ValueKey('favor_meta_${post.id}'),
+                children: [
+                  Icon(
+                    Icons.schedule_rounded,
+                    size: 18,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      meta,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             // Antes no se veía si alguien ya estaba ayudando.
             if (post.status == SolidarityStatus.enCoordinacion) ...[
               const SizedBox(height: 6),
