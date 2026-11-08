@@ -187,21 +187,6 @@ class ServicesSqliteDatasource {
     });
   }
 
-  /// Un servicio del barrio por id (null si no existe o fue retirado).
-  Future<LocalServiceModel?> getService(
-    String tenantId,
-    String serviceId,
-  ) async {
-    final db = await _db.database;
-    final rows = await db.query(
-      LocalServiceModel.table,
-      where: 'id = ? AND tenant_id = ? AND is_deleted = 0',
-      whereArgs: [serviceId, tenantId],
-      limit: 1,
-    );
-    return rows.isEmpty ? null : LocalServiceModel.fromSqlite(rows.first);
-  }
-
   /// Fotos guardadas en el teléfono (vacío si aún no se descargaron).
   Future<List<String>> localPhotos(String serviceId) async {
     final db = await _db.database;

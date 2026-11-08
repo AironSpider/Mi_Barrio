@@ -686,29 +686,14 @@ void main() {
   group('Modo emergencia', () {
     setUp(() => EmergencyModeProvider.instance.resetForTesting());
 
-    test('el toggle local se guarda y se recupera al reabrir', () async {
+    test('la bandera de la junta enciende y apaga el modo', () async {
       final p = EmergencyModeProvider.instance;
-      await p.setLocal(true);
-      expect(p.isActive.value, isTrue);
-
-      p.resetForTesting();
       await p.load();
+      expect(p.isActive.value, isFalse);
+      await p.setTenantFlag(true);
       expect(p.isActive.value, isTrue);
+      await p.setTenantFlag(false);
+      expect(p.isActive.value, isFalse);
     });
-
-    test(
-      'si la junta vecinal la activa, el vecino no puede apagarla',
-      () async {
-        final p = EmergencyModeProvider.instance;
-        await p.load();
-        p.setTenantFlag(true);
-        expect(p.isActive.value, isTrue);
-        expect(p.isLockedByTenant.value, isTrue);
-        await p.setLocal(false);
-        expect(p.isActive.value, isTrue);
-        p.setTenantFlag(false);
-        expect(p.isActive.value, isFalse);
-      },
-    );
   });
 }

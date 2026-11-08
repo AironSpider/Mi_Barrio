@@ -76,8 +76,6 @@ class SyncCoordinator {
   bool _running = false;
   bool _runAgain = false;
 
-  bool get isRunning => _running;
-
   /// Llamar una vez en main(), después de `ConnectivityMonitor.instance.start()`.
   Future<void> start({
     SyncWorker? worker,

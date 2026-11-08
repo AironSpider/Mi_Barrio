@@ -117,9 +117,6 @@ class LocalServiceModel {
   /// Hasta 4 fotos por servicio (mismo tope que el servidor).
   static const maxPhotos = 4;
 
-  bool get hasContact =>
-      (contactPhone?.trim().isNotEmpty ?? false) ||
-      (contactWhatsapp?.trim().isNotEmpty ?? false);
   final double lat;
   final double lng;
   final bool isDeleted;

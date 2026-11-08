@@ -42,9 +42,6 @@ class ServicesDirectoryScreen extends StatefulWidget {
 }
 
 class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
-  /// "Todos" + todos los rubros (fila deslizable).
-  static final _categories = <String?>[null, ...ServiceCategory.labels.keys];
-
   late final String _tenantId;
   late final String _userId;
   late final ServicesSqliteDatasource _servicesDatasource;
@@ -229,9 +226,8 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
           title: 'Oficio',
           allLabel: 'Todos',
           options: [
-            for (final category in _categories)
-              if (category != null)
-                FilterOption(category, ServiceCategoryUi.shortLabel(category)),
+            for (final category in ServiceCategory.labels.keys)
+              FilterOption(category, ServiceCategoryUi.shortLabel(category)),
           ],
         ),
         DistanceFilter.group,
@@ -266,8 +262,10 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
         if (!DistanceFilter.matches(distance, km)) return false;
       }
       if (query.isEmpty) return true;
+      final categoryLabel = ServiceCategory.labels[service.category] ?? '';
       return service.title.toLowerCase().contains(query) ||
           service.description.toLowerCase().contains(query) ||
+          categoryLabel.toLowerCase().contains(query) ||
           (service.publisherName?.toLowerCase().contains(query) ?? false);
     }).toList(growable: false);
   }

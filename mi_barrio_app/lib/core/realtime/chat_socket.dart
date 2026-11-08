@@ -45,6 +45,11 @@ class ChatSocket {
   int _users = 0;
   int _attempt = 0;
 
+  /// Sube en cada conexión y cierre: una conexión que termina de abrir
+  /// después de un cierre (salir y entrar rápido al chat) se descarta en vez
+  /// de quedar duplicada.
+  int _generation = 0;
+
   /// Solo para tests: simula un mensaje recibido por el WebSocket.
   @visibleForTesting
   void injectForTesting(ChatMessage message) => _messages.add(message);
@@ -74,11 +79,12 @@ class ChatSocket {
 
   Future<void> _connect() async {
     if (_users == 0) return;
+    final generation = ++_generation;
     status.value = RealtimeStatus.connecting;
     try {
       final channel = connector(_uri());
       await channel.ready;
-      if (_users == 0) {
+      if (_users == 0 || generation != _generation) {
         await channel.sink.close();
         return;
       }
@@ -95,7 +101,7 @@ class ChatSocket {
         (_) => _channel?.sink.add('ping'),
       );
     } catch (_) {
-      _onLost();
+      if (generation == _generation) _onLost();
     }
   }
 
@@ -137,6 +143,7 @@ class ChatSocket {
   }
 
   void _close() {
+    _generation++;
     _retry?.cancel();
     _retry = null;
     _cleanup();

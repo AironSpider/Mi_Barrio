@@ -448,6 +448,9 @@ class SyncWorker {
                   : value;
             }
             row['sync_status'] = 'SYNCED';
+            if (table == 'local_services') {
+              await _dropStalePhotos(txn, row);
+            }
             await txn.insert(
               table,
               row,
@@ -489,6 +492,29 @@ class SyncWorker {
       // Sin conexion: el usuario sigue usando sus datos locales sin error.
       return PullResult(success: false, message: e.toString(), retryable: true);
     }
+  }
+
+  /// El comerciante pudo cambiar las fotos: si el servicio llega con otra
+  /// versión, se borran las guardadas y el detalle las vuelve a pedir.
+  static Future<void> _dropStalePhotos(
+    DatabaseExecutor txn,
+    Map<String, Object?> incoming,
+  ) async {
+    final local = await txn.query(
+      'local_services',
+      columns: ['updated_at'],
+      where: 'id = ?',
+      whereArgs: [incoming['id']],
+      limit: 1,
+    );
+    if (local.isEmpty || local.first['updated_at'] == incoming['updated_at']) {
+      return;
+    }
+    await txn.delete(
+      'service_photos',
+      where: 'service_id = ?',
+      whereArgs: [incoming['id']],
+    );
   }
 
   /// Hasta dónde quedó al día este teléfono.

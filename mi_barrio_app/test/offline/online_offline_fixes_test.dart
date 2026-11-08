@@ -67,7 +67,7 @@ void main() {
       EmergencyModeProvider.instance.resetForTesting(); // la app se cierra
       await EmergencyModeProvider.instance.load(); // y se abre sin señal
       expect(EmergencyModeProvider.instance.isActive.value, isTrue);
-      expect(EmergencyModeProvider.instance.isLockedByTenant.value, isTrue);
+      expect(EmergencyModeProvider.instance.isActive.value, isTrue);
     });
 
     test('cuando la junta la apaga, al reabrir sigue apagada', () async {

@@ -212,9 +212,10 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
         serviceId: widget.service.id,
       );
       if (mounted) await _load();
-      // Fotos: las guardadas en el teléfono primero; si faltan, del servidor.
+      // Fotos: las guardadas en el teléfono primero; si no coinciden con las
+      // del servicio (faltan o cambiaron), del servidor.
       if (widget.service.photoCount > 0 &&
-          _photos.length < widget.service.photoCount) {
+          _photos.length != widget.service.photoCount) {
         final photos = await remote.fetchServicePhotos(
           tenantId: _tenantId,
           serviceId: widget.service.id,

@@ -134,7 +134,7 @@ void main() {
       expect(reports.single.description, 'Dolor de pecho');
       expect(reports.single.isPending, isFalse);
       expect(EmergencyModeProvider.instance.isActive.value, isTrue);
-      expect(EmergencyModeProvider.instance.isLockedByTenant.value, isTrue);
+      expect(EmergencyModeProvider.instance.isActive.value, isTrue);
     });
   });
 

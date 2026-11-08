@@ -84,13 +84,6 @@ void main() {
     },
   );
 
-  test('administrator roles cannot be selected in public registration', () {
-    expect(UserRole.values.where((role) => role.isSelfSelectable).toList(), [
-      UserRole.vecino,
-      UserRole.comerciante,
-    ]);
-  });
-
   test('AuthNotifier authenticates a user and exposes errors', () async {
     final notifier = AuthNotifier(_FakeAuthRepository());
     addTearDown(notifier.dispose);

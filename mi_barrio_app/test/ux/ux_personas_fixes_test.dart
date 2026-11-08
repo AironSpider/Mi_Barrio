@@ -102,7 +102,6 @@ void main() {
       final svc = (await ServicesSqliteDatasource().getServices(tenant)).single;
       expect(svc.contactPhone, '+51900000001');
       expect(svc.contactWhatsapp, '987654321');
-      expect(svc.hasContact, isTrue);
       expect(svc.toSyncPayload().containsKey('contact_phone'), isFalse, reason: 'el teléfono no lo envía');
     });
 

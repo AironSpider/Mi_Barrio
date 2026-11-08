@@ -97,8 +97,15 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.neighborUserId,
       );
       if (!mounted) return;
+      // Lo que llegó por WebSocket mientras se cargaba no se pierde.
+      final loaded = {for (final m in list) m.id};
+      final arrived = [
+        for (final m in _messages)
+          if (!loaded.contains(m.id)) m,
+      ];
       setState(() {
-        _messages = list;
+        _messages = [...list, ...arrived]
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
         _loading = false;
         _error = null;
       });

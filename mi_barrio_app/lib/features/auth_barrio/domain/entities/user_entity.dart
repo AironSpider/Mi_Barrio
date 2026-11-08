@@ -9,9 +9,6 @@ enum UserRole {
   final String apiValue;
   final String label;
 
-  bool get isSelfSelectable =>
-      this == UserRole.vecino || this == UserRole.comerciante;
-
   static UserRole fromApi(String value) => switch (value.trim().toUpperCase()) {
     'VECINO' => UserRole.vecino,
     'COMERCIANTE' => UserRole.comerciante,
