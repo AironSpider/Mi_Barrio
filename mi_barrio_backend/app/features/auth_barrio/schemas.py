@@ -33,6 +33,8 @@ class RegisterRequest(BaseModel):
     password: Password
     role: Literal["VECINO", "COMERCIANTE"]
     join_code: str = Field(..., min_length=3, max_length=20)
+    # Casilla "Acepto los Términos…": sin ella no se crea la cuenta.
+    accept_terms: bool = False
 
 
 class LoginRequest(BaseModel):
@@ -88,6 +90,8 @@ class GoogleLoginRequest(BaseModel):
     # Solo para crear la cuenta la primera vez: a qué barrio entra y con qué rol.
     join_code: str | None = Field(default=None, min_length=3, max_length=20)
     role: Literal["VECINO", "COMERCIANTE"] = "VECINO"
+    # Obligatorio solo cuando se CREA la cuenta (primera vez con Google).
+    accept_terms: bool = False
 
 
 class SetPasswordRequest(BaseModel):

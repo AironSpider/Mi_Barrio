@@ -122,34 +122,34 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
 
   /// Grupos del modal de filtros (los valores son los mismos del servidor).
   List<FilterGroup> get _filterGroups => [
-        const FilterGroup(
-          id: _flowGroup,
-          title: 'Modalidad',
-          allLabel: 'Todas',
-          options: [
-            FilterOption(SolidarityFlowType.solicitoAyuda, 'Pedir'),
-            FilterOption(SolidarityFlowType.ofrezcoAyuda, 'Brindar'),
-          ],
-        ),
-        const FilterGroup.toggle(id: _mineGroup, title: 'Seleccionar los míos'),
-        const FilterGroup.toggle(
-          id: _emergencyGroup,
-          title: 'Seleccionar apoyo de emergencia',
-        ),
-        FilterGroup(
-          id: _typeGroup,
-          title: 'Tipo',
-          multiple: true,
-          options: [
-            for (final entry in SolidarityModality.labels.entries)
-              // "Recurso crítico" solo existe en emergencia.
-              if (entry.key != SolidarityModality.recursoCritico ||
-                  EmergencyModeProvider.instance.isActive.value)
-                FilterOption(entry.key, entry.value),
-          ],
-        ),
-        DistanceFilter.group,
-      ];
+    const FilterGroup(
+      id: _flowGroup,
+      title: 'Modalidad',
+      allLabel: 'Todas',
+      options: [
+        FilterOption(SolidarityFlowType.solicitoAyuda, 'Pedir'),
+        FilterOption(SolidarityFlowType.ofrezcoAyuda, 'Brindar'),
+      ],
+    ),
+    const FilterGroup.toggle(id: _mineGroup, title: 'Seleccionar los míos'),
+    const FilterGroup.toggle(
+      id: _emergencyGroup,
+      title: 'Seleccionar apoyo de emergencia',
+    ),
+    FilterGroup(
+      id: _typeGroup,
+      title: 'Tipo',
+      multiple: true,
+      options: [
+        for (final entry in SolidarityModality.labels.entries)
+          // "Recurso crítico" solo existe en emergencia.
+          if (entry.key != SolidarityModality.recursoCritico ||
+              EmergencyModeProvider.instance.isActive.value)
+            FilterOption(entry.key, entry.value),
+      ],
+    ),
+    DistanceFilter.group,
+  ];
 
   static const _flowGroup = 'modalidad';
   static const _typeGroup = 'tipo';
@@ -159,11 +159,11 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
   /// En modo emergencia el filtro "de emergencia" viene encendido (el vecino
   /// puede apagarlo); al salir del modo se apaga.
   FilterSelection _withEmergencyDefault(FilterSelection current) => {
-        ...current,
-        _emergencyGroup: {
-          if (EmergencyModeProvider.instance.isActive.value) FilterGroup.on,
-        },
-      };
+    ...current,
+    _emergencyGroup: {
+      if (EmergencyModeProvider.instance.isActive.value) FilterGroup.on,
+    },
+  };
 
   bool get _hasFilters =>
       _searchQuery.trim().isNotEmpty || activeFilterCount(_filters) > 0;
@@ -176,31 +176,37 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
     final mine = isToggleOn(_filters, _mineGroup);
     final emergencyOnly = isToggleOn(_filters, _emergencyGroup);
     final session = TenantSession.instance;
-    return _posts.where((post) {
-      if (mine && post.authorUserId != session.userId) return false;
-      if (emergencyOnly && !post.isEmergencyContext) return false;
-      if (flows != null && flows.isNotEmpty && !flows.contains(post.flowType)) {
-        return false;
-      }
-      if (types != null && types.isNotEmpty && !types.contains(post.modality)) {
-        return false;
-      }
-      if (distance != null && distance.isNotEmpty) {
-        final km = LocalDistance.km(
-          session.centerLat,
-          session.centerLng,
-          post.lat,
-          post.lng,
-        );
-        if (!DistanceFilter.matches(distance, km)) return false;
-      }
-      if (query.isNotEmpty &&
-          !post.title.toLowerCase().contains(query) &&
-          !(post.description?.toLowerCase().contains(query) ?? false)) {
-        return false;
-      }
-      return true;
-    }).toList(growable: false);
+    return _posts
+        .where((post) {
+          if (mine && post.authorUserId != session.userId) return false;
+          if (emergencyOnly && !post.isEmergencyContext) return false;
+          if (flows != null &&
+              flows.isNotEmpty &&
+              !flows.contains(post.flowType)) {
+            return false;
+          }
+          if (types != null &&
+              types.isNotEmpty &&
+              !types.contains(post.modality)) {
+            return false;
+          }
+          if (distance != null && distance.isNotEmpty) {
+            final km = LocalDistance.km(
+              session.centerLat,
+              session.centerLng,
+              post.lat,
+              post.lng,
+            );
+            if (!DistanceFilter.matches(distance, km)) return false;
+          }
+          if (query.isNotEmpty &&
+              !post.title.toLowerCase().contains(query) &&
+              !(post.description?.toLowerCase().contains(query) ?? false)) {
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
   }
 
   /// Detalle en pantalla completa (foto, contacto, chat, comentarios, reseñas).
@@ -295,7 +301,8 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
               message: _hasFilters
                   ? 'No hay publicaciones con esa búsqueda o esos filtros.'
                   : 'Todavía no hay publicaciones. Sé el primero en compartir algo con tu barrio.',
-              action: _hasFilters ||
+              action:
+                  _hasFilters ||
                       EmergencyModeProvider.instance.isActive.value ||
                       PublishAction.maybeOf(context) == null
                   ? null
@@ -309,7 +316,9 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
               child: Column(
-                key: ValueKey('wall_list_${EmergencyModeProvider.instance.isActive.value}'),
+                key: ValueKey(
+                  'wall_list_${EmergencyModeProvider.instance.isActive.value}',
+                ),
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: _buildPostList(),
               ),
@@ -437,133 +446,153 @@ class _PostCard extends StatelessWidget {
         highlightColor: isOwn ? AppPalette.filterActiveBackground : null,
         splashColor: isOwn ? AppPalette.filterActiveBackground : null,
         onTap: onTap,
-        child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Chip(
-                  // Ícono con fondo blanco en las tarjetas propias.
-                  backgroundColor: isOwn ? Colors.white : null,
-                  avatar: Icon(
-                    isOffer ? Icons.favorite_rounded : Icons.back_hand_rounded,
-                    size: 18,
-                    color: colorScheme.primary,
-                  ),
-                  label: Text(isOffer ? 'Brindo ayuda' : 'Pido ayuda'),
-                ),
-                if (isOwn)
-                  Chip(
-                    key: ValueKey('own_post_${post.id}'),
-                    backgroundColor: Colors.white,
-                    label: Text(
-                      'Tuyo',
-                      style: TextStyle(
-                        color: colores.accentText,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                if (isOwn && post.isUnderReview)
-                  Chip(
-                    backgroundColor: AppPalette.failedBackground,
-                    label: Text(
-                      'En revisión',
-                      style: TextStyle(color: colores.urgencyCritical),
-                    ),
-                  ),
-                if (post.isEmergencyContext)
-                  const Chip(
-                    avatar: Icon(Icons.emergency_rounded, size: 18),
-                    label: Text('Emergencia'),
-                  ),
-                if (post.hasPhoto)
-                  const Chip(
-                    avatar: Icon(Icons.photo_camera_rounded, size: 18),
-                    label: Text('Con foto'),
-                  ),
-                if (post.isPending) SyncStatusChip.fromPending(true),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              post.title,
-              style: Theme.of(context).textTheme.titleLarge,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              [
-                SolidarityModality.labels[post.modality] ?? post.modality,
-                if (post.authorUserId == TenantSession.instance.userId)
-                  'publicado por ti'
-                else if (post.authorName != null)
-                  'por ${post.authorName}',
-              ].join(' · '),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            if (_metaLabel() case final meta?) ...[
-              const SizedBox(height: 4),
-              Row(
-                key: ValueKey('favor_meta_${post.id}'),
+        // Para el lector de pantalla, la tarjeta es UN botón que lee todo
+        // junto ("Pido ayuda, Préstamo de escalera, hace 2 h…").
+        excludeFromSemantics: true,
+        child: MergeSemantics(
+          child: Semantics(
+            button: true,
+            onTap: onTap,
+            hint: 'Toca dos veces para ver el detalle',
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.schedule_rounded,
-                    size: 18,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      meta,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Chip(
+                        // Ícono con fondo blanco en las tarjetas propias.
+                        backgroundColor: isOwn ? Colors.white : null,
+                        avatar: Icon(
+                          isOffer
+                              ? Icons.favorite_rounded
+                              : Icons.back_hand_rounded,
+                          size: 18,
+                          color: colorScheme.primary,
+                        ),
+                        label: Text(isOffer ? 'Brindo ayuda' : 'Pido ayuda'),
                       ),
+                      if (isOwn)
+                        Chip(
+                          key: ValueKey('own_post_${post.id}'),
+                          backgroundColor: Colors.white,
+                          label: Text(
+                            'Tuyo',
+                            style: TextStyle(
+                              color: colores.accentText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      if (isOwn && post.isUnderReview)
+                        Chip(
+                          backgroundColor: AppPalette.failedBackground,
+                          label: Text(
+                            'En revisión',
+                            style: TextStyle(color: colores.urgencyCritical),
+                          ),
+                        ),
+                      if (post.isEmergencyContext)
+                        const Chip(
+                          avatar: Icon(Icons.emergency_rounded, size: 18),
+                          label: Text('Emergencia'),
+                        ),
+                      if (post.hasPhoto)
+                        const Chip(
+                          avatar: Icon(Icons.photo_camera_rounded, size: 18),
+                          label: Text('Con foto'),
+                        ),
+                      if (post.isPending) SyncStatusChip.fromPending(true),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    post.title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      SolidarityModality.labels[post.modality] ?? post.modality,
+                      if (post.authorUserId == TenantSession.instance.userId)
+                        'publicado por ti'
+                      else if (post.authorName != null)
+                        'por ${post.authorName}',
+                    ].join(' · '),
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  if (_metaLabel() case final meta?) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      key: ValueKey('favor_meta_${post.id}'),
+                      children: [
+                        Icon(
+                          Icons.schedule_rounded,
+                          size: 18,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            meta,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  // Antes no se veía si alguien ya estaba ayudando.
+                  if (post.status == SolidarityStatus.enCoordinacion) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      key: ValueKey('favor_coordinating_${post.id}'),
+                      children: [
+                        Icon(
+                          Icons.handshake_rounded,
+                          size: 20,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            post.coordinatorName != null
+                                ? '${post.coordinatorName} ya está ayudando'
+                                : 'Alguien ya está ayudando',
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (post.description != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      post.description!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Ver detalle, comentarios y contacto ›',
+                      style: Theme.of(context).textTheme.labelLarge
+                          ?.copyWith(color: colorScheme.primary),
                     ),
                   ),
                 ],
               ),
-            ],
-            // Antes no se veía si alguien ya estaba ayudando.
-            if (post.status == SolidarityStatus.enCoordinacion) ...[
-              const SizedBox(height: 6),
-              Row(
-                key: ValueKey('favor_coordinating_${post.id}'),
-                children: [
-                  Icon(Icons.handshake_rounded, size: 20, color: colorScheme.primary),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      post.coordinatorName != null
-                          ? '${post.coordinatorName} ya está ayudando'
-                          : 'Alguien ya está ayudando',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (post.description != null) ...[
-              const SizedBox(height: 8),
-              Text(post.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
-            ],
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                'Ver detalle, comentarios y contacto ›',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(color: colorScheme.primary),
-              ),
             ),
-          ],
+          ),
         ),
-      ),
       ),
     );
   }

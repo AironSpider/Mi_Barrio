@@ -68,11 +68,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   /// Con Google no hace falta nombre, correo ni contraseña: solo el barrio y el rol.
+  /// Casilla de Términos: obligatoria para las dos formas de crear la cuenta.
+  final _termsField = GlobalKey<FormFieldState<bool>>();
+
+  bool get _termsAccepted => _termsField.currentState?.value == true;
+
+  /// Si falta la casilla, la muestra (puede estar arriba, fuera de la vista).
+  bool _checkTerms() {
+    final ok = _termsField.currentState?.validate() ?? false;
+    final target = _termsField.currentContext;
+    if (!ok && target != null) {
+      Scrollable.ensureVisible(
+        target,
+        alignment: 0.3,
+        duration: const Duration(milliseconds: 300),
+      );
+    }
+    return ok;
+  }
+
   Future<void> _google() async {
     if (!(_joinCodeField.currentState?.validate() ?? false)) {
       setState(() => _googleError = 'Primero escribe el código de tu barrio.');
       return;
     }
+    if (!_checkTerms()) return;
     setState(() {
       _googleBusy = true;
       _googleError = null;
@@ -82,6 +102,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       ref,
       joinCode: _joinCode.text,
       role: _role,
+      acceptedTerms: _termsAccepted,
     );
     if (!mounted) return;
     if (error == null && ref.read(authProvider).user != null) {
@@ -146,7 +167,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) return;
+    final valid = _formKey.currentState!.validate();
+    if (!_checkTerms() || !valid) return;
     await RegisterDraft.save(
       RegisterDraft(
         joinCode: _joinCode.text.trim(),
@@ -163,6 +185,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           password: _password.text,
           role: _role,
           joinCode: _joinCode.text,
+          acceptedTerms: _termsAccepted,
         );
     if (mounted &&
         ref.read(authProvider).status != AuthStatus.error &&
@@ -244,7 +267,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     ...[
                       const SizedBox(height: 16),
-                      const LegalConsentText(),
+                      TermsAcceptanceField(
+                        key: _termsField,
+                        enabled: !loading,
+                      ),
                       const SizedBox(height: 16),
                       GoogleSignInButton(
                         label: 'Registrarme con Google',
@@ -253,11 +279,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                       if (_googleError != null) ...[
                         const SizedBox(height: 8),
-                        Text(
+                        Semantics(
+                          // El lector de pantalla lo anuncia apenas aparece.
+                          liveRegion: true,
+                          child: Text(
                           _googleError!,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.error,
                           ),
+                        ),
                         ),
                       ],
                       const SizedBox(height: 16),
@@ -341,11 +371,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     if (auth.message != null) ...[
                       const SizedBox(height: 12),
-                      Text(
+                      Semantics(
+                        // El lector de pantalla lo anuncia apenas aparece.
+                        liveRegion: true,
+                        child: Text(
                         auth.message!,
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.error,
                         ),
+                      ),
                       ),
                     ],
                     const SizedBox(height: 20),

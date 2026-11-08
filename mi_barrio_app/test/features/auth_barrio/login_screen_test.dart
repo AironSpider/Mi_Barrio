@@ -37,6 +37,7 @@ class _FakeAuthRepository implements AuthRepository {
     required String password,
     required UserRole role,
     required String joinCode,
+    required bool acceptedTerms,
   }) async => throw UnimplementedError();
 
   @override
@@ -47,6 +48,7 @@ class _FakeAuthRepository implements AuthRepository {
     required String idToken,
     String? joinCode,
     UserRole role = UserRole.vecino,
+    bool acceptedTerms = false,
   }) => throw UnimplementedError();
 
   @override

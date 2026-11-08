@@ -87,7 +87,7 @@ def register(base: str, join_code: str, role: str, name: str = "Vecino de prueba
     password = secrets.token_urlsafe(14)
     s, r = http(base, "POST", "/api/v1/auth/register", {
         "full_name": name, "email": email, "password": password,
-        "role": role, "join_code": join_code})
+        "role": role, "join_code": join_code, "accept_terms": True})
     if s != 201:
         raise RuntimeError(f"No se pudo registrar {role}: {s} {r}")
     return {

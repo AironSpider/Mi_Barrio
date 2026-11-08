@@ -66,6 +66,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
     required UserRole role,
     required String joinCode,
+    required bool acceptedTerms,
   }) async {
     final response = await _remote.register(
       fullName: fullName,
@@ -73,6 +74,7 @@ class AuthRepositoryImpl implements AuthRepository {
       password: password,
       role: role.apiValue,
       joinCode: joinCode,
+      acceptedTerms: acceptedTerms,
     );
     return _afterAuth(await _persistResponse(response), online: true);
   }
@@ -82,11 +84,13 @@ class AuthRepositoryImpl implements AuthRepository {
     required String idToken,
     String? joinCode,
     UserRole role = UserRole.vecino,
+    bool acceptedTerms = false,
   }) async {
     final response = await _remote.googleLogin(
       idToken: idToken,
       joinCode: joinCode,
       role: role.apiValue,
+      acceptedTerms: acceptedTerms,
     );
     return _afterAuth(await _persistResponse(response), online: true);
   }

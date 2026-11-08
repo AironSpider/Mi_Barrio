@@ -306,10 +306,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
-                    Text(
+                    Semantics(
+                      // El lector de pantalla lo anuncia apenas aparece.
+                      liveRegion: true,
+                      child: Text(
                       _error!,
                       key: ForgotPasswordScreen.messageKey,
                       style: texto.bodyMedium?.copyWith(color: esquema.error),
+                    ),
                     ),
                   ],
                 ],

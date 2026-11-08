@@ -40,12 +40,14 @@ class AuthRemoteDatasource {
     required String password,
     required String role,
     required String joinCode,
+    required bool acceptedTerms,
   }) => _post('/api/v1/auth/register', {
     'full_name': fullName.trim(),
     'email': email.trim().toLowerCase(),
     'password': password,
     'role': role,
     'join_code': joinCode.trim().toUpperCase(),
+    'accept_terms': acceptedTerms,
   });
 
   /// Entrar (o crear la cuenta) con el ID token de Google.
@@ -54,11 +56,13 @@ class AuthRemoteDatasource {
     required String idToken,
     String? joinCode,
     String role = 'VECINO',
+    bool acceptedTerms = false,
   }) => _post('/api/v1/auth/google', {
     'id_token': idToken,
     if (joinCode != null && joinCode.trim().isNotEmpty)
       'join_code': joinCode.trim().toUpperCase(),
     'role': role,
+    'accept_terms': acceptedTerms,
   });
 
   /// Envía (otra vez) el código de 6 dígitos para confirmar el correo.
@@ -260,7 +264,7 @@ class AuthRemoteDatasource {
 
   Future<Map<String, dynamic>> _post(
     String path,
-    Map<String, String> body,
+    Map<String, Object?> body,
   ) async {
     final response = await _request(
       () => _client

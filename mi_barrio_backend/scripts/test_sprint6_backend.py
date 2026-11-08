@@ -120,6 +120,7 @@ def main() -> int:
             "password": password,
             "role": "VECINO",
             "join_code": JOIN_CODE,
+            "accept_terms": True,
         },
         tenant=None,
         authenticated=False,

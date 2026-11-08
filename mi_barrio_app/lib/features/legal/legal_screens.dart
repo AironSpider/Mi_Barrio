@@ -149,9 +149,13 @@ class LegalConsentText extends StatefulWidget {
   const LegalConsentText({
     super.key,
     this.prefix = 'Al crear tu cuenta aceptas los ',
+    this.alignStart = false,
   });
 
   final String prefix;
+
+  /// true dentro de la casilla de aceptación (texto a la izquierda).
+  final bool alignStart;
 
   @override
   State<LegalConsentText> createState() => _LegalConsentTextState();
@@ -188,7 +192,7 @@ class _LegalConsentTextState extends State<LegalConsentText> {
     );
     return Text.rich(
       key: const ValueKey('legal_consent_text'),
-      textAlign: TextAlign.center,
+      textAlign: widget.alignStart ? TextAlign.start : TextAlign.center,
       TextSpan(
         style: base,
         children: [
@@ -213,6 +217,118 @@ class _LegalConsentTextState extends State<LegalConsentText> {
           const TextSpan(text: '.'),
         ],
       ),
+    );
+  }
+}
+
+/// Casilla OBLIGATORIA para crear una cuenta: "Acepto los Términos…".
+///
+/// Es un campo del formulario: si no está marcada, "Crear cuenta" muestra el
+/// error debajo y el lector de pantalla lo anuncia. Los enlaces abren cada
+/// documento sin marcar la casilla (se pueden leer antes de aceptar).
+class TermsAcceptanceField extends FormField<bool> {
+  TermsAcceptanceField({
+    super.key,
+    super.enabled,
+    ValueChanged<bool>? onChanged,
+  }) : super(
+         initialValue: false,
+         validator: (value) => value == true ? null : missingMessage,
+         builder: (field) => _TermsAcceptanceBody(
+           field: field,
+           enabled: field.widget.enabled,
+           onChanged: onChanged,
+         ),
+       );
+
+  static const checkboxKey = ValueKey('terms_checkbox');
+  static const missingMessage =
+      'Para crear tu cuenta, marca que aceptas los Términos y condiciones.';
+}
+
+class _TermsAcceptanceBody extends StatelessWidget {
+  const _TermsAcceptanceBody({
+    required this.field,
+    required this.enabled,
+    this.onChanged,
+  });
+
+  final FormFieldState<bool> field;
+  final bool enabled;
+  final ValueChanged<bool>? onChanged;
+
+  void _toggle() {
+    final next = !(field.value ?? false);
+    field.didChange(next);
+    // Si ya mostraba "marca que aceptas…", el error se va al marcarla.
+    if (field.hasError) field.validate();
+    onChanged?.call(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final error = field.errorText;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: error != null
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.outlineVariant,
+              width: error != null ? 2 : 1,
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Área táctil de 48 px y una etiqueta completa para el lector.
+              Semantics(
+                label: 'Acepto los Términos y condiciones, la Política de '
+                    'privacidad y las Normas de la comunidad',
+                hint: 'Obligatorio para crear la cuenta',
+                child: Checkbox(
+                  key: TermsAcceptanceField.checkboxKey,
+                  value: field.value ?? false,
+                  onChanged: enabled ? (_) => _toggle() : null,
+                  materialTapTargetSize: MaterialTapTargetSize.padded,
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  // Para el lector de pantalla la casilla ya se marca sola
+                  // (con su etiqueta); aquí solo se anuncian los enlaces.
+                  excludeFromSemantics: true,
+                  onTap: enabled ? _toggle : null,
+                  // El lector ya leyó la casilla; aquí solo quedan los enlaces.
+                  child: const LegalConsentText(
+                    prefix: 'Acepto los ',
+                    alignStart: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 12),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                error,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

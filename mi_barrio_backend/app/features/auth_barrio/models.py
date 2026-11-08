@@ -74,6 +74,9 @@ class User(Base, BarrioBaseMixin):
     )
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reports_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Casilla obligatoria al crear la cuenta (NULL en cuentas anteriores).
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    terms_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class PlatformAdmin(Base):

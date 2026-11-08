@@ -58,7 +58,7 @@ def main() -> int:
 
     s, r = http(BASE, "POST", "/api/v1/auth/register", {
         "full_name": "Rosa Nueva", "email": me["email"], "password": "Nueva1234x",
-        "role": "VECINO", "join_code": code})
+        "role": "VECINO", "join_code": code, "accept_terms": True})
     check("el correo queda libre para otra cuenta", s == 201, f"{s} {r}")
 
     print(f"\n{'TODO OK' if not failures else f'{failures} FALLAS'}")

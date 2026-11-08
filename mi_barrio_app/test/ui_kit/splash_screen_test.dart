@@ -20,4 +20,14 @@ void main() {
     // Ingresar o registrarse no cambia la pantalla de ingreso por la bienvenida.
     expect(const AuthState.loading().restoring, isFalse);
   });
+
+  testWidgets('la bienvenida cumple contraste y anuncia el estado', (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(const MaterialApp(home: SplashScreen()));
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    expect(find.bySemanticsLabel('Abriendo tu barrio…'), findsOneWidget);
+    await tester.pump(SplashScreen.slowAfter);
+    await tester.pump(const Duration(milliseconds: 300));
+    handle.dispose();
+  });
 }

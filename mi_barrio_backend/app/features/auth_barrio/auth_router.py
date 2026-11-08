@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -13,6 +14,7 @@ from app.core.database import get_db_session
 from app.core.tenant_middleware import require_role
 from app.features.auth_barrio import account_codes
 from app.features.auth_barrio.models import PlatformAdmin, Tenant, User
+from app.shared.contract_values import TERMS_VERSION
 from app.features.auth_barrio.schemas import (
     AuthResponse,
     AuthUserResponse,
@@ -56,6 +58,23 @@ def _too_many_attempts(seconds: int) -> HTTPException:
         detail=f"Demasiados intentos fallidos. Vuelve a intentar en {minutes} min.",
         headers={"Retry-After": str(seconds)},
     )
+
+
+TERMS_REQUIRED = (
+    "Para crear tu cuenta debes aceptar los Términos y condiciones, la "
+    "Política de privacidad y las Normas de la comunidad."
+)
+
+
+def require_terms(accepted: bool) -> None:
+    """Sin la casilla marcada no se crea ninguna cuenta (ni con Google)."""
+    if not accepted:
+        raise HTTPException(status_code=422, detail=TERMS_REQUIRED)
+
+
+def stamp_terms(user: User) -> None:
+    user.terms_accepted_at = datetime.now(timezone.utc)
+    user.terms_version = TERMS_VERSION
 
 
 async def ensure_not_suspended(db: AsyncSession, user: User) -> None:
@@ -108,6 +127,7 @@ def _auth_response(user: User, tenant: Tenant) -> AuthResponse:
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_session)):
     email = payload.email.strip().lower()
+    require_terms(payload.accept_terms)
     # Correos desechables, con errores de tipeo o de dominios que no existen
     # nunca recibirían el código: se rechazan antes de crear la cuenta.
     await email_validation.ensure_real_email(email)
@@ -135,6 +155,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
         user.role = payload.role
         user.home_lat = tenant.center_lat
         user.home_lng = tenant.center_lng
+        stamp_terms(user)
     else:
         user = User(
             id=uuid.uuid4(),
@@ -150,6 +171,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
             home_lng=tenant.center_lng,
             tutorial_completed=False,
         )
+        stamp_terms(user)
         db.add(user)
     try:
         await db.commit()

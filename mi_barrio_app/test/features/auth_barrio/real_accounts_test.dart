@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +23,7 @@ import 'package:mi_barrio_app/features/auth_barrio/presentation/register_draft.d
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/verify_email_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/widgets/account_widgets.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/widgets/auth_validators.dart';
+import 'package:mi_barrio_app/features/legal/legal_screens.dart';
 
 /// Cuentas reales: validaciones, Google, confirmar correo y recuperar contraseña.
 
@@ -62,6 +64,8 @@ class _FakeGoogle implements GoogleIdTokenSource {
 
 class _FakeRepo implements AuthRepository {
   final googleCalls = <(String, String?, UserRole)>[];
+  final googleTerms = <bool>[];
+  final registerTerms = <bool>[];
   final verifyCodes = <String>[];
   final resetCalls = <(String, String, String)>[];
   final resetRequests = <String>[];
@@ -77,8 +81,10 @@ class _FakeRepo implements AuthRepository {
     required String idToken,
     String? joinCode,
     UserRole role = UserRole.vecino,
+    bool acceptedTerms = false,
   }) async {
     googleCalls.add((idToken, joinCode, role));
+    googleTerms.add(acceptedTerms);
     if (joinCode == null && googleNeedsNeighborhood) {
       throw const AuthException('NEEDS_JOIN_CODE', statusCode: 428);
     }
@@ -142,7 +148,11 @@ class _FakeRepo implements AuthRepository {
     required String password,
     required UserRole role,
     required String joinCode,
-  }) async => _user(verified: false, email: email);
+    required bool acceptedTerms,
+  }) async {
+    registerTerms.add(acceptedTerms);
+    return _user(verified: false, email: email);
+  }
 
   @override
   Future<UserEntity?> restoreSession() async => null;
@@ -320,6 +330,7 @@ void main() {
           'id_token': 'tok-123456789012345678',
           'join_code': 'BARRIO-01',
           'role': 'COMERCIANTE',
+          'accept_terms': false,
         });
       },
     );
@@ -441,8 +452,17 @@ void main() {
     await tester.tap(find.text('Tengo un negocio y quiero gestionarlo'));
     await tester.tap(find.text('Entrar a mi barrio'));
     await settle(tester);
+    // Cuenta nueva: sin la casilla de términos no continúa.
+    expect(find.text(TermsAcceptanceField.missingMessage), findsOneWidget);
+    expect(repo.googleCalls.length, 1);
+
+    await tester.ensureVisible(find.byKey(TermsAcceptanceField.checkboxKey));
+    await tester.tap(find.byKey(TermsAcceptanceField.checkboxKey));
+    await tester.tap(find.text('Entrar a mi barrio'));
+    await settle(tester);
 
     expect(repo.googleCalls.length, 2);
+    expect(repo.googleTerms.last, isTrue);
     expect(repo.googleCalls.last.$2, 'BARRIO-01');
     expect(repo.googleCalls.last.$3, UserRole.comerciante);
     expect(container.read(authProvider).user?.id, 'user-1');
@@ -723,6 +743,111 @@ void main() {
     expect(find.text('Las contraseñas no coinciden'), findsOneWidget);
   });
 
+  testWidgets('registro con correo: sin marcar los términos NO se crea la cuenta', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      (_) => RegisterScreen(lookupNeighborhood: (_) async => 'Barrio'),
+    );
+    Future<void> type(String label, String text) => tester.enterText(
+      find.widgetWithText(TextFormField, label),
+      text,
+    );
+    await type('Código de tu barrio', 'BARRIO-01');
+    await type('Nombre completo', 'Rosa Vecina');
+    await type('Correo electrónico', 'rosa.vecina@gmail.com');
+    await type('Contraseña', 'barrio2026');
+    await type('Repite la contraseña', 'barrio2026');
+
+    await tester.ensureVisible(find.byKey(RegisterScreen.submitKey));
+    await tester.tap(find.byKey(RegisterScreen.submitKey));
+    await settle(tester);
+    expect(repo.registerTerms, isEmpty);
+    expect(find.text(TermsAcceptanceField.missingMessage), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(TermsAcceptanceField.checkboxKey));
+    await tester.tap(find.byKey(TermsAcceptanceField.checkboxKey));
+    await tester.pump();
+    expect(find.text(TermsAcceptanceField.missingMessage), findsNothing);
+    await tester.ensureVisible(find.byKey(RegisterScreen.submitKey));
+    await tester.tap(find.byKey(RegisterScreen.submitKey));
+    await settle(tester);
+    expect(repo.registerTerms, [true]);
+  });
+
+  group('lector de pantalla y accesibilidad (guías de Flutter)', () {
+    Future<void> guidelines(WidgetTester tester) async {
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(textContrastGuideline));
+    }
+
+    testWidgets('crear cuenta', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pump(tester, (_) => RegisterScreen(lookupNeighborhood: (_) async => 'Barrio'));
+      await settle(tester);
+      await guidelines(tester);
+      handle.dispose();
+    });
+
+    testWidgets('recuperar contraseña', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pump(tester, (_) => const ForgotPasswordScreen(initialEmail: 'rosa@correo.com'));
+      await guidelines(tester);
+      handle.dispose();
+    });
+
+    testWidgets('confirmar correo', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final handle = tester.ensureSemantics();
+      await pump(
+        tester,
+        (_) => VerifyEmailScreen(user: _user(verified: false)),
+        initial: AuthState.authenticated(_user(verified: false)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await guidelines(tester);
+      handle.dispose();
+    });
+
+    testWidgets('crear contraseña tras Google', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pump(
+        tester,
+        (_) => CreatePasswordScreen(user: _user(hasPassword: false)),
+        initial: AuthState.authenticated(_user(hasPassword: false)),
+      );
+      await guidelines(tester);
+      handle.dispose();
+    });
+  });
+
+  testWidgets('la casilla de términos se anuncia completa al lector de pantalla', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await pump(tester, (_) => const RegisterScreen());
+    expect(
+      tester.getSemantics(find.byKey(TermsAcceptanceField.checkboxKey)),
+      matchesSemantics(
+        label: 'Acepto los Términos y condiciones, la Política de privacidad '
+            'y las Normas de la comunidad',
+        hint: 'Obligatorio para crear la cuenta',
+        hasCheckedState: true,
+        isChecked: false,
+        hasEnabledState: true,
+        isEnabled: true,
+        hasTapAction: true,
+        isFocusable: true,
+        hasFocusAction: true,
+        // Antes de tocar "Crear cuenta" todavía no hay error que anunciar.
+        validationResult: SemanticsValidationResult.valid,
+      ),
+    );
+    semantics.dispose();
+  });
+
   testWidgets('registro con Google: primero pide el código del barrio', (
     tester,
   ) async {
@@ -745,7 +870,14 @@ void main() {
     );
     await tester.tap(find.text('Registrarme con Google'));
     await settle(tester);
+    expect(find.text(TermsAcceptanceField.missingMessage), findsOneWidget);
+    expect(repo.googleCalls, isEmpty, reason: 'sin aceptar los términos');
+
+    await tester.tap(find.byKey(TermsAcceptanceField.checkboxKey));
+    await tester.tap(find.text('Registrarme con Google'));
+    await settle(tester);
     expect(repo.googleCalls.single.$2, 'barrio-01');
+    expect(repo.googleTerms.single, isTrue);
   });
 
   group('términos y borrar cuenta', () {
@@ -755,9 +887,12 @@ void main() {
       await pump(tester, (_) => const RegisterScreen());
       expect(find.byKey(const ValueKey('legal_consent_text')), findsOneWidget);
       expect(
-        find.textContaining('Al crear tu cuenta aceptas', findRichText: true),
+        find.textContaining('Acepto los Términos y condiciones', findRichText: true),
         findsOneWidget,
       );
+      // Es una casilla que hay que marcar, no un aviso que se acepta solo.
+      final box = tester.widget<Checkbox>(find.byKey(TermsAcceptanceField.checkboxKey));
+      expect(box.value, isFalse);
 
       await pump(tester, (_) => const LoginScreen());
       expect(

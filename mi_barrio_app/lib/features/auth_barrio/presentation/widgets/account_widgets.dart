@@ -9,6 +9,7 @@ import '../../data/datasources/google_sign_in_client.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
 import 'auth_validators.dart';
+import '../../../legal/legal_screens.dart';
 
 /// Botón "Continuar con Google" (blanco, con la G de colores, como pide Google).
 class GoogleSignInButton extends StatelessWidget {
@@ -289,9 +290,12 @@ class RoleChoice extends StatelessWidget {
 
 /// Lo que eligió el vecino al entrar con Google por primera vez.
 class NeighborhoodChoice {
-  const NeighborhoodChoice(this.joinCode, this.role);
+  const NeighborhoodChoice(this.joinCode, this.role, {this.acceptedTerms = false});
   final String joinCode;
   final UserRole role;
+
+  /// Siempre true al confirmar la hoja: sin la casilla no se puede continuar.
+  final bool acceptedTerms;
 }
 
 /// Hoja que aparece la PRIMERA vez que alguien entra con Google: falta saber
@@ -328,8 +332,13 @@ class _NeighborhoodSheetState extends State<_NeighborhoodSheet> {
 
   void _continue() {
     if (!_formKey.currentState!.validate()) return;
-    Navigator.of(context)
-        .pop(NeighborhoodChoice(_code.text.trim().toUpperCase(), _role));
+    Navigator.of(context).pop(
+      NeighborhoodChoice(
+        _code.text.trim().toUpperCase(),
+        _role,
+        acceptedTerms: true,
+      ),
+    );
   }
 
   @override
@@ -377,6 +386,9 @@ class _NeighborhoodSheetState extends State<_NeighborhoodSheet> {
                 role: _role,
                 onChanged: (r) => setState(() => _role = r),
               ),
+              const SizedBox(height: 16),
+              // Se crea una cuenta nueva: hay que aceptar los términos.
+              TermsAcceptanceField(),
               const SizedBox(height: 20),
               ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 56),
@@ -404,6 +416,7 @@ Future<String?> continueWithGoogle(
   WidgetRef ref, {
   String? joinCode,
   UserRole role = UserRole.vecino,
+  bool acceptedTerms = false,
 }) async {
   final source = ref.read(googleIdTokenSourceProvider);
   final notifier = ref.read(authProvider.notifier);
@@ -423,6 +436,7 @@ Future<String?> continueWithGoogle(
     idToken: idToken,
     joinCode: joinCode,
     role: role,
+    acceptedTerms: acceptedTerms,
   );
   if (result.outcome == GoogleSignInOutcome.needsNeighborhood) {
     if (!context.mounted) return null;
@@ -435,6 +449,7 @@ Future<String?> continueWithGoogle(
       idToken: idToken,
       joinCode: choice.joinCode,
       role: choice.role,
+      acceptedTerms: choice.acceptedTerms,
     );
   }
   return switch (result.outcome) {

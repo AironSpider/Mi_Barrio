@@ -9,6 +9,7 @@ abstract interface class AuthRepository {
     required String password,
     required UserRole role,
     required String joinCode,
+    required bool acceptedTerms,
   });
 
   /// Entra o crea la cuenta con Google. Lanza `AuthException` con
@@ -17,6 +18,7 @@ abstract interface class AuthRepository {
     required String idToken,
     String? joinCode,
     UserRole role = UserRole.vecino,
+    bool acceptedTerms = false,
   });
 
   /// Envía otra vez el código de verificación. Devuelve el mensaje para mostrar.

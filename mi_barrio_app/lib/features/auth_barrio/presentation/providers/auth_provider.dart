@@ -151,6 +151,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String password,
     required UserRole role,
     required String joinCode,
+    required bool acceptedTerms,
   }) async {
     final previousUser = state.user;
     state = const AuthState.loading();
@@ -164,6 +165,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
             password: password,
             role: role,
             joinCode: joinCode,
+            acceptedTerms: acceptedTerms,
           ),
         ),
       );
@@ -182,6 +184,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String idToken,
     String? joinCode,
     UserRole role = UserRole.vecino,
+    bool acceptedTerms = false,
   }) async {
     final previousUser = state.user;
     try {
@@ -189,6 +192,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         idToken: idToken,
         joinCode: joinCode,
         role: role,
+        acceptedTerms: acceptedTerms,
       );
       if (previousUser != null && previousUser.id != user.id) {
         await _endCurrentSession(previousUser);

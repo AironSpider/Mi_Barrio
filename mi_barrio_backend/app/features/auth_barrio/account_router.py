@@ -20,6 +20,8 @@ from app.features.auth_barrio.auth_router import (
     _auth_response,
     _client_ip,
     ensure_not_suspended,
+    require_terms,
+    stamp_terms,
     _hash,
     _too_many_attempts,
 )
@@ -229,9 +231,10 @@ async def google_login(
             await db.refresh(user)
         return await _session_for(db, user)
 
-    # Cuenta nueva: hace falta saber a qué barrio entra.
+    # Cuenta nueva: hace falta saber a qué barrio entra y que acepte los términos.
     if not payload.join_code:
         raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail=NEEDS_NEIGHBORHOOD)
+    require_terms(payload.accept_terms)
     tenant = await db.scalar(
         select(Tenant).where(Tenant.join_code == payload.join_code.strip().upper())
     )
@@ -252,6 +255,7 @@ async def google_login(
         home_lng=tenant.center_lng,
         tutorial_completed=False,
     )
+    stamp_terms(user)
     db.add(user)
     try:
         await db.commit()

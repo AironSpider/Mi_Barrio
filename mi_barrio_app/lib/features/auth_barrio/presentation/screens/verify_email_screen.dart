@@ -227,14 +227,17 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                     ),
                     if (_error != null || _info != null) ...[
                       const SizedBox(height: 12),
-                      Text(
-                        _error ?? _info!,
-                        key: VerifyEmailScreen.messageKey,
-                        textAlign: TextAlign.center,
-                        style: texto.bodyMedium?.copyWith(
-                          color: _error != null
-                              ? esquema.error
-                              : esquema.primary,
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          _error ?? _info!,
+                          key: VerifyEmailScreen.messageKey,
+                          textAlign: TextAlign.center,
+                          style: texto.bodyMedium?.copyWith(
+                            color: _error != null
+                                ? esquema.error
+                                : esquema.primary,
+                          ),
                         ),
                       ),
                     ],

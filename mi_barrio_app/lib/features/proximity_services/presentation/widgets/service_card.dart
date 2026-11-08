@@ -81,114 +81,137 @@ class ServiceCard extends StatelessWidget {
         highlightColor: isOwn ? AppPalette.filterActiveBackground : null,
         splashColor: isOwn ? AppPalette.filterActiveBackground : null,
         onTap: onTap,
+        // El lector de pantalla usa el botón de abajo (toda la información
+        // junta); el Visto Bueno sigue siendo un botón aparte.
+        excludeFromSemantics: true,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isOwn ? Colors.white : esquema.primaryContainer,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      categoryIcon,
-                      size: 28,
-                      color: esquema.onPrimaryContainer,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              categoryLabel,
-                              style: texto.labelMedium?.copyWith(
-                                color: esquema.onSurfaceVariant,
+              MergeSemantics(
+                child: Semantics(
+                  button: onTap != null,
+                  onTap: onTap,
+                  hint: onTap == null
+                      ? null
+                      : 'Toca dos veces para ver el detalle',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: isOwn
+                                  ? Colors.white
+                                  : esquema.primaryContainer,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              categoryIcon,
+                              size: 28,
+                              color: esquema.onPrimaryContainer,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    Text(
+                                      categoryLabel,
+                                      style: texto.labelMedium?.copyWith(
+                                        color: esquema.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    if (publisherBadge != null)
+                                      _Badge(text: publisherBadge!),
+                                    if (isOwn)
+                                      const _Badge(text: 'Tuyo', strong: true),
+                                    if (isNeed)
+                                      const _Badge(text: 'Pide', need: true),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  title,
+                                  style: texto.titleMedium,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (ratingAvg != null && !isNeed) ...[
+                                  const SizedBox(height: 4),
+                                  StarRatingDisplay(
+                                    rating: ratingAvg!,
+                                    count: endorsementsCount,
+                                    size: 18,
+                                  ),
+                                ],
+                                if (isOwn && isUnderReview) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'En revisión: tus vecinos no lo ven por ahora',
+                                    style: texto.labelMedium?.copyWith(
+                                      color: colores.urgencyCritical,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (isPending)
+                            Tooltip(
+                              message: 'Guardado en el teléfono, pendiente de sincronizar',
+                              child: Icon(
+                                Icons.schedule,
+                                size: 26,
+                                color: colores.syncPending,
                               ),
                             ),
-                            if (publisherBadge != null)
-                              _Badge(text: publisherBadge!),
-                            if (isOwn) const _Badge(text: 'Tuyo', strong: true),
-                            if (isNeed) const _Badge(text: 'Pide', need: true),
+                        ],
+                      ),
+                      if (priceText != null || photoCount > 0) ...[
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            if (priceText != null)
+                              _Tag(icon: Icons.sell_rounded, text: priceText!),
+                            if (photoCount > 0)
+                              _Tag(
+                                icon: Icons.photo_library_rounded,
+                                text: photoCount == 1
+                                    ? '1 foto'
+                                    : '$photoCount fotos',
+                              ),
                           ],
                         ),
-                        const SizedBox(height: 2),
+                      ],
+                      if (description != null &&
+                          description!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 12),
                         Text(
-                          title,
-                          style: texto.titleMedium,
-                          maxLines: 2,
+                          description!,
+                          style: texto.bodyMedium?.copyWith(
+                            color: esquema.onSurfaceVariant,
+                          ),
+                          maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (ratingAvg != null && !isNeed) ...[
-                          const SizedBox(height: 4),
-                          StarRatingDisplay(
-                            rating: ratingAvg!,
-                            count: endorsementsCount,
-                            size: 18,
-                          ),
-                        ],
-                        if (isOwn && isUnderReview) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'En revisión: tus vecinos no lo ven por ahora',
-                            style: texto.labelMedium?.copyWith(
-                              color: colores.urgencyCritical,
-                            ),
-                          ),
-                        ],
                       ],
-                    ),
+                    ],
                   ),
-                  if (isPending)
-                    Tooltip(
-                      message:
-                          'Guardado en el teléfono, pendiente de sincronizar',
-                      child: Icon(
-                        Icons.schedule,
-                        size: 26,
-                        color: colores.syncPending,
-                      ),
-                    ),
-                ],
+                ),
               ),
-              if (priceText != null || photoCount > 0) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    if (priceText != null)
-                      _Tag(icon: Icons.sell_rounded, text: priceText!),
-                    if (photoCount > 0)
-                      _Tag(
-                        icon: Icons.photo_library_rounded,
-                        text: photoCount == 1 ? '1 foto' : '$photoCount fotos',
-                      ),
-                  ],
-                ),
-              ],
-              if (description != null && description!.trim().isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  description!,
-                  style: texto.bodyMedium?.copyWith(
-                    color: esquema.onSurfaceVariant,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
               const SizedBox(height: 14),
               LayoutBuilder(
                 builder: (context, constraints) => Wrap(
@@ -315,10 +338,8 @@ class _Badge extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w700,
-        ),
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(color: fg, fontWeight: FontWeight.w700),
       ),
     );
   }

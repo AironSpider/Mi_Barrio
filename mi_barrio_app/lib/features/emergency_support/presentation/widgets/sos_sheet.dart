@@ -256,7 +256,12 @@ class _SosSheetState extends State<SosSheet> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (_error != null) ...[
-                  Text(_error!, style: texto.bodyMedium?.copyWith(color: esquema.error)),
+                  // Se anuncia al lector de pantalla: en una emergencia nadie
+                  // debe creer que su pedido se envió si no fue así.
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(_error!, style: texto.bodyMedium?.copyWith(color: esquema.error)),
+                  ),
                   const SizedBox(height: 8),
                 ],
                 FilledButton(

@@ -164,14 +164,14 @@ void main() {
       await rosa.use();
       rosa.user = await rosa.auth.register(
         fullName: 'Rosa Quispe', email: 'rosa.$suffix@e2e.test', password: password,
-        role: UserRole.vecino, joinCode: joinCode);
+        role: UserRole.vecino, joinCode: joinCode, acceptedTerms: true);
       await rosa.remember();
       expect((await ProfileLocalStorage().getProfile(rosa.id))!.role, 'VECINO');
 
       await luis.use();
       luis.user = await luis.auth.register(
         fullName: 'Luis Ramos', email: 'luis.$suffix@e2e.test', password: password,
-        role: UserRole.comerciante, joinCode: joinCode);
+        role: UserRole.comerciante, joinCode: joinCode, acceptedTerms: true);
       await luis.remember();
       expect((await loadMerchantProfile(luis.id, tenantId: luis.tenant)).isMerchant, isTrue,
           reason: 'el comerciante debe ver "Ofrecer servicio"');
@@ -339,7 +339,7 @@ void main() {
       await nuevo.use();
       nuevo.user = await nuevo.auth.register(
         fullName: 'Ana Torres', email: 'ana.$suffix@e2e.test', password: password,
-        role: UserRole.comerciante, joinCode: joinCode);
+        role: UserRole.comerciante, joinCode: joinCode, acceptedTerms: true);
       await nuevo.remember();
       final svc = await ServicesSqliteDatasource().insertService(
         tenantId: nuevo.tenant, providerUserId: nuevo.id, category: ServiceCategory.clases,

@@ -81,6 +81,7 @@ void main() {
         password: 'password123',
         role: 'VECINO',
         joinCode: 'BARRIO-01',
+        acceptedTerms: true,
       ),
       throwsA(
         isA<AuthException>().having(

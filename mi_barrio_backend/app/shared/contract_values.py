@@ -47,6 +47,9 @@ REPORTS_TO_REVIEW = 3
 # Reportes de vecinos distintos (sobre cualquiera de sus publicaciones) para
 # suspender una cuenta. Solo el jefe del barrio la puede reactivar.
 REPORTS_TO_SUSPEND = 3
+# Versión vigente de Términos + Privacidad + Normas (fecha de publicación).
+# Si cambian, súbela: queda registrado qué versión aceptó cada cuenta.
+TERMS_VERSION = "2026-11-08"
 SupportGroupType = Literal[
     "PRIMEROS_AUXILIOS", "RESCATE", "ALBERGUE", "ALIMENTOS", "LOGISTICA", "SALUD_MENTAL",
 ]

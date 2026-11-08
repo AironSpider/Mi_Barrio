@@ -42,12 +42,25 @@ def main() -> int:
     mail = f"Vecina.Real{secrets.token_hex(3)}@Gmail.com"
     password = "Clave-" + secrets.token_hex(4)
 
+    # ── 0. Sin aceptar los términos no se crea la cuenta ──
+    s, r = http(BASE, "POST", "/api/v1/auth/register", {
+        "full_name": "Sin Aceptar", "email": f"sin.aceptar{secrets.token_hex(3)}@gmail.com",
+        "password": password, "role": "VECINO", "join_code": code})
+    check("registro sin aceptar términos se rechaza (422)", s == 422 and "Términos" in str(r), r)
+    s, r = http(BASE, "POST", "/api/v1/auth/register", {
+        "full_name": "Sin Aceptar", "email": f"sin.aceptar{secrets.token_hex(3)}@gmail.com",
+        "password": password, "role": "VECINO", "join_code": code, "accept_terms": False})
+    check("registro con accept_terms=false también se rechaza", s == 422, r)
+
     # ── 1. Registro: la cuenta nace sin verificar ──
     s, r = http(BASE, "POST", "/api/v1/auth/register", {
         "full_name": "Vecina Real", "email": mail, "password": password,
-        "role": "VECINO", "join_code": code})
+        "role": "VECINO", "join_code": code, "accept_terms": True})
     check("registro crea la cuenta", s == 201, r)
     check("la cuenta nueva no está verificada", s == 201 and r["user"]["email_verified"] is False, r)
+    rows = db("SELECT terms_accepted_at, terms_version FROM users WHERE email = :e", e=mail.lower())
+    check("se guarda cuándo y qué versión de los términos aceptó",
+          bool(rows) and rows[0][0] is not None and rows[0][1], rows)
     token = r.get("access_token") if s == 201 else None
 
     s, r = http(BASE, "POST", "/api/v1/auth/login", {"email": mail, "password": password})
@@ -139,7 +152,7 @@ def main() -> int:
                        ("Gmail con símbolos", f"ana_{secrets.token_hex(3)}@gmail.com")]:
         s, r = http(BASE, "POST", "/api/v1/auth/register", {
             "full_name": "Falsa", "email": bad, "password": password,
-            "role": "VECINO", "join_code": code})
+            "role": "VECINO", "join_code": code, "accept_terms": True})
         check(f"registro con correo {label} se rechaza (422)", s == 422, r)
 
     s, r = http(BASE, "POST", "/api/v1/auth/google", {"id_token": "x" * 40})
@@ -182,7 +195,15 @@ async def _google_checks(join_code: str, existing_email: str) -> tuple[str, str]
             check("Google: cuenta nueva sin código de barrio pide el barrio (428)",
                   exc.status_code == 428 and exc.detail == NEEDS_NEIGHBORHOOD, exc.detail)
     async with AsyncSessionLocal() as session:
-        r = await google_login(session, new_ident, GoogleLoginRequest(id_token="x" * 40, join_code=join_code, role="COMERCIANTE"))
+        try:
+            await google_login(session, new_ident, GoogleLoginRequest(id_token="x" * 40, join_code=join_code))
+            check("Google: cuenta nueva sin aceptar términos se rechaza (422)", False, "no lanzó")
+        except HTTPException as exc:
+            check("Google: cuenta nueva sin aceptar términos se rechaza (422)",
+                  exc.status_code == 422 and "Términos" in exc.detail, exc.detail)
+    async with AsyncSessionLocal() as session:
+        r = await google_login(session, new_ident, GoogleLoginRequest(
+            id_token="x" * 40, join_code=join_code, role="COMERCIANTE", accept_terms=True))
         check("Google: con el código de barrio crea la cuenta verificada",
               r.user.email == new_mail and r.user.email_verified and r.user.role == "COMERCIANTE")
         check("Google: la cuenta nueva todavía no tiene contraseña", r.user.has_password is False)

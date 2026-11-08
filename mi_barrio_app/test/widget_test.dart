@@ -379,6 +379,34 @@ void main() {
     });
   }
 
+  testWidgets('lector de pantalla: cada pestaña tiene etiquetas y áreas táctiles', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await _pumpAuthenticatedApp(tester, initialEmergencyMode: false);
+    await tester.pumpAndSettle();
+    for (final tab in ['servicios', 'apoyo', 'mapa', 'tu']) {
+      await tester.tap(find.byKey(ValueKey('nav_$tab')));
+      await tester.pumpAndSettle();
+      await expectLater(
+        tester,
+        meetsGuideline(labeledTapTargetGuideline),
+        reason: 'pestaña $tab',
+      );
+      await expectLater(
+        tester,
+        meetsGuideline(androidTapTargetGuideline),
+        reason: 'pestaña $tab',
+      );
+      await expectLater(
+        tester,
+        meetsGuideline(textContrastGuideline),
+        reason: 'pestaña $tab',
+      );
+    }
+    handle.dispose();
+  });
+
   testWidgets('soporta texto grande (escala 2x) sin desbordes', (tester) async {
     // Teléfono típico (360x780 dp) con el texto del sistema al 200%.
     tester.view.physicalSize = const Size(1080, 2340);

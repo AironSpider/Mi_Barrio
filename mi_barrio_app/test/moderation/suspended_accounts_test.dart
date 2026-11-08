@@ -56,4 +56,16 @@ void main() {
     expect(AuthSessionStore.reasonFrom('{"error":"La sesión ya no es válida."}'), isNull);
     expect(AuthSessionStore.reasonFrom('no es json'), isNull);
   });
+
+  testWidgets('cumple las guías de accesibilidad (lector de pantalla)', (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: SingleChildScrollView(child: SuspendedAccountsCard(tenantId: 't1', datasource: _FakeDs()))),
+    ));
+    await tester.pumpAndSettle();
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    handle.dispose();
+  });
 }
