@@ -7,7 +7,7 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 if [ -z "$MI_BARRIO_JWT_SECRET" ]; then
-  echo "Falta MI_BARRIO_JWT_SECRET (usa --env-file .env)." >&2
+  echo "Falta MI_BARRIO_JWT_SECRET. En Render, agrégala en Environment; en local, pásala desde .env/--env-file." >&2
   exit 1
 fi
 

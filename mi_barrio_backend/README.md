@@ -29,6 +29,10 @@ cuando el panel la solicite. Usa la cadena PostgreSQL con SSL; el backend la
 adapta a `asyncpg`, incluyendo `sslmode=require` y
 `channel_binding=require`. Render genera `MI_BARRIO_JWT_SECRET`; nunca copies
 el `.env` local ni una URL con contraseña al repositorio.
+Si el servicio de Render se creó manualmente o no sincronizó el Blueprint,
+agrega `MI_BARRIO_JWT_SECRET` en **Environment** con un valor secreto aleatorio
+de al menos 32 caracteres y redeploya. No uses una clave compartida ni la
+publiques en el repositorio o en el chat.
 
 El contexto de Docker apunta a `mi_barrio_backend`, el puerto usa el
 `$PORT` que entrega Render y las migraciones corren al iniciar el contenedor.
