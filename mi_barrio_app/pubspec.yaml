@@ -78,6 +78,8 @@ flutter:
   assets:
     - assets/images/logo_mi_barrio.png
     - assets/images/logo_full.png
+    # Copia de docs/legal y docs/manual_de_usuario.md (se ven dentro de la app).
+    - assets/legal/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

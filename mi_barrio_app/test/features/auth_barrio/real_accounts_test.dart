@@ -59,6 +59,8 @@ class _FakeRepo implements AuthRepository {
   final verifyCodes = <String>[];
   final resetCalls = <(String, String, String)>[];
   final resetRequests = <String>[];
+  final deletedTenants = <String>[];
+  Object? deleteError;
   int resends = 0;
   bool googleNeedsNeighborhood = true;
 
@@ -143,6 +145,12 @@ class _FakeRepo implements AuthRepository {
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<void> deleteAccount({required String tenantId}) async {
+    if (deleteError != null) throw deleteError!;
+    deletedTenants.add(tenantId);
+  }
 
   @override
   Future<void> purgeLocalUserData({
@@ -656,5 +664,84 @@ void main() {
     await tester.tap(find.text('Registrarme con Google'));
     await settle(tester);
     expect(repo.googleCalls.single.$2, 'barrio-01');
+  });
+
+  group('términos y borrar cuenta', () {
+    testWidgets('registro y login muestran el aviso de términos con enlaces', (
+      tester,
+    ) async {
+      await pump(tester, (_) => const RegisterScreen());
+      expect(find.byKey(const ValueKey('legal_consent_text')), findsOneWidget);
+      expect(
+        find.textContaining('Al crear tu cuenta aceptas', findRichText: true),
+        findsOneWidget,
+      );
+
+      await pump(tester, (_) => const LoginScreen());
+      expect(
+        find.textContaining('Al continuar con Google aceptas', findRichText: true),
+        findsOneWidget,
+      );
+    });
+
+    test('deleteAccount: borra en el servidor y cierra la sesión', () async {
+      final notifier = AuthNotifier(
+        repo,
+        initialState: AuthState.authenticated(_user()),
+      );
+      addTearDown(notifier.dispose);
+      expect(await notifier.deleteAccount(), isNull);
+      expect(repo.deletedTenants, ['tenant-1']);
+      expect(notifier.state.status, AuthStatus.unauthenticated);
+    });
+
+    test('deleteAccount: si el servidor falla, sigue con la sesión y explica', () async {
+      repo.deleteError = const AuthException('Sin internet');
+      final notifier = AuthNotifier(
+        repo,
+        initialState: AuthState.authenticated(_user()),
+      );
+      addTearDown(notifier.dispose);
+      expect(await notifier.deleteAccount(), 'Sin internet');
+      expect(notifier.state.status, AuthStatus.authenticatedNeighbor);
+    });
+
+    test('datasource: DELETE /users/me con token y barrio', () async {
+      late http.Request sent;
+      final remote = AuthRemoteDatasource(
+        baseUrl: 'http://api',
+        client: MockClient((request) async {
+          sent = request;
+          return http.Response('{"deleted": true}', 200);
+        }),
+      );
+      await remote.deleteAccount(token: 'tok', tenantId: 'tenant-1');
+      expect(sent.method, 'DELETE');
+      expect(sent.url.toString(), 'http://api/api/v1/users/me');
+      expect(sent.headers['Authorization'], 'Bearer tok');
+      expect(sent.headers['X-Tenant-ID'], 'tenant-1');
+    });
+
+    test('datasource: el admin del barrio recibe el motivo del servidor', () async {
+      final remote = AuthRemoteDatasource(
+        baseUrl: 'http://api',
+        client: MockClient(
+          (_) async => http.Response(
+            '{"detail": "El administrador del barrio no puede borrar su cuenta"}',
+            403,
+          ),
+        ),
+      );
+      expect(
+        () => remote.deleteAccount(token: 'tok', tenantId: 't'),
+        throwsA(
+          isA<AuthException>().having(
+            (e) => e.message,
+            'message',
+            contains('administrador'),
+          ),
+        ),
+      );
+    });
   });
 }

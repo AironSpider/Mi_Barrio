@@ -204,6 +204,17 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> logout() => _sessionStore.clear();
 
   @override
+  Future<void> deleteAccount({required String tenantId}) {
+    final token = _sessionStore.token;
+    if (token == null || token.isEmpty) {
+      throw const AuthException(
+        'Tu sesión venció. Vuelve a entrar e intenta de nuevo.',
+      );
+    }
+    return _remote.deleteAccount(token: token, tenantId: tenantId);
+  }
+
+  @override
   Future<void> keepPendingDataFor({
     required String tenantId,
     required String userId,

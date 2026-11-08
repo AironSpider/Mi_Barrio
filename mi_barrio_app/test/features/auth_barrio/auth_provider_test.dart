@@ -140,8 +140,10 @@ class _FakeAuthRepository implements AuthRepository {
   Future<String> sendVerificationCode(String email) async => 'ok';
 
   @override
-  Future<UserEntity> verifyEmail({required String email, required String code}) =>
-      throw UnimplementedError();
+  Future<UserEntity> verifyEmail({
+    required String email,
+    required String code,
+  }) => throw UnimplementedError();
 
   @override
   Future<String> requestPasswordReset(String email) async => 'ok';
@@ -166,6 +168,9 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<void> deleteAccount({required String tenantId}) async {}
 
   @override
   Future<void> purgeLocalUserData({

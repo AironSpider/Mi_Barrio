@@ -7,6 +7,7 @@ import '../../../../core/ui_kit/app_theme.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
+import '../../../legal/legal_screens.dart';
 import '../register_draft.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/auth_validators.dart';
@@ -242,7 +243,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           : (role) => setState(() => _role = role),
                     ),
                     ...[
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+                      const LegalConsentText(),
+                      const SizedBox(height: 16),
                       GoogleSignInButton(
                         label: 'Registrarme con Google',
                         busy: _googleBusy,

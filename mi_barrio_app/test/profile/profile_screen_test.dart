@@ -104,4 +104,26 @@ void main() {
     expect(payload['whatsapp'], '+51 987 654 321');
     expect(payload['publisher_name'], 'Bodega Rosita');
   });
+
+  testWidgets('"Eliminar mi cuenta" pide escribir ELIMINAR antes de borrar', (tester) async {
+    await open(tester);
+    expect(find.byKey(ProfileScreen.legalKey), findsOneWidget);
+    await tester.tap(find.byKey(ProfileScreen.deleteAccountKey));
+    await tester.pumpAndSettle();
+    expect(find.text('¿Eliminar tu cuenta?'), findsOneWidget);
+
+    FilledButton confirm() =>
+        tester.widget<FilledButton>(find.byKey(ProfileScreen.deleteConfirmKey));
+    expect(confirm().onPressed, isNull, reason: 'sin escribir ELIMINAR no se puede');
+    await tester.enterText(find.byKey(ProfileScreen.deleteConfirmFieldKey), 'borrar');
+    await tester.pump();
+    expect(confirm().onPressed, isNull);
+    await tester.enterText(find.byKey(ProfileScreen.deleteConfirmFieldKey), 'eliminar');
+    await tester.pump();
+    expect(confirm().onPressed, isNotNull);
+
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(find.text('¿Eliminar tu cuenta?'), findsNothing, reason: 'cancelar no borra nada');
+  });
 }

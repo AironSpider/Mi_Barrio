@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui_kit/app_theme.dart';
 import '../providers/auth_provider.dart';
+import '../../../legal/legal_screens.dart';
 import '../register_draft.dart';
 import '../widgets/account_widgets.dart';
 import 'forgot_password_screen.dart';
@@ -331,6 +332,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   GoogleSignInButton(
                                     busy: _googleBusy,
                                     onPressed: loading ? null : _google,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const LegalConsentText(
+                                    prefix:
+                                        'Al continuar con Google aceptas los ',
                                   ),
                                   if (_googleError != null) ...[
                                     const SizedBox(height: 12),

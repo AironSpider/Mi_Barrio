@@ -254,6 +254,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Borra la cuenta en el servidor y luego los datos del celular. null = listo.
+  Future<String?> deleteAccount() async {
+    final currentUser = state.user;
+    final tenantId = currentUser?.tenantId;
+    if (currentUser == null || tenantId == null) {
+      return 'No hay una sesión iniciada.';
+    }
+    try {
+      await _repository.deleteAccount(tenantId: tenantId);
+    } catch (error) {
+      return _message(error);
+    }
+    // La cuenta ya no existe: se borra todo del celular, también lo pendiente.
+    try {
+      await _endCurrentSession(currentUser);
+    } catch (_) {
+      // Aunque falle la limpieza local, la cuenta ya se borró: se sale igual.
+    }
+    state = const AuthState.unauthenticated();
+    return null;
+  }
+
   Future<void> expireSession() async {
     if (state.status == AuthStatus.unauthenticated ||
         state.status == AuthStatus.loading) {

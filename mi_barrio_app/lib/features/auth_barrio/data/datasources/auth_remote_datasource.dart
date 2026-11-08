@@ -139,6 +139,25 @@ class AuthRemoteDatasource {
     }
   }
 
+  /// Borra la cuenta del vecino (DELETE /api/v1/users/me).
+  Future<void> deleteAccount({
+    required String token,
+    required String tenantId,
+  }) async {
+    final response = await _request(
+      () => _client
+          .delete(
+            Uri.parse('$_baseUrl/api/v1/users/me'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'X-Tenant-ID': tenantId,
+            },
+          )
+          .timeout(ApiConfig.coldStartTimeout),
+    );
+    _decodeResponse(response); // lanza AuthException si el servidor dice que no
+  }
+
   /// Barrios de la plataforma (solo SUPER_ADMIN).
   Future<List<NeighborhoodSummary>> listNeighborhoods(String token) async {
     final response = await _request(

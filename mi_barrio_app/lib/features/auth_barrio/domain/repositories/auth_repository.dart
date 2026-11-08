@@ -49,6 +49,9 @@ abstract interface class AuthRepository {
 
   Future<void> logout();
 
+  /// Borra la cuenta en el servidor (necesita internet).
+  Future<void> deleteAccount({required String tenantId});
+
   Future<void> purgeLocalUserData({
     required String tenantId,
     required String userId,

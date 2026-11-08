@@ -12,6 +12,7 @@ import '../../../../core/ui_kit/photo_picker.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../../auth_barrio/presentation/providers/auth_provider.dart';
 import '../../../chat/presentation/conversations_screen.dart';
+import '../../../legal/legal_screens.dart';
 import '../../../proximity_services/data/models/service_model.dart';
 import '../../data/profile_local_storage.dart';
 import '../../data/user_profile_model.dart';
@@ -30,6 +31,10 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
   static const editKey = ValueKey('open_edit_profile');
   static const photoKey = ValueKey('profile_change_photo');
+  static const legalKey = ValueKey('open_legal');
+  static const deleteAccountKey = ValueKey('delete_account_button');
+  static const deleteConfirmFieldKey = ValueKey('delete_account_confirm_field');
+  static const deleteConfirmKey = ValueKey('delete_account_confirm');
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -148,6 +153,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     await ref.read(authProvider.notifier).logout();
   }
 
+  /// "Eliminar mi cuenta": confirma escribiendo ELIMINAR y borra en el servidor.
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _DeleteAccountDialog(),
+    );
+    if (confirmed != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Expanded(child: Text('Eliminando tu cuenta…')),
+            ],
+          ),
+        ),
+      ),
+    );
+    final error = await ref.read(authProvider.notifier).deleteAccount();
+    if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            error ?? 'Tu cuenta y tus datos fueron eliminados. ¡Gracias por ser parte de Mi Barrio!',
+          ),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -214,7 +256,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             profile: profile,
             onEdit: _openEdit,
             // "Negocio" solo tiene sentido para quien ofrece servicios.
-            showBusiness: (profile?.role ?? _session.role) == UserRole.comerciante,
+            showBusiness:
+                (profile?.role ?? _session.role) == UserRole.comerciante,
           ),
           const _SectionTitle('Accesos rápidos'),
           Card(
@@ -240,6 +283,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   subtitle: 'Tus servicios, favores y pedidos de ayuda',
                   onTap: _openHistory,
                 ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                _LinkTile(
+                  key: ProfileScreen.legalKey,
+                  icon: Icons.policy_outlined,
+                  title: 'Términos y privacidad',
+                  subtitle: 'Reglas, tus datos y el manual de usuario',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const LegalDocumentsScreen(),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -255,6 +310,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             icon: const Icon(Icons.logout_rounded),
             label: const Text('Cerrar sesión'),
           ),
+          // El admin del barrio no puede borrarse desde la app (el servidor lo explica).
+          if (user?.role.apiValue != 'ADMIN_BARRIO') ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              key: ProfileScreen.deleteAccountKey,
+              style: TextButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                foregroundColor: scheme.error,
+              ),
+              onPressed: () => unawaited(_deleteAccount()),
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: const Text('Eliminar mi cuenta'),
+            ),
+          ],
         ],
       ),
     );
@@ -455,7 +524,11 @@ class _Stat extends StatelessWidget {
 
 /// Datos del perfil en modo lectura. Lo que falta se ofrece completar.
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({required this.profile, required this.onEdit, required this.showBusiness});
+  const _InfoCard({
+    required this.profile,
+    required this.onEdit,
+    required this.showBusiness,
+  });
 
   final UserProfileModel? profile;
   final VoidCallback onEdit;
@@ -562,4 +635,77 @@ class _LinkTile extends StatelessWidget {
     trailing: const Icon(Icons.chevron_right_rounded),
     onTap: onTap,
   );
+}
+
+/// Pide escribir ELIMINAR para que nadie borre su cuenta por un toque sin querer.
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _controller = TextEditingController();
+
+  bool get _ready => _controller.text.trim().toUpperCase() == 'ELIMINAR';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      icon: Icon(Icons.warning_amber_rounded, color: theme.colorScheme.error),
+      title: const Text('¿Eliminar tu cuenta?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Esto no se puede deshacer:\n'
+              '• Se borran tu nombre, correo, teléfono y fotos.\n'
+              '• Tus servicios, favores, comentarios y mensajes dejan de verse.\n'
+              '• Se cierra tu sesión en este celular.\n\n'
+              'Necesitas internet. Para confirmar, escribe ELIMINAR:',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: ProfileScreen.deleteConfirmFieldKey,
+              controller: _controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                hintText: 'ELIMINAR',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          key: ProfileScreen.deleteConfirmKey,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            backgroundColor: theme.colorScheme.error,
+            foregroundColor: theme.colorScheme.onError,
+          ),
+          onPressed: _ready ? () => Navigator.of(context).pop(true) : null,
+          child: const Text('Eliminar cuenta'),
+        ),
+      ],
+    );
+  }
 }
