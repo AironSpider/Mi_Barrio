@@ -39,22 +39,30 @@ class _Context:
     title: str
 
 
-async def _context(db: AsyncSession, tenant_id: uuid.UUID, kind: str, context_id: uuid.UUID) -> _Context:
-    """La publicación del chat (favor o servicio) y su dueño."""
+async def _context(
+    db: AsyncSession, tenant_id: uuid.UUID, kind: str, context_id: uuid.UUID, *, for_writing: bool = False
+) -> _Context:
+    """La publicación del chat (favor o servicio) y su dueño.
+
+    Una publicación retirada conserva su historial (se puede leer desde
+    "Mis mensajes"), pero ya no recibe mensajes nuevos.
+    """
     if kind == "favor":
         post = await db.scalar(select(SolidarityPost).where(
             SolidarityPost.id == context_id,
             SolidarityPost.tenant_id == tenant_id,
-            SolidarityPost.is_deleted.is_(False),
         ))
+        if post is not None and post.is_deleted and for_writing:
+            post = None
         if post is None:
             raise HTTPException(status_code=404, detail="Publicación no encontrada en este barrio")
         return _Context(kind, "FAVOR", post.id, post.author_user_id, post.title)
     service = await db.scalar(select(LocalService).where(
         LocalService.id == context_id,
         LocalService.tenant_id == tenant_id,
-        LocalService.is_deleted.is_(False),
     ))
+    if service is not None and service.is_deleted and for_writing:
+        service = None
     if service is None:
         raise HTTPException(status_code=404, detail="Servicio no encontrado en este barrio")
     title = f"{service.publisher_name}, {service.title}" if service.publisher_name else service.title
@@ -203,7 +211,7 @@ async def send_message(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Guarda el mensaje y lo entrega AL INSTANTE (WebSocket) a los dos participantes."""
-    ctx = await _context(db, tenant_id, kind, context_id)
+    ctx = await _context(db, tenant_id, kind, context_id, for_writing=True)
     me = uuid.UUID(principal["sub"])
     _check_participant(ctx, neighbor_id, me)
     if me == ctx.owner_user_id:

@@ -481,6 +481,19 @@ def main():
     s, b = call("GET", f"/api/v1/chat/service/{sid}/conversations/{ME}/messages", who=vecino2)
     check("un tercero no lee el chat del servicio -> 403", s == 403, f"{s}")
 
+    # Servicio retirado: el historial se sigue leyendo, pero no recibe mensajes nuevos.
+    s, b = call("POST", f"/api/v1/chat/service/{full_id}/conversations/{ME}/messages", {"body": "¿Sigue?"})
+    check("el vecino escribe por otro servicio", s == 201, f"{s} {b}")
+    s, b = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": now(), "mutations": [
+        {"target_table": "local_services", "record_id": full_id, "operation": "UPSERT",
+         "payload": dict(edited, is_deleted=True, updated_at=now(20))}]}, who=comerciante)
+    check("el comerciante retira el servicio", s == 200 and b["processed_record_ids"] == [full_id], f"{s} {b}")
+    s, b = call("GET", f"/api/v1/chat/service/{full_id}/conversations/{ME}/messages")
+    check("el chat de un servicio retirado se sigue leyendo",
+          s == 200 and [x["body"] for x in b] == ["¿Sigue?"], f"{s} {b}")
+    s, b = call("POST", f"/api/v1/chat/service/{full_id}/conversations/{ME}/messages", {"body": "¿Hola?"})
+    check("un servicio retirado ya no recibe mensajes -> 404", s == 404, f"{s} {b}")
+
     # Coordinar → completar → reseñas
     s, b = call("POST", f"/api/v1/solidarity/{fav_id}/reviews", {"rating": 5})
     check("reseña antes de completar -> 409", s == 409, f"{s}")
