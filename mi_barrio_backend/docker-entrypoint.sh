@@ -18,4 +18,7 @@ export DATABASE_URL
 
 python -m alembic upgrade head
 # 1 proceso: el límite de intentos de login vive en memoria y debe ser uno solo.
-exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Render (y otros) indican el puerto en $PORT; en la PC se usa 8000.
+# --proxy-headers: detrás del proxy de Render, la IP real del vecino (límite de intentos).
+exec python -m uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" \
+  --proxy-headers --forwarded-allow-ips="*"
