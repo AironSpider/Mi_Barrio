@@ -73,6 +73,29 @@ class AuthRemoteDatasource {
     return _decodeResponse(response);
   }
 
+  /// Barrios de la plataforma (solo SUPER_ADMIN).
+  Future<List<NeighborhoodSummary>> listNeighborhoods(String token) async {
+    final response = await _request(
+      () => _client
+          .get(
+            Uri.parse('$_baseUrl/api/v1/platform/neighborhoods'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(ApiConfig.coldStartTimeout),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _decodeResponse(response); // lanza AuthException con el detalle
+    }
+    final body = jsonDecode(response.body);
+    if (body is! List) {
+      throw const FormatException('Respuesta de barrios inválida');
+    }
+    return body
+        .whereType<Map<String, dynamic>>()
+        .map(NeighborhoodSummary.fromJson)
+        .toList(growable: false);
+  }
+
   Future<NeighborhoodProvisionEntity> createNeighborhood({
     required String token,
     required String neighborhoodName,

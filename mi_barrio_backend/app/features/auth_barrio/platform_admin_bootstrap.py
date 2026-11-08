@@ -1,15 +1,27 @@
+"""Crea el PRIMER superadministrador (solo funciona una vez por base de datos).
+
+Uso (desde mi_barrio_backend):
+    DATABASE_URL='postgresql://...neon.tech/...' .venv/bin/python -m app.features.auth_barrio.platform_admin_bootstrap
+
+Sin DATABASE_URL en el entorno usa la de .env (la base local). Antes de pedir
+los datos muestra en qué servidor se va a crear la cuenta.
+"""
 import asyncio
 import getpass
 import re
+import sys
 
 from sqlalchemy import select
+from sqlalchemy.engine import make_url
 
 from app.core.auth_security import hash_password
-from app.core.database import async_session_factory
+from app.core.database import DATABASE_URL, async_session_factory, engine
 from app.features.auth_barrio.models import PlatformAdmin, User
 
 
 async def create_platform_admin() -> None:
+    url = make_url(DATABASE_URL)
+    print(f"Base de datos: {url.host}/{url.database}")
     full_name = input("Nombre del superadministrador: ").strip()
     email = input("Correo del superadministrador: ").strip().lower()
     password = getpass.getpass("Contraseña (mínimo 8 caracteres): ")
@@ -49,5 +61,17 @@ async def create_platform_admin() -> None:
     print(f"SUPER_ADMIN creado: {email}")
 
 
+async def _main() -> int:
+    try:
+        await create_platform_admin()
+        return 0
+    except ValueError as error:
+        print(f"No se creó: {error}", file=sys.stderr)
+        return 1
+    finally:
+        # Cierra las conexiones antes de que termine el event loop.
+        await engine.dispose()
+
+
 if __name__ == "__main__":
-    asyncio.run(create_platform_admin())
+    sys.exit(asyncio.run(_main()))

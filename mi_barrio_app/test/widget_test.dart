@@ -104,6 +104,9 @@ void main() {
   testWidgets('el superadministrador ve el formulario de alta de barrios', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(1080, 4800);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
     const user = UserModel(
       id: 'platform-admin',
       tenantId: null,
@@ -125,22 +128,55 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(home: PlatformAdminScreen(user: user)),
+        child: MaterialApp(
+          home: PlatformAdminScreen(
+            user: user,
+            loadNeighborhoods: () async => const [
+              NeighborhoodSummary(
+                id: 'n1',
+                name: 'Barrio Los Algarrobos',
+                inviteCode: 'MB-ALGARROBO1',
+                isEmergencyActive: false,
+                adminCount: 0,
+              ),
+              NeighborhoodSummary(
+                id: 'n2',
+                name: 'Barrio Centro',
+                inviteCode: 'MB-CENTRO0001',
+                isEmergencyActive: true,
+                adminCount: 1,
+              ),
+            ],
+          ),
+        ),
       ),
     );
 
+    await tester.pumpAndSettle();
     expect(find.text('Administración de Mi Barrio'), findsOneWidget);
+    // Lista real de barrios (del servidor), sin datos fijos.
+    expect(find.text('Barrios (2)'), findsOneWidget);
+    expect(find.text('Barrio Los Algarrobos'), findsOneWidget);
+    expect(find.text('Sin administrador'), findsOneWidget);
+    expect(find.text('En emergencia'), findsOneWidget);
     expect(find.text('Nombre del barrio'), findsOneWidget);
     expect(find.text('Crear barrio'), findsOneWidget);
     expect(find.text('Usar mi ubicación'), findsOneWidget);
 
-    // "Barrio existente" pide solo el código (sin nombre ni coordenadas).
-    await tester.tap(find.byKey(PlatformAdminScreen.existingModeKey));
+    // "Asignar administrador" en un barrio sin junta llena el código.
+    await tester.tap(find.text('Asignar administrador').first);
     await tester.pumpAndSettle();
+    expect(find.text('MB-ALGARROBO1'), findsWidgets);
     expect(find.text('Código del barrio'), findsOneWidget);
     expect(find.text('Nombre del barrio'), findsNothing);
     expect(find.text('Latitud'), findsNothing);
-    expect(find.text('Asignar administrador'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(PlatformAdminScreen.submitKey),
+        matching: find.text('Asignar administrador'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('el administrador de barrio tiene su código para compartir', (

@@ -36,6 +36,8 @@ _RULES: dict[str, dict[str, tuple[str, object]]] = {
         "description": ("text_opt", (0, 2000)),
         "lat": ("lat", None),
         "lng": ("lng", None),
+        # Foto opcional del favor: mismo tope que las fotos de calificaciones.
+        "photo_b64": ("text_opt", (0, 110_000)),
     },
     "local_services": {
         "category": ("enum", _one_of(ServiceCategory)),

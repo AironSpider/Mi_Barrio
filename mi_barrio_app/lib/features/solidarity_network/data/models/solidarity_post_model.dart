@@ -58,6 +58,12 @@ class SolidarityPostModel {
     this.isDeleted = false,
     required this.updatedAt,
     this.syncStatus = SqliteTables.syncPending,
+    this.authorName,
+    this.contactPhone,
+    this.contactWhatsapp,
+    this.hasPhoto = false,
+    this.coordinatorUserId,
+    this.coordinatorName,
   });
 
   static const table = 'solidarity_posts';
@@ -80,7 +86,57 @@ class SolidarityPostModel {
   final String updatedAt;
   final String syncStatus;
 
+  // ── Solo bajada (los manda el servidor en el pull; no viajan en el push) ──
+  /// Nombre público del autor ("Rosa C.").
+  final String? authorName;
+
+  /// Teléfono / WhatsApp que el autor cargó en su perfil (para coordinar).
+  final String? contactPhone;
+  final String? contactWhatsapp;
+
+  /// true si tiene foto (se descarga aparte, ver `post_photos`).
+  final bool hasPhoto;
+
+  /// Quién está ayudando (lo registra el servidor al coordinar).
+  final String? coordinatorUserId;
+  final String? coordinatorName;
+
   bool get isPending => syncStatus == SqliteTables.syncPending;
+
+  bool get hasPhone => contactPhone?.trim().isNotEmpty ?? false;
+  bool get hasWhatsapp => contactWhatsapp?.trim().isNotEmpty ?? false;
+
+  SolidarityPostModel copyWith({
+    String? status,
+    String? updatedAt,
+    String? syncStatus,
+    bool? hasPhoto,
+    String? coordinatorUserId,
+    bool clearCoordinator = false,
+  }) =>
+      SolidarityPostModel(
+        id: id,
+        tenantId: tenantId,
+        authorUserId: authorUserId,
+        flowType: flowType,
+        modality: modality,
+        title: title,
+        description: description,
+        isEmergencyContext: isEmergencyContext,
+        status: status ?? this.status,
+        lat: lat,
+        lng: lng,
+        isDeleted: isDeleted,
+        updatedAt: updatedAt ?? this.updatedAt,
+        syncStatus: syncStatus ?? this.syncStatus,
+        authorName: authorName,
+        contactPhone: contactPhone,
+        contactWhatsapp: contactWhatsapp,
+        hasPhoto: hasPhoto ?? this.hasPhoto,
+        coordinatorUserId:
+            clearCoordinator ? null : coordinatorUserId ?? this.coordinatorUserId,
+        coordinatorName: clearCoordinator ? null : coordinatorName,
+      );
 
   Map<String, Object?> toSqlite() => {
         'id': id,
@@ -97,6 +153,12 @@ class SolidarityPostModel {
         'is_deleted': isDeleted ? 1 : 0,
         'updated_at': updatedAt,
         'sync_status': syncStatus,
+        'author_name': authorName,
+        'contact_phone': contactPhone,
+        'contact_whatsapp': contactWhatsapp,
+        'has_photo': hasPhoto ? 1 : 0,
+        'coordinator_user_id': coordinatorUserId,
+        'coordinator_name': coordinatorName,
       };
 
   /// Payload para la cola outbox / `/sync/push` (formato del contrato).
@@ -132,6 +194,12 @@ class SolidarityPostModel {
       isDeleted: (row['is_deleted'] as int? ?? 0) == 1,
       updatedAt: row['updated_at'] as String,
       syncStatus: row['sync_status'] as String? ?? SqliteTables.syncSynced,
+      authorName: row['author_name'] as String?,
+      contactPhone: row['contact_phone'] as String?,
+      contactWhatsapp: row['contact_whatsapp'] as String?,
+      hasPhoto: (row['has_photo'] as int? ?? 0) == 1,
+      coordinatorUserId: row['coordinator_user_id'] as String?,
+      coordinatorName: row['coordinator_name'] as String?,
     );
   }
 }

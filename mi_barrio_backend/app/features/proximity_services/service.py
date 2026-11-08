@@ -52,27 +52,11 @@ async def rating_avg_for_service(
 async def provider_contacts(
     db: AsyncSession, tenant_id: uuid.UUID, provider_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, dict]:
-    """Teléfono y WhatsApp de quien OFRECE un servicio en el barrio.
+    """Teléfono y WhatsApp de quien OFRECE un servicio en el barrio (solo cuentas
+    activas y aprobadas por la junta)."""
+    from app.features.auth_barrio.service import public_profiles  # evita import circular
 
-    Solo se consulta a dueños de servicios publicados (dato de negocio que
-    cargaron para que los contacten), de cuentas activas y aprobadas por la junta.
-    """
-    if not provider_ids:
-        return {}
-    from app.features.auth_barrio.models import User  # evita import circular
-
-    rows = (await db.execute(
-        select(User.id, User.phone, User.whatsapp).where(
-            User.id.in_(provider_ids),
-            User.tenant_id == tenant_id,
-            User.is_deleted.is_(False),
-            User.is_approved.is_(True),
-        )
-    )).all()
-    return {
-        uid: {"contact_phone": phone or None, "contact_whatsapp": whatsapp or None}
-        for uid, phone, whatsapp in rows
-    }
+    return await public_profiles(db, tenant_id, provider_ids, only_approved=True)
 
 
 async def recalculate_service_rating(db: AsyncSession, service_id: uuid.UUID) -> LocalService | None:

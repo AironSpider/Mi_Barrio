@@ -12,9 +12,9 @@ import '../../../../shared/emergency_ranking.dart';
 import '../../../../shared/local_distance.dart';
 import '../../data/datasources/solidarity_sqlite_ds.dart';
 import '../../data/models/solidarity_post_model.dart';
-import '../widgets/favor_detail_sheet.dart';
 import '../widgets/post_meta_label.dart';
 import '../widgets/support_groups_section.dart';
+import 'favor_detail_screen.dart';
 
 class CollaborativeWallScreen extends StatefulWidget {
   const CollaborativeWallScreen({
@@ -119,15 +119,23 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
       .where((post) => _flowFilter == null || post.flowType == _flowFilter)
       .toList(growable: false);
 
-  void _openDetail(SolidarityPostModel post) {
-    unawaited(
-      showFavorDetailSheet(
-        context,
-        post: post,
-        userId: TenantSession.instance.userId,
-        onCoordinate: widget.onCoordinate ?? _coordinate,
+  /// Detalle en pantalla completa (foto, contacto, chat, comentarios, reseñas).
+  Future<void> _openDetail(SolidarityPostModel post) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => FavorDetailScreen(
+          post: post,
+          onCoordinate: widget.onCoordinate ?? _coordinate,
+          onChangeStatus: (p, status) => _datasource.changeMyPostStatus(
+            tenantId: _tenantId,
+            postId: p.id,
+            authorUserId: TenantSession.instance.userId,
+            newStatus: status,
+          ),
+        ),
       ),
     );
+    if (mounted) unawaited(_loadPosts());
   }
 
   /// Coordina un favor ajeno: guarda PENDING en el teléfono y encola el cambio.
@@ -356,6 +364,11 @@ class _PostCard extends StatelessWidget {
                     avatar: Icon(Icons.emergency_rounded, size: 18),
                     label: Text('Emergencia'),
                   ),
+                if (post.hasPhoto)
+                  const Chip(
+                    avatar: Icon(Icons.photo_camera_rounded, size: 18),
+                    label: Text('Con foto'),
+                  ),
                 if (post.isPending) SyncStatusChip.fromPending(true),
               ],
             ),
@@ -368,7 +381,13 @@ class _PostCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              SolidarityModality.labels[post.modality] ?? post.modality,
+              [
+                SolidarityModality.labels[post.modality] ?? post.modality,
+                if (post.authorUserId == TenantSession.instance.userId)
+                  'publicado por ti'
+                else if (post.authorName != null)
+                  'por ${post.authorName}',
+              ].join(' · '),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             if (_metaLabel() case final meta?) ...[
@@ -403,7 +422,9 @@ class _PostCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      'Alguien ya está ayudando',
+                      post.coordinatorName != null
+                          ? '${post.coordinatorName} ya está ayudando'
+                          : 'Alguien ya está ayudando',
                       style: Theme.of(context).textTheme.labelLarge,
                     ),
                   ),
@@ -412,8 +433,16 @@ class _PostCard extends StatelessWidget {
             ],
             if (post.description != null) ...[
               const SizedBox(height: 8),
-              Text(post.description!),
+              Text(post.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
             ],
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'Ver detalle, comentarios y contacto ›',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(color: colorScheme.primary),
+              ),
+            ),
           ],
         ),
       ),

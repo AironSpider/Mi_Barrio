@@ -37,6 +37,7 @@ PROTECTED_FIELDS = {
     "server_updated_at",
     "email",
     "password_hash",
+    "coordinator_user_id",  # lo pone el servidor al coordinar
 }
 
 # Dueño de cada tabla: solo él puede crear o modificar sus registros.
@@ -159,7 +160,8 @@ async def _apply_solidarity_coordination(
         raise ValueError("esta publicación ya no está disponible para coordinar")
 
     columns = {column.name for column in post.__table__.columns}
-    ignored_fields = {"status", "updated_at"}
+    # La foto y el coordinador no los decide quien coordina: no se comparan.
+    ignored_fields = {"status", "updated_at", "photo_b64", "coordinator_user_id"}
     for key, value in payload.items():
         if key in ignored_fields:
             continue
@@ -169,6 +171,7 @@ async def _apply_solidarity_coordination(
             )
 
     post.status = "EN_COORDINACION"
+    post.coordinator_user_id = principal_id
     post.updated_at = max(_aware(post.updated_at), _client_time(payload.get("updated_at")))
 
 
@@ -316,6 +319,12 @@ async def process_sync_push(
                             ):
                                 setattr(existing_record, key, _coerce(key, val))
                         existing_record.updated_at = client_updated_at
+                        # El autor vuelve a "Disponible": ya nadie lo está ayudando.
+                        if (
+                            model_class is SolidarityPost
+                            and payload.get("status") == "DISPONIBLE"
+                        ):
+                            existing_record.coordinator_user_id = None
                 else:
                     clean_payload = {
                         "id": rec_id,

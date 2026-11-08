@@ -423,6 +423,83 @@ def main():
     leaked = [x for v in b.get("delta", {}).values() for x in v if x.get("tenant_id") == TENANT] if s == 200 else []
     check("pull de otro barrio no filtra datos", s == 200 and not leaked, f"{s} {len(leaked)}")
 
+    # ── Detalle del favor: foto, comentarios, chat en tiempo real y reseñas ──
+    fav_id = str(uuid.uuid4())
+    photo = "/9j/4AAQSkZJRgABAQAAAQABAAD/"
+    s, b = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": now(), "mutations": [{
+        "target_table": "solidarity_posts", "record_id": fav_id, "operation": "UPSERT", "payload": {
+            "id": fav_id, "author_user_id": ME, "flow_type": "SOLICITO_AYUDA",
+            "modality": "PRESTAMO_HERRAMIENTA", "title": "Necesito un taladro", "status": "DISPONIBLE",
+            "is_emergency_context": False, "lat": LAT, "lng": LNG, "photo_b64": photo,
+            "updated_at": now()}}]})
+    check("favor con foto por sync", s == 200 and b["processed_record_ids"] == [fav_id], f"{s} {b}")
+    s, b = call("GET", f"/api/v1/solidarity/{fav_id}/photo", who=vecino2)
+    check("GET /solidarity/{id}/photo", s == 200 and b.get("photo_b64") == photo, f"{s}")
+    s, b = call("GET", "/api/v1/sync/pull", who=vecino2)
+    row = next((x for x in b["delta"]["solidarity_posts"] if x["id"] == fav_id), {}) if s == 200 else {}
+    check("pull del favor: sin foto, con has_photo y nombre del autor",
+          row.get("has_photo") is True and "photo_b64" not in row and row.get("author_name") == "Vecina s.",
+          f"{row}")
+
+    s, c = call("POST", f"/api/v1/solidarity/{fav_id}/comments", {"body": "Yo tengo uno"}, who=vecino2)
+    check("POST comentario", s == 201 and c.get("author_name") == "Vecino s.", f"{s} {c}")
+    s, b = call("GET", f"/api/v1/solidarity/{fav_id}/comments")
+    check("GET comentarios", s == 200 and [x["body"] for x in b] == ["Yo tengo uno"], f"{s} {b}")
+    s, b = call("DELETE", f"/api/v1/solidarity/{fav_id}/comments/{c.get('id')}")
+    check("no puedes borrar el comentario de otro -> 403", s == 403, f"{s}")
+
+    # Chat en tiempo real: la autora escucha por WebSocket y el vecino le escribe.
+    from websockets.sync.client import connect as ws_connect
+    import json as _json
+    ws_url = BASE.replace("http", "ws", 1) + f"/api/v1/ws/chat?token={vecino['token']}&tenant={TENANT}"
+    VEC2 = vecino2["id"]
+    s, b = call("POST", f"/api/v1/solidarity/{fav_id}/conversations/{VEC2}/messages", {"body": "Hola"})
+    check("la autora no puede iniciar el chat -> 409", s == 409, f"{s} {b}")
+    with ws_connect(ws_url, open_timeout=10) as ws:
+        ws.send("ping")
+        check("WebSocket conecta y responde pong", ws.recv(timeout=5) == "pong")
+        s, m = call("POST", f"/api/v1/solidarity/{fav_id}/conversations/{VEC2}/messages",
+                    {"body": "Te lo presto hoy"}, who=vecino2)
+        check("el vecino escribe por el favor", s == 201, f"{s} {m}")
+        pushed = _json.loads(ws.recv(timeout=5))
+        check("la autora lo recibe AL INSTANTE por WebSocket",
+              pushed.get("type") == "favor_message" and pushed["message"]["body"] == "Te lo presto hoy", f"{pushed}")
+    s, b = call("POST", f"/api/v1/solidarity/{fav_id}/conversations/{VEC2}/messages", {"body": "¡Gracias!"})
+    check("la autora responde", s == 201, f"{s} {b}")
+    s, b = call("GET", f"/api/v1/solidarity/{fav_id}/conversations")
+    check("la autora ve la conversación", s == 200 and b and b[0]["message_count"] == 2, f"{s} {b}")
+    s, b = call("GET", f"/api/v1/solidarity/{fav_id}/conversations/{VEC2}/messages", who=comerciante)
+    check("un tercero no lee el chat -> 403", s == 403, f"{s}")
+    try:
+        with ws_connect(BASE.replace("http", "ws", 1) + f"/api/v1/ws/chat?token=malo&tenant={TENANT}",
+                        open_timeout=10) as ws:
+            ws.recv(timeout=5)
+        ws_rejected = False
+    except Exception:
+        ws_rejected = True
+    check("WebSocket con token inválido se rechaza", ws_rejected)
+
+    # Coordinar → completar → reseñas
+    s, b = call("POST", f"/api/v1/solidarity/{fav_id}/reviews", {"rating": 5})
+    check("reseña antes de completar -> 409", s == 409, f"{s}")
+    s, b = call("PATCH", f"/api/v1/solidarity/{fav_id}/coordinate", who=vecino2)
+    check("coordinar registra quién ayuda", s == 200 and b.get("coordinator_user_id") == VEC2, f"{s} {b}")
+    s, b = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": now(), "mutations": [{
+        "target_table": "solidarity_posts", "record_id": fav_id, "operation": "UPSERT",
+        "payload": {"id": fav_id, "author_user_id": ME, "status": "COMPLETADO", "updated_at": now(5)}}]})
+    check("la autora marca COMPLETADO", s == 200 and b["processed_record_ids"] == [fav_id], f"{s} {b}")
+    s, b = call("POST", f"/api/v1/solidarity/{fav_id}/reviews", {"rating": 5, "comment": "Muy amable"})
+    check("la autora califica a quien ayudó",
+          s == 201 and b.get("reviewed_user_id") == VEC2 and b.get("reviewed_name") == "Vecino s.", f"{s} {b}")
+    s, b = call("POST", f"/api/v1/solidarity/{fav_id}/reviews", {"rating": 4})
+    check("reseña duplicada -> 409", s == 409, f"{s}")
+    s, b = call("POST", f"/api/v1/solidarity/{fav_id}/reviews", {"rating": 5}, who=vecino2)
+    check("quien ayudó califica a la autora", s == 201 and b.get("reviewed_user_id") == ME, f"{s} {b}")
+    s, b = call("POST", f"/api/v1/solidarity/{fav_id}/reviews", {"rating": 5}, who=comerciante)
+    check("un tercero no deja reseña -> 403", s == 403, f"{s}")
+    s, b = call("GET", f"/api/v1/solidarity/{fav_id}/reviews", who=comerciante)
+    check("GET reseñas (públicas)", s == 200 and len(b) == 2, f"{s} {b}")
+
     # ── Superadministrador (plataforma) ──
     sa = temporary_platform_admin()
     try:

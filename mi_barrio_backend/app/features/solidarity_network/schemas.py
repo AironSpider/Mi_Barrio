@@ -38,3 +38,68 @@ class SolidarityPostResponse(SolidarityPostBase):
     created_at: datetime
     updated_at: datetime
     is_deleted: bool
+    coordinator_user_id: Optional[uuid.UUID] = None
+
+
+class PostPhotoResponse(BaseModel):
+    id: uuid.UUID
+    photo_b64: str
+    content_type: str = "image/jpeg"
+
+
+# ── Comentarios ──
+class CommentCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=500, examples=["¡Yo te presto la escalera!"])
+
+
+class CommentResponse(BaseModel):
+    id: uuid.UUID
+    post_id: uuid.UUID
+    author_user_id: uuid.UUID
+    author_name: str
+    body: str
+    created_at: datetime
+
+
+# ── Reseñas (al completar el favor) ──
+class ReviewCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = Field(None, max_length=300)
+
+
+class ReviewResponse(BaseModel):
+    id: uuid.UUID
+    post_id: uuid.UUID
+    reviewer_user_id: uuid.UUID
+    reviewer_name: str
+    reviewed_user_id: uuid.UUID
+    reviewed_name: str
+    rating: int
+    comment: Optional[str] = None
+    created_at: datetime
+
+
+# ── Chat del favor ──
+class MessageCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=1000)
+
+
+class MessageResponse(BaseModel):
+    id: uuid.UUID
+    post_id: uuid.UUID
+    neighbor_user_id: uuid.UUID
+    sender_user_id: uuid.UUID
+    sender_name: str
+    body: str
+    created_at: datetime
+
+
+class ConversationSummary(BaseModel):
+    """Una conversación del favor (autor ↔ un vecino)."""
+    post_id: uuid.UUID
+    neighbor_user_id: uuid.UUID
+    neighbor_name: str
+    last_message: str
+    last_sender_user_id: uuid.UUID
+    last_at: datetime
+    message_count: int

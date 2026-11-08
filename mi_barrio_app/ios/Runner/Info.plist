@@ -68,5 +68,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Para tomar una foto de lo que necesitas u ofreces en tu barrio.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Para elegir una foto de tu galería y agregarla a tu publicación.</string>
 </dict>
 </plist>

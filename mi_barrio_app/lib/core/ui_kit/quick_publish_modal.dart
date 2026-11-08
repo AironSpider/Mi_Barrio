@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../features/solidarity_network/data/datasources/solidarity_sqlite_ds.dart';
 import '../../features/solidarity_network/data/models/solidarity_post_model.dart';
 import 'icon_scale.dart';
 
@@ -9,13 +13,33 @@ class QuickPublishData {
     required this.flowType,
     required this.title,
     required this.isEmergencyContext,
+    this.photoB64,
   });
 
   final String modality;
   final String flowType;
   final String title;
   final bool isEmergencyContext;
+
+  /// Foto opcional (JPEG comprimido en base64).
+  final String? photoB64;
 }
+
+/// Elige una foto ya comprimida (máx. 800 px, calidad 60). Los tests la reemplazan.
+typedef PhotoPicker = Future<List<int>?> Function(ImageSource source);
+
+Future<List<int>?> _defaultPicker(ImageSource source) async {
+  final file = await ImagePicker().pickImage(
+    source: source,
+    maxWidth: 800,
+    maxHeight: 800,
+    imageQuality: 60,
+  );
+  return file?.readAsBytes();
+}
+
+/// Reemplazable en pruebas.
+PhotoPicker quickPublishPhotoPicker = _defaultPicker;
 
 typedef QuickPublishCallback = Future<void> Function(QuickPublishData data);
 
@@ -63,6 +87,25 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
   String _flujo = SolidarityFlowType.solicitoAyuda;
   bool _guardando = false;
   String? _error;
+  String? _fotoB64;
+
+  Future<void> _elegirFoto(ImageSource source) async {
+    try {
+      final bytes = await quickPublishPhotoPicker(source);
+      if (bytes == null || !mounted) return;
+      final b64 = base64Encode(bytes);
+      if (b64.length > SolidaritySqliteDatasource.maxPhotoB64Length) {
+        setState(() => _error = 'La foto es muy pesada. Prueba con otra o tómala de más lejos.');
+        return;
+      }
+      setState(() {
+        _fotoB64 = b64;
+        _error = null;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'No se pudo abrir la cámara o la galería.');
+    }
+  }
 
   List<_Categoria> get _categorias => [
     const _Categoria(
@@ -121,6 +164,7 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
           flowType: _flujo,
           title: _titulo.text.trim(),
           isEmergencyContext: widget.isEmergencyMode,
+          photoB64: _fotoB64,
         ),
       );
       if (!mounted) return;
@@ -228,6 +272,15 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
                       ),
                     ),
             ),
+            if (_modalidad != null) ...[
+              const SizedBox(height: 12),
+              _FotoOpcional(
+                fotoB64: _fotoB64,
+                onCamara: () => _elegirFoto(ImageSource.camera),
+                onGaleria: () => _elegirFoto(ImageSource.gallery),
+                onQuitar: () => setState(() => _fotoB64 = null),
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -312,6 +365,72 @@ class _CategoriaTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// "Agregar foto (opcional)": cámara o galería, con vista previa y quitar.
+class _FotoOpcional extends StatelessWidget {
+  const _FotoOpcional({
+    required this.fotoB64,
+    required this.onCamara,
+    required this.onGaleria,
+    required this.onQuitar,
+  });
+
+  final String? fotoB64;
+  final VoidCallback onCamara;
+  final VoidCallback onGaleria;
+  final VoidCallback onQuitar;
+
+  static const camaraKey = ValueKey('quick_publish_photo_camera');
+  static const galeriaKey = ValueKey('quick_publish_photo_gallery');
+
+  @override
+  Widget build(BuildContext context) {
+    final texto = Theme.of(context).textTheme;
+    final foto = fotoB64;
+    if (foto != null) {
+      return Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.memory(base64Decode(foto), width: 72, height: 72, fit: BoxFit.cover),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text('Foto agregada', style: texto.bodyLarge)),
+          TextButton.icon(
+            onPressed: onQuitar,
+            icon: const Icon(Icons.close_rounded),
+            label: const Text('Quitar'),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Agregar foto (opcional)', style: texto.titleSmall),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              key: camaraKey,
+              onPressed: onCamara,
+              icon: const Icon(Icons.photo_camera_rounded),
+              label: const Text('Cámara'),
+            ),
+            OutlinedButton.icon(
+              key: galeriaKey,
+              onPressed: onGaleria,
+              icon: const Icon(Icons.photo_library_rounded),
+              label: const Text('Galería'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

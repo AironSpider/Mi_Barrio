@@ -13,7 +13,7 @@ class SqliteTables {
 
   /// Versión actual del esquema. Súbela al agregar tablas o columnas
   /// y añade el paso correspondiente en [migrations].
-  static const int schemaVersion = 7;
+  static const int schemaVersion = 8;
 
   // ── Valores permitidos (idénticos al contrato del backend) ──
   static const syncPending = 'PENDING';
@@ -37,7 +37,23 @@ class SqliteTables {
       lng REAL NOT NULL,
       is_deleted INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL,
-      sync_status TEXT NOT NULL DEFAULT 'SYNCED'
+      sync_status TEXT NOT NULL DEFAULT 'SYNCED',
+      author_name TEXT,
+      contact_phone TEXT,
+      contact_whatsapp TEXT,
+      has_photo INTEGER NOT NULL DEFAULT 0,
+      coordinator_user_id TEXT,
+      coordinator_name TEXT
+    )
+  ''';
+
+  /// Fotos de favores (aparte: el pull reemplaza la fila del favor y no trae
+  /// la foto; así no se pierde la que ya se descargó o se tomó aquí).
+  static const createPostPhotos = '''
+    CREATE TABLE IF NOT EXISTS post_photos (
+      post_id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      photo_b64 TEXT NOT NULL
     )
   ''';
 
@@ -222,6 +238,7 @@ class SqliteTables {
     createAppSettings,
     createVulnerableReports,
     createSupportGroups,
+    createPostPhotos,
     ...indexes,
     ...indexesV3,
     ...indexesV4,
@@ -237,6 +254,7 @@ class SqliteTables {
   /// v6 (Sprint 12): + users.email_contacto (correo de contacto del perfil).
   /// v7 (Sprint 12): + local_services.contact_phone / contact_whatsapp
   ///     (contacto del comerciante; lo manda el servidor en el pull).
+  /// v8 (Sprint 13): favores con autor, contacto, foto y coordinador + post_photos.
   static const Map<int, List<String>> migrations = {
     2: [createLocalServices, ...indexes],
     3: [createNeighborEndorsements, createUsers, createAppSettings, ...indexesV3],
@@ -246,6 +264,9 @@ class SqliteTables {
     // El pull es incremental y nunca los volvería a bajar: se olvida el cursor
     // para descargar todo UNA vez (lo pendiente de subir no se pisa).
     7: ['DELETE FROM sync_state'],
+    // v8: favores con autor, contacto, foto y quién ayuda. Se baja todo de
+    // nuevo UNA vez para completar los favores ya guardados.
+    8: [createPostPhotos, 'DELETE FROM sync_state'],
   };
 
   /// Columnas nuevas en tablas existentes, por versión destino.
@@ -263,6 +284,16 @@ class SqliteTables {
     },
     7: {
       'local_services': {'contact_phone': 'TEXT', 'contact_whatsapp': 'TEXT'},
+    },
+    8: {
+      'solidarity_posts': {
+        'author_name': 'TEXT',
+        'contact_phone': 'TEXT',
+        'contact_whatsapp': 'TEXT',
+        'has_photo': 'INTEGER NOT NULL DEFAULT 0',
+        'coordinator_user_id': 'TEXT',
+        'coordinator_name': 'TEXT',
+      },
     },
   };
 }

@@ -17,6 +17,7 @@ from app.features.sync_engine.validation import MAX_BATCH
 from app.features.auth_barrio.models import Tenant
 from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService
+from app.features.auth_barrio.service import public_profiles
 from app.features.proximity_services.service import provider_contacts, rating_avg_by_service
 from app.features.emergency_support.models import SupportGroup, VulnerableReport
 
@@ -128,6 +129,23 @@ async def pull_delta(
         contact = contacts.get(uuid.UUID(svc["provider_user_id"]), {})
         svc["contact_phone"] = contact.get("contact_phone")
         svc["contact_whatsapp"] = contact.get("contact_whatsapp")
+
+    # Favores: sin la foto (se pide aparte), con nombre público y contacto del
+    # autor (para WhatsApp / Llamar al coordinar) y el nombre de quien ayuda.
+    people = {uuid.UUID(p["author_user_id"]) for p in delta["solidarity_posts"]} | {
+        uuid.UUID(p["coordinator_user_id"]) for p in delta["solidarity_posts"] if p.get("coordinator_user_id")
+    }
+    profiles = await public_profiles(db, tenant_uuid, people)
+    for post in delta["solidarity_posts"]:
+        post["has_photo"] = bool(post.pop("photo_b64", None))
+        author = profiles.get(uuid.UUID(post["author_user_id"]), {})
+        post["author_name"] = author.get("name")
+        post["contact_phone"] = author.get("contact_phone")
+        post["contact_whatsapp"] = author.get("contact_whatsapp")
+        coordinator = post.get("coordinator_user_id")
+        post["coordinator_name"] = (
+            profiles.get(uuid.UUID(coordinator), {}).get("name") if coordinator else None
+        )
 
     tenant = await db.get(Tenant, tenant_uuid)
     tenant_info = TenantInfo(
