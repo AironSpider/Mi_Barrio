@@ -332,6 +332,7 @@ void main() {
                   'is_deleted': false,
                   'updated_at': '2026-11-07T09:00:00+00:00',
                   'created_at': '2026-11-07T09:00:00+00:00',
+                  'server_updated_at': '2026-11-07T14:00:00+00:00',
                 },
                 {
                   'id': 'deadbeef-0000-4000-8000-000000000002',
@@ -387,8 +388,11 @@ void main() {
       expect(services.single.ratingAvg, 4.6);
       expect(services.single.isPending, isFalse);
 
+      // Sprint 12: el cursor se queda en la fila que se saltó (14:00), no en la
+      // hora del pull (15:00): así el próximo pull la vuelve a traer si el
+      // servidor se quedó con su versión.
       final state = (await (await db()).query('sync_state')).single;
-      expect(state['last_pulled_at'], '2026-11-07T15:00:00.123456Z');
+      expect(state['last_pulled_at'], '2026-11-07T14:00:00.000Z');
     });
 
     test('sin red: push y pull fallan sin lanzar excepciones', () async {

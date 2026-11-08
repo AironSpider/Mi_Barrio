@@ -43,10 +43,25 @@ class _Net extends http.BaseClient {
   final _inner = http.Client();
   bool online = true;
 
+  /// Rutas que responden 503 (servidor caído solo para esa ruta).
+  final Set<String> down = {};
+
+  /// Si es true, la petición LLEGA al servidor pero la respuesta se pierde
+  /// (la app se cerró a la fuerza justo después de enviar).
+  bool dieAfterSend = false;
+
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
     if (!online) throw const SocketException('Sin señal (modo avión)');
-    return _inner.send(request);
+    if (down.contains(request.url.path)) {
+      return http.StreamedResponse(Stream.value(utf8.encode('caído')), 503);
+    }
+    final response = await _inner.send(request);
+    if (dieAfterSend) {
+      await response.stream.drain<void>();
+      throw const SocketException('la app se cerró antes de leer la respuesta');
+    }
+    return response;
   }
 }
 
@@ -382,6 +397,71 @@ void main() {
       final back = await rosa.auth.login(email: 'rosa.$suffix@e2e.test', password: password);
       await rosa.auth.reconcilePendingData(back);
       await rosa.remember();
+    });
+
+    test('14. La app muere DESPUÉS de que el servidor recibió el envío: al reabrir reenvía y no hay copias', () async {
+      await rosa.use();
+      final favor = await SolidaritySqliteDatasource().publishInThreeClicks(
+        tenantId: rosa.tenant, authorUserId: rosa.id, modality: SolidarityModality.ayudaTemporal,
+        title: 'Acompaño al médico', lat: -5.1950, lng: -80.6330);
+      await EndorsementsSqliteDatasource().rateService(
+        tenantId: rosa.tenant, serviceId: serviceId, endorserUserId: rosa.id, rating: 4);
+
+      rosa.net.dieAfterSend = true;
+      final cut = await rosa.sync.pushLocalChanges(rosa.tenant);
+      expect(cut.success, isFalse);
+      rosa.net.dieAfterSend = false;
+
+      await rosa.use(); // se reabre la app
+      expect(await PendingChanges.count(rosa.tenant), 2, reason: 'nada se perdió');
+      final again = await rosa.sync.pushLocalChanges(rosa.tenant);
+      expect(again.success, isTrue, reason: again.message);
+      expect(await PendingChanges.count(rosa.tenant), 0);
+
+      final (s, list) = await rest('GET', '/api/v1/solidarity', token: rosa.session!['token'] as String);
+      expect(s, 200);
+      expect((list as List).where((p) => p['id'] == favor.id), hasLength(1), reason: 'una sola copia');
+      final reviews = await ServicesRemoteDatasource(api: ApiClient(baseUrl: base, client: rosa.net))
+          .fetchEndorsements(tenantId: rosa.tenant, serviceId: serviceId);
+      expect(reviews.items.where((e) => e.endorserUserId == rosa.id), hasLength(1));
+    });
+
+    test('15. Push caído (503) y pull OK: si el servidor gana (LWW) Rosa igual termina viendo su versión', () async {
+      await rosa.use();
+      final favor = await SolidaritySqliteDatasource().publishInThreeClicks(
+        tenantId: rosa.tenant, authorUserId: rosa.id, modality: SolidarityModality.prestamoHerramienta,
+        title: 'Necesito un taladro', lat: -5.1950, lng: -80.6330);
+      expect((await rosa.sync.pushLocalChanges(rosa.tenant)).success, isTrue);
+
+      // Rosa, sin señal, lo marca COMPLETADO…
+      rosa.net.online = false;
+      await SolidaritySqliteDatasource().changeMyPostStatus(
+          tenantId: rosa.tenant, postId: favor.id, authorUserId: rosa.id, newStatus: SolidarityStatus.completado);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      // …y DESPUÉS Luis (con señal) lo coordina: la versión del servidor es más nueva.
+      await luis.use();
+      expect((await luis.sync.pullRemoteChanges(luis.tenant)).success, isTrue);
+      await SolidaritySqliteDatasource().coordinatePost(
+          tenantId: luis.tenant, postId: favor.id, coordinatorUserId: luis.id);
+      expect((await luis.sync.pushLocalChanges(luis.tenant)).success, isTrue);
+
+      // Vuelve la señal de Rosa, pero el push está caído (503) y el pull no.
+      await rosa.use();
+      rosa.net.online = true;
+      rosa.net.down.add('/api/v1/sync/push');
+      final push = await rosa.sync.pushLocalChanges(rosa.tenant);
+      expect(push.retryable, isTrue, reason: '503 se reintenta');
+      expect((await rosa.sync.pullRemoteChanges(rosa.tenant)).skippedPendingCount, greaterThanOrEqualTo(1));
+
+      // El servidor vuelve: el push "gana" por LWW del servidor y el pull trae su versión.
+      rosa.net.down.clear();
+      expect((await rosa.sync.pushLocalChanges(rosa.tenant)).success, isTrue);
+      expect((await rosa.sync.pullRemoteChanges(rosa.tenant)).success, isTrue);
+      final now = (await SolidaritySqliteDatasource().getPost(rosa.tenant, favor.id))!;
+      expect(now.status, SolidarityStatus.enCoordinacion,
+          reason: 'antes se quedaba en COMPLETADO para siempre (el cursor ya había pasado)');
+      expect(now.syncStatus, SqliteTables.syncSynced);
     });
 
     test('11. Sesión vencida sin señal: lo pendiente NO se pierde y sube al volver a entrar', () async {

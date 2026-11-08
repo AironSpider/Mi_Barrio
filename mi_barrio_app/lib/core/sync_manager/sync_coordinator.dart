@@ -19,9 +19,23 @@ enum SyncPhase { idle, syncing, offline, error }
 ///
 /// Nunca corre dos sincronizaciones a la vez; si llega un pedido durante una,
 /// se hace una ronda más al terminar.
+///
+/// Reintentos (Sprint 12): si el SERVIDOR falla (5xx, sin respuesta, tiempo
+/// agotado) estando con red, se reintenta a los 2, 4, 8 y 16 s. Después sigue
+/// el ritmo normal ([interval]). Cualquier sincronización exitosa reinicia la
+/// cuenta. No se reintenta sin red (lo hace la vuelta de internet), con la
+/// sesión vencida (401) ni por datos rechazados (reintentar no los arregla).
 class SyncCoordinator {
   SyncCoordinator._();
   static final SyncCoordinator instance = SyncCoordinator._();
+
+  /// Esperas entre reintentos: 2, 4, 8 y 16 segundos.
+  static const defaultRetryDelays = [
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+    Duration(seconds: 8),
+    Duration(seconds: 16),
+  ];
 
   /// Estado actual, para que la UI lo muestre (Sprint 10).
   final ValueNotifier<SyncPhase> phase = ValueNotifier(SyncPhase.idle);
@@ -29,6 +43,17 @@ class SyncCoordinator {
   /// Fecha de la última sincronización exitosa (push + pull).
   final ValueNotifier<DateTime?> lastSuccess = ValueNotifier(null);
   final ValueNotifier<String?> lastError = ValueNotifier(null);
+
+  /// Espera del próximo reintento programado (null = ninguno). Para la UI:
+  /// "Reintentando en 4 s…".
+  final ValueNotifier<Duration?> nextRetry = ValueNotifier(null);
+
+  List<Duration> _retryDelays = defaultRetryDelays;
+  int _retryAttempt = 0;
+  Timer? _retryTimer;
+
+  /// Cuántos reintentos seguidos se programaron desde el último éxito.
+  int get retryAttempt => _retryAttempt;
 
   SyncWorker? _worker;
   bool Function() _isOnline = () => true;
@@ -51,9 +76,11 @@ class SyncCoordinator {
     String Function()? tenantId,
     Duration interval = const Duration(seconds: 60),
     bool syncImmediately = true,
+    List<Duration> retryDelays = defaultRetryDelays,
   }) async {
     await stop();
     _worker = worker ?? SyncWorker(baseUrl: ApiConfig.baseUrl);
+    _retryDelays = retryDelays;
     lastError.value = null;
     _isOnline =
         isOnline ??
@@ -65,6 +92,9 @@ class SyncCoordinator {
           if (status == ConnectionStatus.online) {
             syncNow();
           } else {
+            // Sin red no tiene sentido reintentar: al volver internet se
+            // sincroniza solo y la cuenta empieza de nuevo en 2 s.
+            _resetRetries();
             phase.value = SyncPhase.offline;
           }
         });
@@ -88,11 +118,17 @@ class SyncCoordinator {
       return;
     }
     _running = true;
+    // Esta ronda reemplaza a cualquier reintento que estuviera esperando.
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    nextRetry.value = null;
+    var outcome = _Outcome.success;
     try {
       do {
         _runAgain = false;
         if (!_isOnline()) {
           phase.value = SyncPhase.offline;
+          outcome = _Outcome.offline;
           break;
         }
         phase.value = SyncPhase.syncing;
@@ -101,21 +137,26 @@ class SyncCoordinator {
         if (push.unauthorized) {
           phase.value = SyncPhase.error;
           lastError.value = push.message;
+          outcome = _Outcome.stop;
           break;
         }
         final pull = await worker.pullRemoteChanges(tenant);
         if (pull.unauthorized) {
           phase.value = SyncPhase.error;
           lastError.value = pull.message;
+          outcome = _Outcome.stop;
           break;
         }
         if (push.success && pull.success) {
           phase.value = SyncPhase.idle;
           lastError.value = null;
           lastSuccess.value = DateTime.now();
+          outcome = _Outcome.success;
         } else {
           phase.value = SyncPhase.error;
           lastError.value = push.success ? pull.message : push.message;
+          final transient = (!push.success && push.retryable) || (!pull.success && pull.retryable);
+          outcome = transient ? _Outcome.retry : _Outcome.stop;
           if (kDebugMode) {
             debugPrint(
               '[Sync] push: ${push.message ?? 'ok'} | pull: ${pull.message ?? 'ok'}',
@@ -123,9 +164,41 @@ class SyncCoordinator {
           }
         }
       } while (_runAgain);
+    } catch (e) {
+      // Un error inesperado no debe dejar la sincronización trabada.
+      phase.value = SyncPhase.error;
+      lastError.value = e.toString();
+      outcome = _Outcome.retry;
     } finally {
       _running = false;
     }
+    _afterRound(outcome);
+  }
+
+  /// Falla temporal → próximo reintento; éxito, sin red o falla definitiva →
+  /// se cancela lo programado y la cuenta vuelve a empezar en 2 s.
+  void _afterRound(_Outcome outcome) =>
+      outcome == _Outcome.retry ? _scheduleRetry() : _resetRetries();
+
+  void _scheduleRetry() {
+    if (_worker == null || _retryAttempt >= _retryDelays.length) {
+      // Se agotaron los reintentos rápidos: sigue el ritmo normal ([interval]).
+      nextRetry.value = null;
+      return;
+    }
+    final wait = _retryDelays[_retryAttempt++];
+    nextRetry.value = wait;
+    _retryTimer = Timer(wait, () {
+      _retryTimer = null;
+      syncNow();
+    });
+  }
+
+  void _resetRetries() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _retryAttempt = 0;
+    nextRetry.value = null;
   }
 
   /// Ajusta la frecuencia (Sprint 8: 15 s en emergencia, 60 s en modo normal).
@@ -148,5 +221,9 @@ class SyncCoordinator {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
     _worker = null;
+    _resetRetries(); // después de esperar: la ronda en curso ya no programa nada
   }
 }
+
+/// Cómo terminó una ronda de sincronización.
+enum _Outcome { success, offline, retry, stop }

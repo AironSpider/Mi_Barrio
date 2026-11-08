@@ -23,6 +23,10 @@ class PushResult {
   /// la aprobación de la junta). Siguen en la cola como Pendiente.
   final int waitingCount;
 
+  /// Falla TEMPORAL (servidor caído o lento, sin respuesta): vale la pena
+  /// reintentar pronto. Un 401 o un dato rechazado no se arreglan reintentando.
+  final bool retryable;
+
   const PushResult({
     required this.success,
     this.sentCount = 0,
@@ -31,6 +35,7 @@ class PushResult {
     this.unauthorized = false,
     this.batchCount = 0,
     this.waitingCount = 0,
+    this.retryable = false,
   });
 }
 
@@ -43,6 +48,7 @@ class _BatchOutcome {
     this.message,
     this.httpFailed = false,
     this.unauthorized = false,
+    this.retryable = false,
   });
 
   final int sentCount;
@@ -53,6 +59,7 @@ class _BatchOutcome {
   /// El servidor no respondió 200: se detienen los lotes siguientes.
   final bool httpFailed;
   final bool unauthorized;
+  final bool retryable;
 }
 
 /// Resultado de descargar cambios del servidor.
@@ -63,14 +70,22 @@ class PullResult {
   final String? message;
   final bool unauthorized;
 
+  /// Ver [PushResult.retryable].
+  final bool retryable;
+
   const PullResult({
     required this.success,
     this.savedCount = 0,
     this.skippedPendingCount = 0,
     this.message,
     this.unauthorized = false,
+    this.retryable = false,
   });
 }
+
+/// Respuestas HTTP que suelen arreglarse solas: 408 (tiempo agotado),
+/// 429 (demasiadas peticiones) y 5xx (el servidor falló o se está reiniciando).
+bool isTransientHttpStatus(int status) => status == 408 || status == 429 || status >= 500;
 
 class SyncWorker {
   final String baseUrl;
@@ -209,6 +224,7 @@ class SyncWorker {
             batchCount: batches,
             message: problems.join(' | '),
             unauthorized: batch.unauthorized,
+            retryable: batch.retryable,
           );
         }
       }
@@ -235,6 +251,7 @@ class SyncWorker {
         processedCount: processed,
         batchCount: batches,
         message: e.toString(),
+        retryable: true,
       );
     }
   }
@@ -278,6 +295,7 @@ class SyncWorker {
         sentCount: pending.length,
         message: 'El servidor respondio ${response.statusCode}',
         unauthorized: response.statusCode == 401,
+        retryable: isTransientHttpStatus(response.statusCode),
       );
     }
 
@@ -413,6 +431,7 @@ class SyncWorker {
           success: false,
           message: 'El servidor respondio ${response.statusCode}',
           unauthorized: response.statusCode == 401,
+          retryable: isTransientHttpStatus(response.statusCode),
         );
       }
 
@@ -422,18 +441,27 @@ class SyncWorker {
 
       var saved = 0;
       var skipped = 0;
+      // Filas del servidor que NO se guardaron porque aquí hay cambios sin subir.
+      // El cursor no debe pasar por encima de ellas: si el servidor se queda con
+      // su versión (Last-Write-Wins), el próximo pull la tiene que volver a traer.
+      DateTime? oldestSkipped;
+      var skippedWithoutStamp = false;
       await db.transaction((txn) async {
         for (final entry in _pullColumns.entries) {
           final table = entry.key;
           final rows = (delta[table] as List?) ?? const [];
           if (rows.isEmpty) continue;
 
+          // Solo se protege lo que TODAVÍA está en la cola (se va a subir).
+          // Un registro FAILED ya salió de la cola: el servidor lo rechazó, así
+          // que su versión es la verdad y se debe ver (antes quedaba congelado
+          // para siempre, sin recibir nunca más cambios).
           final pendingIds = (await txn.query(
-            table,
-            columns: ['id'],
-            where: 'tenant_id = ? AND sync_status IN (?, ?)',
-            whereArgs: [tenantId, 'PENDING', 'FAILED'],
-          )).map((r) => r['id']).toSet();
+            'sync_outbox',
+            columns: ['record_id'],
+            where: 'tenant_id = ? AND target_table = ?',
+            whereArgs: [tenantId, table],
+          )).map((r) => r['record_id']).toSet();
 
           for (final raw in rows) {
             final record = raw as Map<String, dynamic>;
@@ -444,6 +472,12 @@ class SyncWorker {
             }
             if (pendingIds.contains(record['id'])) {
               skipped++;
+              final stamp = DateTime.tryParse('${record['server_updated_at'] ?? ''}');
+              if (stamp == null) {
+                skippedWithoutStamp = true;
+              } else if (oldestSkipped == null || stamp.isBefore(oldestSkipped!)) {
+                oldestSkipped = stamp;
+              }
               continue;
             }
             final row = <String, Object?>{'tenant_id': tenantId};
@@ -464,10 +498,18 @@ class SyncWorker {
           }
         }
 
-        await txn.insert('sync_state', {
-          'tenant_id': tenantId,
-          'last_pulled_at': serverTimestamp,
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
+        final cursor = _nextCursor(
+          serverTimestamp: serverTimestamp,
+          previous: lastPulled,
+          oldestSkipped: oldestSkipped,
+          skippedWithoutStamp: skippedWithoutStamp,
+        );
+        if (cursor != null) {
+          await txn.insert('sync_state', {
+            'tenant_id': tenantId,
+            'last_pulled_at': cursor,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
       });
 
       // Modo Emergencia decidido por la junta vecinal (llega en cada pull).
@@ -486,7 +528,26 @@ class SyncWorker {
       );
     } catch (e) {
       // Sin conexion: el usuario sigue usando sus datos locales sin error.
-      return PullResult(success: false, message: e.toString());
+      return PullResult(success: false, message: e.toString(), retryable: true);
     }
+  }
+
+  /// Hasta dónde quedó al día este teléfono.
+  /// - Normal: la hora del servidor de este pull.
+  /// - Si se saltaron filas por cambios locales sin subir: la hora de la más
+  ///   antigua de ellas (el próximo pull la vuelve a traer).
+  /// - Si una saltada no trae hora: no se avanza (null = conservar el anterior).
+  static String? _nextCursor({
+    required String serverTimestamp,
+    required String? previous,
+    required DateTime? oldestSkipped,
+    required bool skippedWithoutStamp,
+  }) {
+    if (skippedWithoutStamp) return previous;
+    final server = DateTime.tryParse(serverTimestamp);
+    if (oldestSkipped != null && server != null && oldestSkipped.isBefore(server)) {
+      return oldestSkipped.toUtc().toIso8601String();
+    }
+    return serverTimestamp;
   }
 }
