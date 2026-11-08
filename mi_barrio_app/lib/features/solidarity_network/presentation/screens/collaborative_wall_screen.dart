@@ -344,7 +344,7 @@ class _PostCard extends StatelessWidget {
                     avatar: Icon(Icons.emergency_rounded, size: 18),
                     label: Text('Emergencia'),
                   ),
-                SyncStatusChip.fromPending(post.isPending),
+                if (post.isPending) SyncStatusChip.fromPending(true),
               ],
             ),
             const SizedBox(height: 4),
@@ -359,6 +359,23 @@ class _PostCard extends StatelessWidget {
               SolidarityModality.labels[post.modality] ?? post.modality,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            // Antes no se veía si alguien ya estaba ayudando.
+            if (post.status == SolidarityStatus.enCoordinacion) ...[
+              const SizedBox(height: 6),
+              Row(
+                key: ValueKey('favor_coordinating_${post.id}'),
+                children: [
+                  Icon(Icons.handshake_rounded, size: 20, color: colorScheme.primary),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Alguien ya está ayudando',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (post.description != null) ...[
               const SizedBox(height: 8),
               Text(post.description!),

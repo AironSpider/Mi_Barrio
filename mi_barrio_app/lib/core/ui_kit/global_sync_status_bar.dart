@@ -102,7 +102,9 @@ class GlobalSyncStatusBar extends StatelessWidget {
             duration: const Duration(milliseconds: 250),
             width: double.infinity,
             color: fondo,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            // "Todo bien" ocupa UNA línea fina (con letra grande se comía la
+            // pantalla); los avisos importantes sí pueden usar varias líneas.
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: estado == 'synced' ? 4 : 8),
             child: Row(
               children: [
                 Icon(icono, size: 20, color: frente),
@@ -113,6 +115,8 @@ class GlobalSyncStatusBar extends StatelessWidget {
                     child: Text(
                       texto,
                       key: ValueKey(estado),
+                      maxLines: estado == 'synced' ? 1 : null,
+                      overflow: estado == 'synced' ? TextOverflow.ellipsis : null,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: frente,
                         fontWeight: FontWeight.w600,

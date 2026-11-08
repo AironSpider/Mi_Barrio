@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from app.features.sync_engine.schemas import SyncPushRequest
 from app.features.auth_barrio.models import User
@@ -225,6 +225,7 @@ async def process_sync_push(
     def reject(reason: str) -> None:
         rejected.append({"record_id": item.record_id, "target_table": item.target_table, "reason": reason})
     touched_services: set[uuid.UUID] = set()
+    merchant_profile_changed = False
 
     for item in request.mutations:
         table_name = item.target_table
@@ -346,10 +347,21 @@ async def process_sync_push(
             continue
 
         processed_ids.append(rec_id_str)
+        if model_class is User:
+            merchant_profile_changed = True
 
     # El promedio y la cantidad de calificaciones los recalcula siempre el servidor.
     for service_id in touched_services:
         await recalculate_service_rating(db, service_id)
+
+    # Si quien ofrece servicios cambió su perfil (teléfono/WhatsApp), sus servicios
+    # vuelven a bajar en el próximo pull con el contacto nuevo (si no tiene, no cambia nada).
+    if merchant_profile_changed:
+        await db.execute(
+            update(LocalService)
+            .where(LocalService.tenant_id == tenant_uuid, LocalService.provider_user_id == principal_id)
+            .values(server_updated_at=func.clock_timestamp())
+        )
 
     await db.commit()
     return processed_ids, rejected

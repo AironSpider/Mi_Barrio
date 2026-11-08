@@ -15,6 +15,8 @@ import '../../../solidarity_network/data/models/solidarity_post_model.dart';
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key, this.dao, this.tenantId, this.userId});
 
+  static const tabBarKey = ValueKey('history_tabs');
+
   final HistoryDao? dao;
   final String? tenantId;
   final String? userId;
@@ -82,13 +84,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Pestañas legibles sobre la barra de color (antes: la elegida era verde
+    // sobre verde = invisible, y las otras gris sobre verde, sin contraste AA).
+    final sobreBarra = Theme.of(context).appBarTheme.foregroundColor ??
+        Theme.of(context).colorScheme.onPrimary;
+    // Un vecino no ofrece servicios: abre directo en "Mis favores".
+    final esComerciante = TenantSession.instance.role == 'COMERCIANTE';
     return DefaultTabController(
       length: 3,
+      initialIndex: esComerciante ? 0 : 1,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Mi historial'),
           bottom: TabBar(
+            key: HistoryScreen.tabBarKey,
             isScrollable: true,
+            labelColor: sobreBarra,
+            unselectedLabelColor: sobreBarra,
+            indicatorColor: sobreBarra,
+            indicatorWeight: 4,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
             tabs: [
               Tab(text: 'Mis servicios (${_services.length})'),
               Tab(text: 'Mis favores (${_posts.length})'),

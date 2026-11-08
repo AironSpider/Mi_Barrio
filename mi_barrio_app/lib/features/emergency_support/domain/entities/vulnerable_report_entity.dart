@@ -89,12 +89,14 @@ class VulnerabilityType {
   static const viviendaAfectada = 'VIVIENDA_AFECTADA';
   static const faltaSuministros = 'FALTA_SUMINISTROS';
 
+  /// Lenguaje simple (lo entiende una niña de 10 años o una persona bajo
+  /// estrés). El valor que viaja al servidor NO cambia, solo el texto.
   static const labels = {
-    atencionMedica: 'Atención médica',
-    adultoMayorSolo: 'Adulto mayor solo',
-    movilidadReducida: 'Movilidad reducida',
-    viviendaAfectada: 'Vivienda afectada',
-    faltaSuministros: 'Falta de agua o comida',
+    atencionMedica: 'Alguien está enfermo o herido',
+    adultoMayorSolo: 'Persona mayor sola',
+    movilidadReducida: 'No puede caminar o moverse',
+    viviendaAfectada: 'Se dañó la casa',
+    faltaSuministros: 'No hay agua o comida',
   };
 
   /// Urgencia sugerida por tipo (el vecino no tiene que pensar en eso al pedir ayuda).

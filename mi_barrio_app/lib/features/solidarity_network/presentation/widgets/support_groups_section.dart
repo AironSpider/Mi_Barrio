@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
+import '../../../../shared/contact_launcher.dart';
 import '../../../../shared/local_distance.dart';
 import '../../../emergency_support/data/datasources/support_groups_sqlite_ds.dart';
 import '../../../emergency_support/data/models/support_group_model.dart';
@@ -163,7 +164,24 @@ class _GroupCard extends StatelessWidget {
               Wrap(
                 spacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
+                runSpacing: 8,
                 children: [
+                  // Llamar es la acción principal (un toque); copiar queda de respaldo.
+                  Semantics(
+                    button: true,
+                    label: 'Llamar a ${group.name}',
+                    excludeSemantics: true,
+                    child: FilledButton.icon(
+                      key: ValueKey('support_group_call_${group.id}'),
+                      style: FilledButton.styleFrom(minimumSize: const Size(120, 48)),
+                      onPressed: () async {
+                        final ok = await ContactLauncher.call(group.contactPhone!);
+                        if (!ok) onCopy?.call();
+                      },
+                      icon: const Icon(Icons.call_rounded),
+                      label: const Text('Llamar'),
+                    ),
+                  ),
                   Text(group.contactPhone!, style: theme.textTheme.titleSmall),
                   TextButton.icon(
                     onPressed: onCopy,

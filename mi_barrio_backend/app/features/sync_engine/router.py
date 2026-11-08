@@ -17,7 +17,7 @@ from app.features.sync_engine.validation import MAX_BATCH
 from app.features.auth_barrio.models import Tenant
 from app.features.solidarity_network.models import SolidarityPost
 from app.features.proximity_services.models import LocalService
-from app.features.proximity_services.service import rating_avg_by_service
+from app.features.proximity_services.service import provider_contacts, rating_avg_by_service
 from app.features.emergency_support.models import SupportGroup, VulnerableReport
 
 router = APIRouter(prefix="/api/v1/sync", tags=["Sync Engine"])
@@ -128,8 +128,16 @@ async def pull_delta(
 
     # El celular guarda el promedio de estrellas ya calculado (sin fotos).
     averages = await rating_avg_by_service(db, tenant_uuid)
+    # Y el contacto del comerciante, para que los vecinos puedan llamarlo
+    # (antes el detalle buscaba el teléfono en el celular y nunca lo encontraba).
+    contacts = await provider_contacts(
+        db, tenant_uuid, {uuid.UUID(s["provider_user_id"]) for s in delta["local_services"]}
+    )
     for svc in delta["local_services"]:
         svc["rating_avg"] = averages.get(uuid.UUID(svc["id"]))
+        contact = contacts.get(uuid.UUID(svc["provider_user_id"]), {})
+        svc["contact_phone"] = contact.get("contact_phone")
+        svc["contact_whatsapp"] = contact.get("contact_whatsapp")
 
     tenant = await db.get(Tenant, tenant_uuid)
     tenant_info = TenantInfo(

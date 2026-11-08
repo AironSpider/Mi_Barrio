@@ -54,7 +54,7 @@ void main() {
       final saved = await repo.activeReports(tenant);
       expect(saved.single.id, sos.id);
       expect(saved.single.isPending, isTrue);
-      expect(saved.single.description, 'Atención médica'); // nunca vacío
+      expect(saved.single.description, VulnerabilityType.labels[VulnerabilityType.atencionMedica]); // nunca vacío
       final payload = jsonDecode((await outbox()).single['payload_json'] as String) as Map;
       expect(payload['reporter_user_id'], me);
       expect(payload['is_deleted'], isFalse);

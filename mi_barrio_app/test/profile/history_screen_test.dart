@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mi_barrio_app/core/barrio_context/tenant_session.dart';
 import 'package:mi_barrio_app/core/database_sqlite/sqlite_database.dart';
 import 'package:mi_barrio_app/core/ui_kit/app_theme.dart';
 import 'package:mi_barrio_app/core/ui_kit/sync_status_chip.dart';
@@ -63,6 +64,10 @@ void main() {
     expect(find.text('Mis servicios (1)'), findsOneWidget);
     expect(find.text('Mis favores (2)'), findsOneWidget);
     expect(find.text('Mis SOS (0)'), findsOneWidget);
+    // Un vecino abre directo en "Mis favores".
+    expect(find.text('Préstamo de escalera'), findsOneWidget);
+    await tester.tap(find.text('Mis servicios (1)'));
+    await tester.pumpAndSettle();
     expect(find.text('Gasfitero 24h'), findsOneWidget);
     expect(find.text('Gasfitería'), findsOneWidget);
 
@@ -85,10 +90,34 @@ void main() {
 
   testWidgets('sin datos muestra mensajes claros por pestaña', (tester) async {
     await open(tester);
+    await tester.tap(find.text('Mis servicios (0)'));
+    await tester.pumpAndSettle();
     expect(find.text('Aún no ofreces servicios.'), findsOneWidget);
     await tester.tap(find.text('Mis SOS (0)'));
     await tester.pumpAndSettle();
     expect(find.text('Aún no creaste alertas.'), findsOneWidget);
+  });
+
+  testWidgets('un comerciante abre en "Mis servicios"', (tester) async {
+    await seed(tester);
+    TenantSession.instance.role = 'COMERCIANTE';
+    addTearDown(() => TenantSession.instance.role = 'VECINO');
+    await open(tester);
+    expect(find.text('Gasfitero 24h'), findsOneWidget);
+  });
+
+  testWidgets('las pestañas se leen sobre la barra (no verde sobre verde)', (tester) async {
+    await seed(tester);
+    await open(tester);
+    final bar = tester.widget<TabBar>(find.byKey(HistoryScreen.tabBarKey));
+    final fondo = Theme.of(tester.element(find.byType(AppBar))).appBarTheme.backgroundColor!;
+    double lum(Color c) => c.computeLuminance();
+    double ratio(Color a, Color b) {
+      final (x, y) = (lum(a), lum(b));
+      return (x > y ? x + 0.05 : y + 0.05) / (x > y ? y + 0.05 : x + 0.05);
+    }
+    expect(ratio(bar.labelColor!, fondo), greaterThanOrEqualTo(4.5));
+    expect(ratio(bar.unselectedLabelColor!, fondo), greaterThanOrEqualTo(4.5));
   });
 
   testWidgets('accesible: áreas táctiles, etiquetas y contraste', (tester) async {

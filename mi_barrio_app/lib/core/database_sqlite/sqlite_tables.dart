@@ -13,7 +13,7 @@ class SqliteTables {
 
   /// Versión actual del esquema. Súbela al agregar tablas o columnas
   /// y añade el paso correspondiente en [migrations].
-  static const int schemaVersion = 6;
+  static const int schemaVersion = 7;
 
   // ── Valores permitidos (idénticos al contrato del backend) ──
   static const syncPending = 'PENDING';
@@ -54,6 +54,8 @@ class SqliteTables {
       rating_avg REAL,
       publisher_type TEXT,
       publisher_name TEXT,
+      contact_phone TEXT,
+      contact_whatsapp TEXT,
       lat REAL NOT NULL,
       lng REAL NOT NULL,
       is_deleted INTEGER NOT NULL DEFAULT 0,
@@ -233,11 +235,17 @@ class SqliteTables {
   /// v4 (Sprint 8): + vulnerable_reports (SOS sin red).
   /// v5 (Sprint 11): + support_groups (grupos de apoyo sin red).
   /// v6 (Sprint 12): + users.email_contacto (correo de contacto del perfil).
+  /// v7 (Sprint 12): + local_services.contact_phone / contact_whatsapp
+  ///     (contacto del comerciante; lo manda el servidor en el pull).
   static const Map<int, List<String>> migrations = {
     2: [createLocalServices, ...indexes],
     3: [createNeighborEndorsements, createUsers, createAppSettings, ...indexesV3],
     4: [createVulnerableReports, ...indexesV4],
     5: [createSupportGroups, ...indexesV5],
+    // v7: los servicios ya descargados no traían el contacto del comerciante.
+    // El pull es incremental y nunca los volvería a bajar: se olvida el cursor
+    // para descargar todo UNA vez (lo pendiente de subir no se pisa).
+    7: ['DELETE FROM sync_state'],
   };
 
   /// Columnas nuevas en tablas existentes, por versión destino.
@@ -252,6 +260,9 @@ class SqliteTables {
     },
     6: {
       'users': {'email_contacto': 'TEXT'},
+    },
+    7: {
+      'local_services': {'contact_phone': 'TEXT', 'contact_whatsapp': 'TEXT'},
     },
   };
 }

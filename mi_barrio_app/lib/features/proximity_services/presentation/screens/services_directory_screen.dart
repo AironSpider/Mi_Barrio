@@ -261,10 +261,24 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
           Text('Servicios del barrio', style: theme.textTheme.headlineSmall),
           const SizedBox(height: 4),
           Text(
-            'Encuentra y recomienda oficios de tus vecinos.',
+            _emergency
+                ? '¿Quién puede ayudar ahora? Los primeros están más preparados y más cerca.'
+                : 'Encuentra y recomienda oficios de tus vecinos.',
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
+          // Bajo estrés la atención se estrecha: lo urgente va antes que buscar.
+          if (_emergency && _loadError == null && _visibleServices.isNotEmpty) ...[
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: Column(
+                key: const ValueKey('services_podium_first'),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _buildPodium(context),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           if (_merchant.isMerchant) ...[
             FilledButton.icon(
               key: const ValueKey('offer_service_button'),
@@ -292,12 +306,15 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
           const SizedBox(height: 12),
           Text('Oficios', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
+          SingleChildScrollView(
+            key: const ValueKey('service_categories_row'),
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
               for (final category in _categories)
-                ChoiceChip(
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
                   key: ValueKey('service_category_${category ?? 'all'}'),
                   label: Text(
                     category == null ? 'Todos' : _categoryLabel(category),
@@ -313,8 +330,10 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
                     setState(() => _selectedCategory = category);
                     unawaited(_loadServices());
                   },
+                  ),
                 ),
-            ],
+              ],
+            ),
           ),
           if (widget.emergencyOnly) ...[
             const SizedBox(height: 8),
@@ -365,28 +384,40 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
     );
   }
 
-  /// En emergencia, las 3 primeras según el ranking suben arriba con el
-  /// marco "Prioridad 1/2/3"; el resto sigue en su orden normal.
-  List<Widget> _buildServiceList(BuildContext context) {
-    final services = _visibleServices;
-    if (!EmergencyModeProvider.instance.isActive.value) {
-      return [for (final s in services) _buildServiceCard(context, s)];
-    }
+  bool get _emergency => EmergencyModeProvider.instance.isActive.value;
+
+  List<Ranked<LocalServiceModel>> get _podiumRanked {
     final session = TenantSession.instance;
-    final ranked = EmergencyRanking.rankServices(
-      services,
+    return EmergencyRanking.rankServices(
+      _visibleServices,
       lat: session.centerLat,
       lng: session.centerLng,
-    );
-    final podium = ranked.where((r) => r.isPodium).toList();
-    final podiumIds = {for (final r in podium) r.item.id};
+    ).where((r) => r.isPodium).toList();
+  }
+
+  /// En emergencia, las 3 primeras según el ranking, con el marco
+  /// "Prioridad 1/2/3". Se muestran arriba de todo (ver build).
+  List<Widget> _buildPodium(BuildContext context) => [
+        for (final r in _podiumRanked)
+          Semantics(
+            label: 'Prioridad ${r.priority} de 3',
+            container: true,
+            child: PodiumFrame(
+              key: ValueKey('podium_service_${r.item.id}'),
+              priority: r.priority!,
+              child: _buildServiceCard(context, r.item),
+            ),
+          ),
+      ];
+
+  /// El resto de los servicios (en emergencia, sin los del podio).
+  List<Widget> _buildServiceList(BuildContext context) {
+    final services = _visibleServices;
+    if (!_emergency) {
+      return [for (final s in services) _buildServiceCard(context, s)];
+    }
+    final podiumIds = {for (final r in _podiumRanked) r.item.id};
     return [
-      for (final r in podium)
-        PodiumFrame(
-          key: ValueKey('podium_service_${r.item.id}'),
-          priority: r.priority!,
-          child: _buildServiceCard(context, r.item),
-        ),
       for (final s in services)
         if (!podiumIds.contains(s.id)) _buildServiceCard(context, s),
     ];

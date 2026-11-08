@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/ui_kit/app_theme.dart';
+import '../../../../core/ui_kit/icon_scale.dart';
 import '../../domain/entities/vulnerable_report_entity.dart';
 import '../providers/emergency_provider.dart';
 
@@ -245,7 +246,7 @@ class _TipoTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  Icon(icon, size: 28, color: frente),
+                  Icon(icon, size: 28 * escalaIcono(context), color: frente),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(label, style: texto.titleMedium?.copyWith(color: frente)),

@@ -38,6 +38,8 @@ class LocalServiceModel {
     this.ratingAvg,
     this.publisherType,
     this.publisherName,
+    this.contactPhone,
+    this.contactWhatsapp,
     required this.lat,
     required this.lng,
     this.isDeleted = false,
@@ -66,6 +68,14 @@ class LocalServiceModel {
   /// Perfil de publicador (v3): Persona natural, Emprendedor, Bodega, etc.
   final String? publisherType;
   final String? publisherName;
+
+  /// Contacto del comerciante (teléfono / WhatsApp). Lo manda el servidor en
+  /// el pull; el teléfono no lo envía (no viaja en [toSyncPayload]).
+  final String? contactPhone;
+  final String? contactWhatsapp;
+
+  bool get hasContact =>
+      (contactPhone?.trim().isNotEmpty ?? false) || (contactWhatsapp?.trim().isNotEmpty ?? false);
   final double lat;
   final double lng;
   final bool isDeleted;
@@ -86,6 +96,8 @@ class LocalServiceModel {
         'rating_avg': ratingAvg,
         'publisher_type': publisherType,
         'publisher_name': publisherName,
+        'contact_phone': contactPhone,
+        'contact_whatsapp': contactWhatsapp,
         'lat': lat,
         'lng': lng,
         'is_deleted': isDeleted ? 1 : 0,
@@ -123,6 +135,8 @@ class LocalServiceModel {
       ratingAvg: (row['rating_avg'] as num?)?.toDouble(),
       publisherType: row['publisher_type'] as String?,
       publisherName: row['publisher_name'] as String?,
+      contactPhone: row['contact_phone'] as String?,
+      contactWhatsapp: row['contact_whatsapp'] as String?,
       lat: (row['lat'] as num).toDouble(),
       lng: (row['lng'] as num).toDouble(),
       isDeleted: (row['is_deleted'] as int? ?? 0) == 1,

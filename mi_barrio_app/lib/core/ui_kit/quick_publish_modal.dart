@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../features/solidarity_network/data/models/solidarity_post_model.dart';
+import 'icon_scale.dart';
 
 class QuickPublishData {
   const QuickPublishData({
@@ -76,18 +77,18 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
     ),
     const _Categoria(
       SolidarityModality.donacionMaterial,
-      'Material',
+      'Cosas o materiales',
       Icons.inventory_2_rounded,
     ),
     const _Categoria(
       SolidarityModality.ayudaTemporal,
-      'Soporte',
+      'Compañía o cuidado',
       Icons.volunteer_activism_rounded,
     ),
     if (widget.isEmergencyMode)
       const _Categoria(
         SolidarityModality.recursoCritico,
-        'Recurso crítico',
+        'Agua, comida o medicina',
         Icons.emergency_rounded,
       ),
   ];
@@ -174,22 +175,31 @@ class _QuickPublishSheetState extends State<_QuickPublishSheet> {
             const SizedBox(height: 20),
             Text('¿Qué tipo es?', style: texto.titleMedium),
             const SizedBox(height: 12),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 2.4,
-              children: [
-                for (final categoria in _categorias)
-                  _CategoriaTile(
-                    categoria: categoria,
-                    seleccionada: _modalidad == categoria.modality,
-                    onTap: () =>
-                        setState(() => _modalidad = categoria.modality),
-                  ),
-              ],
+            // Alto LIBRE (antes era fijo y con letra grande se cortaban las
+            // palabras: "Herram-ienta"). Con letra grande, una sola columna.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const gap = 12.0;
+                final escala = MediaQuery.textScalerOf(context).scale(1);
+                final columnas = escala > 1.3 ? 1 : 2;
+                final ancho = (constraints.maxWidth - gap * (columnas - 1)) / columnas;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final categoria in _categorias)
+                      SizedBox(
+                        width: ancho,
+                        child: _CategoriaTile(
+                          categoria: categoria,
+                          seleccionada: _modalidad == categoria.modality,
+                          onTap: () =>
+                              setState(() => _modalidad = categoria.modality),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
             AnimatedSize(
               duration: const Duration(milliseconds: 220),
@@ -281,21 +291,23 @@ class _CategoriaTile extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Icon(categoria.icon, size: 28, color: contenido),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    categoria.label,
-                    style: texto.labelLarge?.copyWith(color: contenido),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 64),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  // El ícono crece con la letra (hasta 1,6 veces).
+                  Icon(categoria.icon, size: 28 * escalaIcono(context), color: contenido),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      categoria.label,
+                      style: texto.labelLarge?.copyWith(color: contenido),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

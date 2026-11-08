@@ -132,6 +132,8 @@ class SyncWorker {
       'rating_avg',
       'publisher_type',
       'publisher_name',
+      'contact_phone', // contacto del comerciante (solo bajada)
+      'contact_whatsapp',
       'lat',
       'lng',
       'is_deleted',

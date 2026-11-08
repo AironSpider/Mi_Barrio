@@ -18,6 +18,7 @@ import '../../data/datasources/endorsements_sqlite_ds.dart';
 import '../../data/datasources/services_remote_ds.dart';
 import '../../data/models/endorsement_model.dart';
 import '../../data/models/service_model.dart';
+import '../../../../shared/contact_launcher.dart';
 
 /// Abre el detalle de un servicio en una hoja inferior.
 Future<void> showServiceDetailSheet(
@@ -76,6 +77,8 @@ class ServiceDetailSheet extends StatefulWidget {
   static const saveKey = ValueKey('service_rating_save');
   static const commentKey = ValueKey('service_rating_comment');
   static const mapKey = ValueKey('service_mini_map');
+  static const callButtonKey = ValueKey('service_call');
+  static const whatsappButtonKey = ValueKey('service_whatsapp');
   static const maxComment = 140;
 
   @override
@@ -177,22 +180,33 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
     }
   }
 
+  /// Contacto del comerciante. Lo trae el servidor junto con el servicio
+  /// (`contact_phone` / `contact_whatsapp`). La tabla local `users` solo tiene
+  /// el perfil del dueño de ESTE teléfono: sirve para ver el propio servicio.
   Future<_Contact?> _loadContact() async {
+    final service = widget.service;
+    String? clean(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
+    final fromService = _Contact(
+      name: clean(service.publisherName),
+      phone: clean(service.contactPhone),
+      whatsapp: clean(service.contactWhatsapp),
+    );
+    if (!fromService.isEmpty) return fromService;
     try {
       final db = await LocalDatabase.instance.database;
       final rows = await db.query(
         'users',
         columns: ['full_name', 'phone', 'whatsapp'],
         where: 'id = ? AND tenant_id = ? AND is_deleted = 0',
-        whereArgs: [widget.service.providerUserId, _tenantId],
+        whereArgs: [service.providerUserId, _tenantId],
         limit: 1,
       );
       if (rows.isEmpty) return null;
       final row = rows.first;
       return _Contact(
         name: row['full_name'] as String?,
-        phone: row['phone'] as String?,
-        whatsapp: row['whatsapp'] as String?,
+        phone: clean(row['phone'] as String?),
+        whatsapp: clean(row['whatsapp'] as String?),
       );
     } catch (_) {
       return null;
@@ -531,11 +545,60 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
       if (contact.whatsapp != null && contact.whatsapp!.isNotEmpty)
         ('WhatsApp', contact.whatsapp!),
     ];
+    final callNumber = contact.phone ?? contact.whatsapp;
+    final waNumber = contact.whatsapp ?? contact.phone;
+    final who = (contact.name?.isNotEmpty ?? false) ? contact.name! : widget.service.title;
+
+    Future<void> open(Future<bool> Function(String) action, String number, String label) async {
+      final messenger = ScaffoldMessenger.of(context);
+      if (await action(number)) return;
+      // Sin app de teléfono / WhatsApp (ej. tablet): al menos queda copiado.
+      await Clipboard.setData(ClipboardData(text: number));
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('No se pudo abrir $label. Copiamos el número.')));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (contact.name != null && contact.name!.isNotEmpty)
           Text(contact.name!, style: texto.bodyLarge),
+        const SizedBox(height: 8),
+        // Acciones directas, grandes y con verbo (adultos mayores, una mano).
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            if (callNumber != null && ContactLauncher.isDialable(callNumber))
+              Semantics(
+                button: true,
+                label: 'Llamar a $who',
+                excludeSemantics: true,
+                child: FilledButton.icon(
+                  key: ServiceDetailSheet.callButtonKey,
+                  style: FilledButton.styleFrom(minimumSize: const Size(140, 56)),
+                  onPressed: () => open(ContactLauncher.call, callNumber, 'el teléfono'),
+                  icon: const Icon(Icons.call_rounded),
+                  label: const Text('Llamar'),
+                ),
+              ),
+            if (waNumber != null && ContactLauncher.isDialable(waNumber))
+              Semantics(
+                button: true,
+                label: 'Escribir por WhatsApp a $who',
+                excludeSemantics: true,
+                child: OutlinedButton.icon(
+                  key: ServiceDetailSheet.whatsappButtonKey,
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(140, 56)),
+                  onPressed: () => open(ContactLauncher.whatsapp, waNumber, 'WhatsApp'),
+                  icon: const Icon(Icons.chat_rounded),
+                  label: const Text('WhatsApp'),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
         for (final (label, value) in lines)
           Row(
             children: [
@@ -685,7 +748,7 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
                       else
                         Text('Visto bueno', style: texto.bodyMedium),
                       if (item.endorserUserId == _userId)
-                        SyncStatusChip.fromPending(item.isPending),
+                        if (item.isPending) SyncStatusChip.fromPending(true),
                     ],
                   ),
                   if (item.shortComment != null &&
