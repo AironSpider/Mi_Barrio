@@ -76,6 +76,26 @@ class _SupportGroupsSectionState extends State<SupportGroupsSection> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Sin grupos: una sola línea discreta (antes era un bloque grande que
+    // empujaba el muro hacia abajo justo en plena emergencia).
+    if (_loaded && _groups.isEmpty) {
+      return Semantics(
+        container: true,
+        child: Row(
+          key: SupportGroupsSection.sectionKey,
+          children: [
+            Icon(Icons.groups_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Grupos de apoyo: tu junta vecinal aún no registró ninguno.',
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Semantics(
       container: true,
       child: Column(
@@ -102,14 +122,6 @@ class _SupportGroupsSectionState extends State<SupportGroupsSection> {
             const Padding(
               padding: EdgeInsets.all(12),
               child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_groups.isEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('Tu junta vecinal aún no registró grupos de apoyo.',
-                    style: theme.textTheme.bodyMedium),
-              ),
             )
           else
             for (final g in _groups) _GroupCard(group: g, onCopy: g.hasPhone ? () => _copy(g) : null),

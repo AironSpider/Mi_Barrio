@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import '../../../../core/network/api_client.dart';
 
 class MerchantBusinessRemoteDatasource {
@@ -10,7 +8,7 @@ class MerchantBusinessRemoteDatasource {
 
   Future<List<Map<String, dynamic>>> myServices(String tenantId) async {
     final response = await _api.get('/api/v1/services/mine', tenantId);
-    final body = _decode(response);
+    final body = ApiClient.decodeOrThrow(response);
     if (body is! List) {
       throw const FormatException('Respuesta de servicios propios inválida');
     }
@@ -25,7 +23,7 @@ class MerchantBusinessRemoteDatasource {
       '/api/v1/services/$serviceId/endorsements',
       tenantId,
     );
-    final body = _decode(response);
+    final body = ApiClient.decodeOrThrow(response);
     if (body is! List) {
       throw const FormatException('Respuesta de recomendaciones inválida');
     }
@@ -43,20 +41,6 @@ class MerchantBusinessRemoteDatasource {
       tenantId,
       {'reply': text},
     );
-    _decode(response);
-  }
-
-  Object? _decode(dynamic response) {
-    Object? body;
-    try {
-      body = jsonDecode(response.body);
-    } on FormatException {
-      body = null;
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final message = body is Map ? body['detail'] ?? body['error'] : null;
-      throw Exception(message?.toString() ?? 'No se pudo completar la acción');
-    }
-    return body;
+    ApiClient.decodeOrThrow(response);
   }
 }

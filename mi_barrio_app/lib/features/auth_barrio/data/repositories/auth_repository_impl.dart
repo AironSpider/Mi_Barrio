@@ -119,8 +119,12 @@ class AuthRepositoryImpl implements AuthRepository {
         }
         return null;
       }
-      // Sin red: entra con lo guardado y solo se asegura la fila local.
-      if (error.statusCode == null) return _afterAuth(cachedUser, online: false);
+      // Sin red o servidor caído / despertando (5xx, ej. Render free): entra
+      // con lo guardado (offline-first) y solo se asegura la fila local.
+      final status = error.statusCode;
+      if (status == null || status >= 500) {
+        return _afterAuth(cachedUser, online: false);
+      }
       rethrow;
     }
   }

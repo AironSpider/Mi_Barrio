@@ -4,6 +4,7 @@ import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sqlite_database.dart';
 import '../../data/datasources/services_sqlite_ds.dart';
 import '../../data/models/service_model.dart';
+import 'service_category_ui.dart';
 
 /// Lo que la app necesita saber del vecino para ofrecer un servicio.
 class MerchantProfile {
@@ -100,14 +101,14 @@ class OfferServiceSheet extends StatefulWidget {
 }
 
 class _OfferServiceSheetState extends State<OfferServiceSheet> {
-  static const _rubros = <(String, String, IconData)>[
-    (ServiceCategory.gasfiteria, 'Gasfitería', Icons.plumbing_rounded),
-    (ServiceCategory.electricidad, 'Electricidad', Icons.electrical_services_rounded),
-    (ServiceCategory.carpinteria, 'Carpintería', Icons.carpenter_rounded),
-    (ServiceCategory.cerrajeria, 'Cerrajería', Icons.key_rounded),
-    (ServiceCategory.clases, 'Clases', Icons.school_rounded),
-    (ServiceCategory.paseadorMascotas, 'Mascotas', Icons.pets_rounded),
-    (ServiceCategory.soporteEmergencia, 'Soporte en emergencia', Icons.health_and_safety_rounded),
+  static const _rubros = <String>[
+    ServiceCategory.gasfiteria,
+    ServiceCategory.electricidad,
+    ServiceCategory.carpinteria,
+    ServiceCategory.cerrajeria,
+    ServiceCategory.clases,
+    ServiceCategory.paseadorMascotas,
+    ServiceCategory.soporteEmergencia,
   ];
 
   final TextEditingController _title = TextEditingController();
@@ -202,10 +203,10 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
               crossAxisSpacing: 12,
               childAspectRatio: 2.4,
               children: [
-                for (final (value, label, icon) in _rubros)
+                for (final value in _rubros)
                   _RubroTile(
-                    label: label,
-                    icon: icon,
+                    label: ServiceCategoryUi.shortLabel(value),
+                    icon: ServiceCategoryUi.icon(value),
                     selected: _category == value,
                     onTap: () => setState(() => _category = value),
                   ),

@@ -1,3 +1,5 @@
+import 'package:sqflite/sqflite.dart';
+
 import '../../../core/database_sqlite/record_validation.dart';
 import '../../../core/database_sqlite/sqlite_database.dart';
 import '../../../core/database_sqlite/sqlite_tables.dart';
@@ -70,8 +72,9 @@ class ProfileLocalStorage {
     }
     for (final entry in {'facebookUrl': facebookUrl, 'instagramUrl': instagramUrl}.entries) {
       final url = clean(entry.value);
-      if (url != null && !url.startsWith('https://')) {
-        throw ArgumentError.value(entry.value, entry.key, 'Debe empezar con https://');
+      if (url != null && (!url.startsWith('https://') || url.length > 300)) {
+        throw ArgumentError.value(
+            entry.value, entry.key, 'Debe empezar con https:// (máximo 300 caracteres)');
       }
     }
     final type = clean(publisherType);
@@ -108,11 +111,10 @@ class ProfileLocalStorage {
 
     final db = await _db.database;
     await db.transaction((txn) async {
-      await txn.rawInsert(
-        'INSERT OR REPLACE INTO ${UserProfileModel.table} '
-        '(${profile.toSqlite().keys.join(', ')}) '
-        'VALUES (${List.filled(profile.toSqlite().length, '?').join(', ')})',
-        profile.toSqlite().values.toList(),
+      await txn.insert(
+        UserProfileModel.table,
+        profile.toSqlite(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
       );
       await _outboxDao.queueMutation(
         tenantId: tenantId,

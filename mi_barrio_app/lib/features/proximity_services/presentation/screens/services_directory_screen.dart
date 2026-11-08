@@ -8,7 +8,6 @@ import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
 import '../../../../core/ui_kit/done_confirmation.dart';
 import '../../../../core/ui_kit/podium_frame.dart';
-import '../../../../core/ui_kit/star_rating_display.dart';
 import '../../../../shared/emergency_ranking.dart';
 import '../../data/datasources/endorsements_sqlite_ds.dart';
 import '../../data/datasources/services_sqlite_ds.dart';
@@ -17,6 +16,7 @@ import '../../data/models/service_model.dart';
 import '../widgets/offer_service_sheet.dart';
 import '../widgets/service_card.dart';
 import '../widgets/service_detail_sheet.dart';
+import '../widgets/service_category_ui.dart';
 
 class ServicesDirectoryScreen extends StatefulWidget {
   const ServicesDirectoryScreen({
@@ -40,22 +40,18 @@ class ServicesDirectoryScreen extends StatefulWidget {
 }
 
 class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
+  // Todas las categorías: antes faltaban Cerrajería y Soporte en emergencia,
+  // así que esos servicios no se podían filtrar.
   static const _categories = <String?>[
     null,
     ServiceCategory.gasfiteria,
     ServiceCategory.carpinteria,
     ServiceCategory.electricidad,
+    ServiceCategory.cerrajeria,
     ServiceCategory.clases,
     ServiceCategory.paseadorMascotas,
+    ServiceCategory.soporteEmergencia,
   ];
-
-  static const _icons = <String, IconData>{
-    ServiceCategory.gasfiteria: Icons.plumbing_rounded,
-    ServiceCategory.carpinteria: Icons.carpenter_rounded,
-    ServiceCategory.electricidad: Icons.electrical_services_rounded,
-    ServiceCategory.clases: Icons.school_rounded,
-    ServiceCategory.paseadorMascotas: Icons.pets_rounded,
-  };
 
   late final String _tenantId;
   late final String _userId;
@@ -321,7 +317,7 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
                   child: ChoiceChip(
                   key: ValueKey('service_category_${category ?? 'all'}'),
                   label: Text(
-                    category == null ? 'Todos' : _categoryLabel(category),
+                    category == null ? 'Todos' : ServiceCategoryUi.shortLabel(category),
                   ),
                   selected: _selectedCategory == category,
                   selectedColor: theme.colorScheme.primary,
@@ -430,54 +426,35 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
   Widget _buildServiceCard(BuildContext context, LocalServiceModel service) {
     final endorsement = _myEndorsements[service.id];
     final isOwnService = service.providerUserId == _userId;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ServiceCard(
-          key: ValueKey('service_${service.id}'),
-          title: service.publisherName?.isNotEmpty == true
-              ? '${service.publisherName}, ${service.title}'
-              : service.title,
-          categoryLabel:
-              ServiceCategory.labels[service.category] ?? service.category,
-          categoryIcon: _icons[service.category] ?? Icons.handyman_rounded,
-          description: service.description,
-          endorsementsCount: service.endorsementsCount,
-          isEndorsed: endorsement != null,
-          isPending: service.isPending || (endorsement?.isPending ?? false),
-          isAvailableInEmergency: service.isAvailableInEmergency,
-          onEndorse: isOwnService || _updatingEndorsements.contains(service.id)
-              ? null
-              : () => unawaited(_toggleEndorsement(service)),
-          onTap: () => unawaited(
-            showServiceDetailSheet(
-              context,
-              service: service,
-              tenantId: _tenantId,
-              userId: _userId,
-              endorsementsDatasource: _endorsementsDatasource,
-            ),
-          ),
+    return ServiceCard(
+      key: ValueKey('service_${service.id}'),
+      title: service.publisherName?.isNotEmpty == true
+          ? '${service.publisherName}, ${service.title}'
+          : service.title,
+      categoryLabel: ServiceCategory.labels[service.category] ?? service.category,
+      categoryIcon: ServiceCategoryUi.icon(service.category),
+      description: service.description,
+      endorsementsCount: service.endorsementsCount,
+      ratingAvg: service.ratingAvg,
+      isOwn: isOwnService,
+      isEndorsed: endorsement != null,
+      isPending: service.isPending || (endorsement?.isPending ?? false),
+      isAvailableInEmergency: service.isAvailableInEmergency,
+      onEndorse: isOwnService || _updatingEndorsements.contains(service.id)
+          ? null
+          : () => unawaited(_toggleEndorsement(service)),
+      onTap: () => unawaited(
+        showServiceDetailSheet(
+          context,
+          service: service,
+          tenantId: _tenantId,
+          userId: _userId,
+          endorsementsDatasource: _endorsementsDatasource,
         ),
-        if (service.ratingAvg != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 20, bottom: 8),
-            child: StarRatingDisplay(
-              rating: service.ratingAvg!,
-              count: service.endorsementsCount,
-            ),
-          ),
-        if (isOwnService)
-          Padding(
-            padding: const EdgeInsets.only(left: 20, bottom: 8),
-            child: Text(
-              'Este es tu servicio',
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-          ),
-      ],
+      ),
     );
   }
+
 
   Widget _buildMessage(
     BuildContext context, {
@@ -499,15 +476,6 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
       ),
     );
   }
-
-  String _categoryLabel(String category) => switch (category) {
-    ServiceCategory.gasfiteria => 'Gasfitería',
-    ServiceCategory.carpinteria => 'Carpintería',
-    ServiceCategory.electricidad => 'Electricidad',
-    ServiceCategory.clases => 'Clases',
-    ServiceCategory.paseadorMascotas => 'Mascotas',
-    _ => ServiceCategory.labels[category] ?? category,
-  };
 }
 
 /// Aviso junto a "Ofrecer servicio" mientras la junta no aprueba la cuenta:

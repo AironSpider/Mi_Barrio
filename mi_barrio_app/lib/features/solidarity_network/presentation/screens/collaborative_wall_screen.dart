@@ -116,7 +116,6 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
   }
 
   List<SolidarityPostModel> get _visiblePosts => _posts
-      .where((post) => post.status != SolidarityStatus.completado)
       .where((post) => _flowFilter == null || post.flowType == _flowFilter)
       .toList(growable: false);
 
@@ -144,7 +143,10 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: _loadPosts,
+      onRefresh: () async {
+        await _sync.syncNow();
+        await _loadPosts();
+      },
       child: ListView(
         key: const ValueKey('collaborative_wall_list'),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
@@ -156,11 +158,7 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 4),
-          Text(
-            'Préstamos, donaciones e intercambio de ayuda entre vecinos.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 12),
+          // Descripción + botón actualizar en una sola fila.
           _buildSyncControls(context),
           const SizedBox(height: 12),
           // En emergencia: grupos de apoyo del barrio antes del muro (Sprint 11).
@@ -253,8 +251,8 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
       children: [
         Expanded(
           child: Text(
-            'Las publicaciones se actualizan automáticamente.',
-            style: Theme.of(context).textTheme.bodySmall,
+            'Préstamos, donaciones e intercambio de ayuda entre vecinos.',
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
         IconButton(

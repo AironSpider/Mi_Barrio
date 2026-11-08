@@ -38,8 +38,6 @@ void main() {
       GlobalSyncStatusBar.offlineText,
       Icons.cloud_off_rounded,
     ),
-    SyncPhase.idle: (GlobalSyncStatusBar.syncedText, Icons.cloud_done_rounded),
-    SyncPhase.syncing: (GlobalSyncStatusBar.syncingText, Icons.sync_rounded),
     SyncPhase.error: (
       GlobalSyncStatusBar.errorText,
       Icons.sync_problem_rounded,
@@ -67,18 +65,18 @@ void main() {
     });
   }
 
-  testWidgets('antes de la primera sincronización dice "Conectando", no "Sincronizado"', (
-    tester,
-  ) async {
-    final phase = ValueNotifier(SyncPhase.idle);
-    final success = ValueNotifier<DateTime?>(null);
-    await tester.pumpWidget(_bar(phase, success: success));
-    expect(find.text(GlobalSyncStatusBar.connectingText), findsOneWidget);
-    expect(find.text(GlobalSyncStatusBar.syncedText), findsNothing);
+  // Cuando todo está bien la barra no ocupa espacio (solo avisa problemas).
+  for (final fase in [SyncPhase.idle, SyncPhase.syncing]) {
+    testWidgets('fase $fase sin problemas previos: la barra no se muestra', (tester) async {
+      await tester.pumpWidget(_bar(ValueNotifier(fase)));
+      expect(find.byKey(GlobalSyncStatusBar.barKey), findsNothing);
+    });
+  }
 
-    success.value = DateTime.now();
-    await tester.pumpAndSettle();
-    expect(find.text(GlobalSyncStatusBar.syncedText), findsOneWidget);
+  testWidgets('"Conectando" al abrir tampoco ocupa espacio', (tester) async {
+    await tester.pumpWidget(_bar(ValueNotifier(SyncPhase.idle), success: ValueNotifier<DateTime?>(null)));
+    expect(find.text(GlobalSyncStatusBar.connectingText), findsNothing);
+    expect(find.byKey(GlobalSyncStatusBar.barKey), findsNothing);
   });
 
   testWidgets('si el servidor falla muestra "Reintentando en N s"', (tester) async {
@@ -107,17 +105,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('cambia de "Modo offline" a "Sincronizado" al volver la señal', (
+  testWidgets('al volver la señal confirma "Sincronizado" unos segundos y se oculta', (
     tester,
   ) async {
     final phase = ValueNotifier(SyncPhase.offline);
     await tester.pumpWidget(_bar(phase));
     expect(find.text(GlobalSyncStatusBar.offlineText), findsOneWidget);
 
+    phase.value = SyncPhase.syncing;
+    await tester.pumpAndSettle();
+    expect(find.byKey(GlobalSyncStatusBar.barKey), findsNothing);
+
     phase.value = SyncPhase.idle;
     await tester.pumpAndSettle();
     expect(find.text(GlobalSyncStatusBar.syncedText), findsOneWidget);
     expect(find.text(GlobalSyncStatusBar.offlineText), findsNothing);
+
+    await tester.pump(GlobalSyncStatusBar.recoveredDuration);
+    await tester.pumpAndSettle();
+    expect(find.byKey(GlobalSyncStatusBar.barKey), findsNothing);
   });
 
   for (final scale in [1.0, 2.0]) {

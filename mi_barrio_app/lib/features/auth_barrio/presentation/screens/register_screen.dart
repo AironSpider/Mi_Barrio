@@ -1,12 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/ui_kit/app_theme.dart';
+import '../../data/datasources/auth_remote_datasource.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
 
-class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({super.key});
+/// Busca el nombre del barrio de un código (null = no existe).
+typedef NeighborhoodLookup = Future<String?> Function(String joinCode);
 
+class RegisterScreen extends ConsumerStatefulWidget {
+  const RegisterScreen({super.key, this.lookupNeighborhood});
+
+  /// Por defecto, `GET /api/v1/tenants/by-code/{code}` (ruta pública).
+  final NeighborhoodLookup? lookupNeighborhood;
+
+  static const joinCodeStatusKey = ValueKey('register_join_code_status');
   static const vecinoCardKey = ValueKey('register_role_vecino');
   static const comercianteCardKey = ValueKey('register_role_comerciante');
 
@@ -23,8 +34,49 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   UserRole _role = UserRole.vecino;
   bool _obscurePassword = true;
 
+  // Confirmación del barrio mientras se escribe el código.
+  late final NeighborhoodLookup _lookup =
+      widget.lookupNeighborhood ??
+      AuthRemoteDatasource().lookupNeighborhoodName;
+  Timer? _lookupDebounce;
+  _CodeStatus _codeStatus = _CodeStatus.empty;
+  String? _neighborhoodName;
+  int _lookupVersion = 0;
+
+  void _onCodeChanged(String value) {
+    _lookupDebounce?.cancel();
+    final code = value.trim();
+    if (code.length < 3) {
+      setState(() => _codeStatus = _CodeStatus.empty);
+      return;
+    }
+    setState(() => _codeStatus = _CodeStatus.checking);
+    _lookupDebounce = Timer(
+      const Duration(milliseconds: 600),
+      () => _check(code),
+    );
+  }
+
+  Future<void> _check(String code) async {
+    final version = ++_lookupVersion;
+    _CodeStatus status;
+    String? name;
+    try {
+      name = await _lookup(code);
+      status = name == null ? _CodeStatus.notFound : _CodeStatus.found;
+    } catch (_) {
+      status = _CodeStatus.unverified;
+    }
+    if (!mounted || version != _lookupVersion) return;
+    setState(() {
+      _codeStatus = status;
+      _neighborhoodName = name;
+    });
+  }
+
   @override
   void dispose() {
+    _lookupDebounce?.cancel();
     _name.dispose();
     _email.dispose();
     _password.dispose();
@@ -58,7 +110,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Crear cuenta')),
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
@@ -68,12 +121,46 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Text(
+                      'Únete a tu barrio',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Pide el código a tu junta vecinal. Con él te conectas con '
+                      'los vecinos de tu zona.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: _joinCode,
+                      enabled: !loading,
+                      textCapitalization: TextCapitalization.characters,
+                      onChanged: _onCodeChanged,
+                      decoration: const InputDecoration(
+                        labelText: 'Código de tu barrio',
+                        hintText: 'Ej: BARRIO-01',
+                        prefixIcon: Icon(Icons.vpn_key_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) => (value?.trim().length ?? 0) >= 3
+                          ? null
+                          : 'Ingresa el código de invitación del barrio',
+                    ),
+                    const SizedBox(height: 6),
+                    _JoinCodeStatus(
+                      key: RegisterScreen.joinCodeStatusKey,
+                      status: _codeStatus,
+                      neighborhoodName: _neighborhoodName,
+                    ),
+                    const SizedBox(height: 14),
                     TextFormField(
                       controller: _name,
                       enabled: !loading,
                       textCapitalization: TextCapitalization.words,
                       decoration: const InputDecoration(
                         labelText: 'Nombre completo',
+                        prefixIcon: Icon(Icons.person_outline_rounded),
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) => (value?.trim().length ?? 0) >= 2
@@ -87,6 +174,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(
                         labelText: 'Correo electrónico',
+                        prefixIcon: Icon(Icons.mail_outline_rounded),
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) => (value?.contains('@') ?? false)
@@ -100,6 +188,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       obscureText: _obscurePassword,
                       decoration: InputDecoration(
                         labelText: 'Contraseña (mínimo 8 caracteres)',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           onPressed: () => setState(
@@ -117,18 +206,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           : 'Usa al menos 8 caracteres',
                     ),
                     const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _joinCode,
-                      enabled: !loading,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(
-                        labelText: 'Código de tu barrio',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) => (value?.trim().length ?? 0) >= 3
-                          ? null
-                          : 'Ingresa el código de invitación del barrio',
-                    ),
                     const SizedBox(height: 14),
                     Text(
                       '¿Cómo vas a usar Mi Barrio?',
@@ -234,7 +311,9 @@ class _RoleCard extends StatelessWidget {
                   Icon(
                     icon,
                     size: 36,
-                    color: selected ? scheme.onPrimaryContainer : scheme.primary,
+                    color: selected
+                        ? scheme.onPrimaryContainer
+                        : scheme.primary,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -272,6 +351,72 @@ class _RoleCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+enum _CodeStatus { empty, checking, found, notFound, unverified }
+
+/// Línea bajo el código: "Te vas a unir a: …" o qué pasa con el código.
+/// Siempre ícono + texto (nunca solo color).
+class _JoinCodeStatus extends StatelessWidget {
+  const _JoinCodeStatus({
+    super.key,
+    required this.status,
+    this.neighborhoodName,
+  });
+
+  final _CodeStatus status;
+  final String? neighborhoodName;
+
+  @override
+  Widget build(BuildContext context) {
+    final texto = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    final (IconData? icon, String text, Color color) = switch (status) {
+      _CodeStatus.empty => (null, '', scheme.onSurfaceVariant),
+      _CodeStatus.checking => (
+        Icons.search_rounded,
+        'Buscando tu barrio…',
+        scheme.onSurfaceVariant,
+      ),
+      _CodeStatus.found => (
+        Icons.check_circle_rounded,
+        'Te vas a unir a: ${neighborhoodName ?? ''}',
+        AppPalette.syncSynced,
+      ),
+      _CodeStatus.notFound => (
+        Icons.error_outline_rounded,
+        'No encontramos un barrio con ese código. Revísalo con tu junta.',
+        scheme.error,
+      ),
+      _CodeStatus.unverified => (
+        Icons.cloud_off_rounded,
+        'No pudimos verificar el código ahora. Puedes continuar igual.',
+        scheme.onSurfaceVariant,
+      ),
+    };
+    if (icon == null) return const SizedBox.shrink();
+    return Semantics(
+      liveRegion: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: texto.bodyMedium?.copyWith(
+                color: color,
+                fontWeight: status == _CodeStatus.found
+                    ? FontWeight.w600
+                    : null,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import '../../../../core/network/api_client.dart';
 
 class AdminMerchantApprovalRemoteDatasource {
@@ -13,7 +11,7 @@ class AdminMerchantApprovalRemoteDatasource {
       '/api/v1/users/pending-merchants',
       tenantId,
     );
-    final body = _decode(response);
+    final body = ApiClient.decodeOrThrow(response);
     if (body is! List) {
       throw const FormatException(
         'Respuesta de comerciantes pendientes inválida',
@@ -23,7 +21,7 @@ class AdminMerchantApprovalRemoteDatasource {
   }
 
   Future<void> approve(String tenantId, String userId) async {
-    _decode(
+    ApiClient.decodeOrThrow(
       await _api.patch(
         '/api/v1/users/$userId/approve-merchant',
         tenantId,
@@ -33,26 +31,12 @@ class AdminMerchantApprovalRemoteDatasource {
   }
 
   Future<void> reject(String tenantId, String userId) async {
-    _decode(
+    ApiClient.decodeOrThrow(
       await _api.patch(
         '/api/v1/users/$userId/reject-merchant',
         tenantId,
         const <String, Object?>{},
       ),
     );
-  }
-
-  Object? _decode(dynamic response) {
-    Object? body;
-    try {
-      body = jsonDecode(response.body);
-    } on FormatException {
-      body = null;
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final message = body is Map ? body['detail'] ?? body['error'] : null;
-      throw Exception(message?.toString() ?? 'No se pudo completar la acción');
-    }
-    return body;
   }
 }

@@ -41,6 +41,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   sqflite_common_ffi: ^2.4.5
   url_launcher: ^6.3.3
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
   
   
 
@@ -54,6 +56,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -68,6 +71,7 @@ flutter:
   
   assets:
     - assets/images/logo_mi_barrio.png
+    - assets/images/logo_full.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -99,3 +103,25 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Ícono de la app: `dart run flutter_launcher_icons` regenera todas las plataformas.
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  android: "launcher_icon"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/app_icon_adaptive.png"
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+    background_color: "#FFFFFF"
+    theme_color: "#2E7D32"
+  windows:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: "assets/icon/app_icon.png"

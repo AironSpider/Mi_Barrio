@@ -149,7 +149,7 @@ void main() {
         _report('lejos', UrgencyLevel.critica, dLat: 0.02), // ~2,2 km
         _report('cerca', UrgencyLevel.media, dLat: 0.003), // ~330 m
       ]));
-      await tester.pumpWidget(_app(const EmergencyMapScreen()));
+      await tester.pumpWidget(_app(const EmergencyMapScreen(startInList: true)));
       await tester.pumpAndSettle();
 
       expect(find.text('Mapa de ayuda'), findsOneWidget);
@@ -164,13 +164,13 @@ void main() {
 
     testWidgets('sin GPS avisa que mide desde el centro del barrio', (tester) async {
       HelpLocator.resolve = () async => const HelpLocation(lat: _lat, lng: _lng, fromGps: false);
-      await tester.pumpWidget(_app(const EmergencyMapScreen()));
+      await tester.pumpWidget(_app(const EmergencyMapScreen(startInList: true)));
       await tester.pumpAndSettle();
       expect(find.text('Sin GPS: distancias desde el centro del barrio.'), findsOneWidget);
     });
 
     testWidgets('un SOS nuevo aparece en el mapa sin recargar', (tester) async {
-      await tester.pumpWidget(_app(const EmergencyMapScreen()));
+      await tester.pumpWidget(_app(const EmergencyMapScreen(startInList: true)));
       await tester.pumpAndSettle();
       await repo.createSos(
         tenantId: TenantSession.instance.tenantId,
@@ -240,7 +240,7 @@ void main() {
           _report('a', UrgencyLevel.alta),
           _report('m', UrgencyLevel.media, reporter: TenantSession.instance.userId),
         ]));
-        await tester.pumpWidget(_app(const EmergencyMapScreen(), emergency: emergency));
+        await tester.pumpWidget(_app(const EmergencyMapScreen(startInList: true), emergency: emergency));
         await tester.pumpAndSettle();
         await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
         await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
@@ -271,7 +271,7 @@ void main() {
         _report('c', UrgencyLevel.critica, dLat: 0.01),
         _report('m', UrgencyLevel.media, reporter: TenantSession.instance.userId),
       ]));
-      await tester.pumpWidget(_app(const EmergencyMapScreen()));
+      await tester.pumpWidget(_app(const EmergencyMapScreen(startInList: true)));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 

@@ -92,23 +92,10 @@ class EndorsementsSqliteDatasource {
     );
 
     await db.transaction((txn) async {
-      await txn.rawInsert(
-        'INSERT OR REPLACE INTO ${EndorsementModel.table} '
-        '(id, tenant_id, service_id, endorser_user_id, rating, short_comment, '
-        'photo_b64, is_deleted, updated_at, sync_status) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          endorsement.id,
-          endorsement.tenantId,
-          endorsement.serviceId,
-          endorsement.endorserUserId,
-          endorsement.rating,
-          endorsement.shortComment,
-          endorsement.photoB64,
-          0,
-          endorsement.updatedAt,
-          endorsement.syncStatus,
-        ],
+      await txn.insert(
+        EndorsementModel.table,
+        endorsement.toSqlite(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
       );
       await _outboxDao.queueMutation(
         tenantId: tenantId,

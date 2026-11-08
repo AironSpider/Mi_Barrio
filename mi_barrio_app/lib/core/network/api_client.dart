@@ -63,16 +63,19 @@ class ApiClient {
           .patch(uri(path), headers: _headers(tenantId), body: jsonEncode(body))
           .timeout(ApiConfig.timeout);
 
-  /// true si el backend responde a /health (útil porque "tener Wi-Fi"
-  /// no garantiza que el servidor sea alcanzable).
-  Future<bool> isServerReachable() async {
+  /// Cuerpo JSON de [response]; si el estado no es 2xx lanza [Exception]
+  /// con el mensaje del servidor (`detail` / `error`).
+  static Object? decodeOrThrow(http.Response response) {
+    Object? body;
     try {
-      final r = await _client
-          .get(uri('/health'))
-          .timeout(const Duration(seconds: 4));
-      return r.statusCode == 200;
-    } catch (_) {
-      return false;
+      body = jsonDecode(response.body);
+    } on FormatException {
+      body = null;
     }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = body is Map ? body['detail'] ?? body['error'] : null;
+      throw Exception(message?.toString() ?? 'No se pudo completar la acción');
+    }
+    return body;
   }
 }

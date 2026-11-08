@@ -77,17 +77,6 @@ class SyncOutboxDao {
     );
   }
 
-  Future<void> removeProcessed(List<String> recordIds) async {
-    if (recordIds.isEmpty) return;
-    final db = await _dbProvider.database;
-    final placeholders = List.filled(recordIds.length, '?').join(',');
-    await db.delete(
-      'sync_outbox',
-      where: 'record_id IN ($placeholders)',
-      whereArgs: recordIds,
-    );
-  }
-
   static const _ownerKey = 'pending_outbox_owner';
 
   /// Recuerda de quién son los cambios pendientes cuando la sesión vence sin
@@ -145,7 +134,6 @@ class SyncOutboxDao {
     const alwaysPrivate = {'users'};
 
     await db.transaction((txn) async {
-      final ownedRecordIds = <String>{};
       for (final entry in ownerColumns.entries) {
         final onlyUnsent = !alwaysPrivate.contains(entry.key);
         final rows = await txn.query(
@@ -156,7 +144,6 @@ class SyncOutboxDao {
           whereArgs: [tenantId, userId],
         );
         final ids = rows.map((row) => row['id'] as String).toSet();
-        ownedRecordIds.addAll(ids);
         if (ids.isNotEmpty) {
           final placeholders = List.filled(ids.length, '?').join(',');
           await txn.delete(

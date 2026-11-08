@@ -23,11 +23,7 @@ class TenantSession {
   String? inviteCode;
   bool isApproved = true;
 
-  bool get isLeader => role == 'LIDER_VECINAL';
-  bool get isSuperAdmin => role == 'SUPER_ADMIN' || role == 'SUPERADMIN';
-  bool get isAdmin => role == 'ADMIN_BARRIO' || role == 'ADMIN';
   bool get isComerciante => role == 'COMERCIANTE';
-  bool get isVecino => role == 'VECINO';
 
   void applyAuthenticatedUser({
     required String authenticatedTenantId,
@@ -50,14 +46,10 @@ class TenantSession {
   }
 
   void applyPlatformAdmin(String authenticatedUserId) {
-    tenantId = demoTenantId;
+    clearAuthenticatedUser();
     userId = authenticatedUserId;
     tenantName = '';
     role = 'SUPER_ADMIN';
-    inviteCode = null;
-    isApproved = true;
-    centerLat = demoCenterLat;
-    centerLng = demoCenterLng;
   }
 
   void clearAuthenticatedUser() {

@@ -53,21 +53,42 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 12),
-                  SelectableText(
-                    joinCode.isEmpty ? 'Código no disponible' : joinCode,
-                    style: Theme.of(context).textTheme.headlineMedium,
+                  // El código destacado: es lo que la junta dicta o comparte.
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: SelectableText(
+                      joinCode.isEmpty ? 'Código no disponible' : joinCode,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 2,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
+                          ),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   const Text(
                     'Comparte este código solo con personas que pertenezcan '
                     'a tu barrio.',
                   ),
-                  if (joinCode.isNotEmpty)
+                  if (joinCode.isNotEmpty) ...[
+                    const SizedBox(height: 12),
                     Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 8,
+                      spacing: 12,
+                      runSpacing: 8,
                       children: [
-                        TextButton.icon(
+                        OutlinedButton.icon(
                           onPressed: () async {
                             await Clipboard.setData(
                               ClipboardData(text: joinCode),
@@ -81,7 +102,7 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
                           icon: const Icon(Icons.copy_rounded),
                           label: const Text('Copiar código'),
                         ),
-                        TextButton.icon(
+                        FilledButton.icon(
                           onPressed: () async {
                             await Clipboard.setData(
                               ClipboardData(
@@ -105,6 +126,7 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
+                  ],
                 ],
               ),
             ),

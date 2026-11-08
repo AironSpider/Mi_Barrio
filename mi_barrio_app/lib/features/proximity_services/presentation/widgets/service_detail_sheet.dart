@@ -19,6 +19,8 @@ import '../../data/datasources/services_remote_ds.dart';
 import '../../data/models/endorsement_model.dart';
 import '../../data/models/service_model.dart';
 import '../../../../shared/contact_launcher.dart';
+import '../../../../shared/local_distance.dart';
+import 'service_category_ui.dart';
 
 /// Abre el detalle de un servicio en una hoja inferior.
 Future<void> showServiceDetailSheet(
@@ -391,7 +393,7 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
             borderRadius: BorderRadius.circular(14),
           ),
           child: Icon(
-            _categoryIcon(service.category),
+            ServiceCategoryUi.icon(service.category),
             size: 28,
             color: esquema.onPrimaryContainer,
           ),
@@ -463,13 +465,9 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
     final colores = MiBarrioColors.of(context);
     final centerLat = widget.centerLat ?? TenantSession.instance.centerLat;
     final centerLng = widget.centerLng ?? TenantSession.instance.centerLng;
-    final meters = _distanceMeters(
-      centerLat,
-      centerLng,
-      widget.service.lat,
-      widget.service.lng,
+    final distance = LocalDistance.label(
+      LocalDistance.km(centerLat, centerLng, widget.service.lat, widget.service.lng),
     );
-    final distance = _formatDistance(meters);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -773,37 +771,6 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
       ],
     );
   }
-}
-
-IconData _categoryIcon(String category) => switch (category) {
-  ServiceCategory.gasfiteria => Icons.plumbing_rounded,
-  ServiceCategory.carpinteria => Icons.carpenter_rounded,
-  ServiceCategory.electricidad => Icons.electrical_services_rounded,
-  ServiceCategory.clases => Icons.school_rounded,
-  ServiceCategory.paseadorMascotas => Icons.pets_rounded,
-  ServiceCategory.cerrajeria => Icons.key_rounded,
-  ServiceCategory.soporteEmergencia => Icons.health_and_safety_rounded,
-  _ => Icons.handyman_rounded,
-};
-
-/// Distancia aproximada en metros entre dos puntos (fórmula de haversine).
-double _distanceMeters(double lat1, double lng1, double lat2, double lng2) {
-  const earth = 6371000.0;
-  double rad(double deg) => deg * math.pi / 180;
-  final dLat = rad(lat2 - lat1);
-  final dLng = rad(lng2 - lng1);
-  final a =
-      math.sin(dLat / 2) * math.sin(dLat / 2) +
-      math.cos(rad(lat1)) *
-          math.cos(rad(lat2)) *
-          math.sin(dLng / 2) *
-          math.sin(dLng / 2);
-  return 2 * earth * math.asin(math.min(1, math.sqrt(a)));
-}
-
-String _formatDistance(double meters) {
-  if (meters < 1000) return '${meters.round()} m';
-  return '${(meters / 1000).toStringAsFixed(1)} km';
 }
 
 /// Mini mapa dibujado a mano: no necesita internet ni mapas externos.

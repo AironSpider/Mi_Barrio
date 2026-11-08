@@ -3,16 +3,30 @@ import 'package:flutter/material.dart';
 import '../../../../core/ui_kit/app_theme.dart';
 import '../../domain/repositories/emergency_repository.dart';
 import '../providers/emergency_provider.dart';
+import '../widgets/neighbor_map.dart';
 import 'humanitarian_board_screen.dart';
 
-/// Pestaña "Mapa": pedidos de ayuda en modo lista.
-/// - "Más cerca": del más cercano al más lejano (GPS o centro del barrio).
-/// - "Más urgente": el tablero humanitario ordenado por urgencia.
+/// Pestaña "Mapa".
+/// - **Mapa** (por defecto): cada vecino que publicó, con sus pedidos de
+///   ayuda, favores y servicios ([NeighborMap]).
+/// - **Lista**: los pedidos de ayuda, por cercanía ("Más cerca") o por
+///   urgencia ("Más urgente").
 class EmergencyMapScreen extends StatefulWidget {
-  const EmergencyMapScreen({super.key, this.isEmergencyMode = false, this.repository});
+  const EmergencyMapScreen({
+    super.key,
+    this.isEmergencyMode = false,
+    this.repository,
+    this.startInList = false,
+  });
 
   final bool isEmergencyMode;
   final EmergencyRepository? repository;
+
+  /// true = abre directamente en la vista de lista.
+  final bool startInList;
+
+  static const mapViewKey = ValueKey('map_view_map');
+  static const listViewKey = ValueKey('map_view_list');
 
   static const proximityKey = ValueKey('map_sort_proximity');
   static const urgencyKey = ValueKey('map_sort_urgency');
@@ -23,6 +37,7 @@ class EmergencyMapScreen extends StatefulWidget {
 
 class _EmergencyMapScreenState extends State<EmergencyMapScreen> {
   bool _byDistance = true;
+  late bool _asList = widget.startInList;
   HelpLocation? _location;
 
   @override
@@ -39,10 +54,64 @@ class _EmergencyMapScreenState extends State<EmergencyMapScreen> {
     final esquema = Theme.of(context).colorScheme;
     final loc = _location;
 
-    final header = Column(
+    final viewToggle = SegmentedButton<bool>(
+      showSelectedIcon: false,
+      style: SegmentedButton.styleFrom(minimumSize: const Size(48, 52)),
+      segments: const [
+        ButtonSegment(
+          value: false,
+          label: Text('Mapa', key: EmergencyMapScreen.mapViewKey),
+          icon: Icon(Icons.map_rounded),
+        ),
+        ButtonSegment(
+          value: true,
+          label: Text('Lista', key: EmergencyMapScreen.listViewKey),
+          icon: Icon(Icons.view_list_rounded),
+        ),
+      ],
+      selected: {_asList},
+      onSelectionChanged: (v) => setState(() => _asList = v.first),
+    );
+    final title = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('Mapa de ayuda', style: texto.headlineSmall),
+        const SizedBox(height: 8),
+        viewToggle,
+      ],
+    );
+    final repository = widget.repository ?? EmergencyReports.repository;
+
+    if (!_asList) {
+      // El mapa ocupa el resto de la pantalla. Con letra muy grande no cabe:
+      // entonces la vista se desplaza y el mapa mantiene una altura mínima.
+      final textScale = MediaQuery.textScalerOf(context).scale(1);
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          const minMap = 360.0;
+          final headerHeight = (32 + 8 + 52 + 12) * textScale;
+          final available = constraints.maxHeight - 16 - 96 - headerHeight;
+          final fits = available >= minMap;
+          return ListView(
+            physics: fits ? const NeverScrollableScrollPhysics() : null,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            children: [
+              title,
+              const SizedBox(height: 12),
+              SizedBox(
+                height: fits ? available : minMap,
+                child: NeighborMap(repository: repository, location: loc),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        title,
         const SizedBox(height: 4),
         Row(
           children: [

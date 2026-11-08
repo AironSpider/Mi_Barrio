@@ -7,6 +7,7 @@ import '../auth/auth_session_store.dart';
 import '../barrio_context/emergency_mode_provider.dart';
 import '../database_sqlite/sqlite_database.dart';
 import '../database_sqlite/sync_outbox_dao.dart';
+import '../network/api_client.dart';
 
 /// Resultado de subir los cambios pendientes.
 class PushResult {
@@ -90,7 +91,7 @@ bool isTransientHttpStatus(int status) => status == 408 || status == 429 || stat
 class SyncWorker {
   final String baseUrl;
   final SyncOutboxDao _outboxDao = SyncOutboxDao();
-  final http.Client _client;
+  final ApiClient _api;
 
   // Solo estas tablas se pueden marcar como SYNCED.
   static const _syncableTables = {
@@ -180,12 +181,7 @@ class SyncWorker {
   };
 
   SyncWorker({required this.baseUrl, http.Client? client})
-    : _client = client ?? http.Client();
-
-  Future<void> synchronize(String tenantId) async {
-    await pushLocalChanges(tenantId);
-    await pullRemoteChanges(tenantId);
-  }
+    : _api = ApiClient(baseUrl: baseUrl, client: client);
 
   /// Máximo de cambios por envío que acepta `/sync/push` (si se pasa: 413).
   static const maxBatch = 200;
@@ -272,21 +268,10 @@ class SyncWorker {
       };
     }).toList();
 
-    final response = await _client
-        .post(
-          Uri.parse('$baseUrl/api/v1/sync/push'),
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId,
-            if (AuthSessionStore.instance.token case final token?)
-              'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode({
-            'client_sync_timestamp': DateTime.now().toUtc().toIso8601String(),
-            'mutations': mutations,
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
+    final response = await _api.post('/api/v1/sync/push', tenantId, {
+      'client_sync_timestamp': DateTime.now().toUtc().toIso8601String(),
+      'mutations': mutations,
+    });
 
     if (response.statusCode != 200) {
       if (response.statusCode == 401) {
@@ -410,20 +395,11 @@ class SyncWorker {
           ? state.first['last_pulled_at'] as String?
           : null;
 
-      final uri = Uri.parse('$baseUrl/api/v1/sync/pull').replace(
-        queryParameters: lastPulled != null ? {'since': lastPulled} : null,
+      final response = await _api.get(
+        '/api/v1/sync/pull',
+        tenantId,
+        query: lastPulled != null ? {'since': lastPulled} : null,
       );
-
-      final response = await _client
-          .get(
-            uri,
-            headers: {
-              'X-Tenant-ID': tenantId,
-              if (AuthSessionStore.instance.token case final token?)
-                'Authorization': 'Bearer $token',
-            },
-          )
-          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode != 200) {
         if (response.statusCode == 401) {

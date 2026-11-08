@@ -326,7 +326,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-/// Banda superior con el color de la marca, el logo en círculo blanco y el lema.
+/// Encabezado de marca: el logo (casa y vecinos), el nombre y el lema, sobre
+/// blanco como en el ícono de la app, con el trazo naranja del logo.
 class _BrandHeader extends StatelessWidget {
   const _BrandHeader();
 
@@ -336,45 +337,54 @@ class _BrandHeader extends StatelessWidget {
     final scheme = theme.colorScheme;
     return Container(
       width: double.infinity,
-      color: scheme.primary,
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+      decoration: const BoxDecoration(
+        color: AppPalette.card,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: const BoxDecoration(
-              color: AppPalette.card,
-              shape: BoxShape.circle,
-            ),
-            child: Image.asset(
-              'assets/images/logo_mi_barrio.png',
-              height: 72,
-              width: 72,
-              excludeFromSemantics: true,
-              errorBuilder: (_, _, _) => Icon(
-                Icons.holiday_village_rounded,
-                size: 72,
-                color: scheme.primary,
-              ),
+          Image.asset(
+            'assets/images/logo_mi_barrio.png',
+            height: 140,
+            width: 140,
+            excludeFromSemantics: true,
+            errorBuilder: (_, _, _) => Icon(
+              Icons.holiday_village_rounded,
+              size: 96,
+              color: scheme.primary,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Semantics(
             header: true,
             child: Text(
               'Mi Barrio',
               textAlign: TextAlign.center,
               style: theme.textTheme.headlineMedium?.copyWith(
-                color: scheme.onPrimary,
-                fontWeight: FontWeight.w700,
+                color: AppPalette.textPrimary,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
+          // Trazo naranja del logo: firma visual de la marca.
+          Container(
+            width: 72,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppPalette.brandOrange,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 10),
           Text(
             'Tu barrio conectado, aunque no haya señal.',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onPrimary),
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: AppPalette.textSecondary,
+            ),
           ),
         ],
       ),

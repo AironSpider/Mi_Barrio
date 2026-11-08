@@ -131,8 +131,16 @@ void main() {
 
     expect(find.text('Administración de Mi Barrio'), findsOneWidget);
     expect(find.text('Nombre del barrio'), findsOneWidget);
-    expect(find.text('Crear barrio / asignar administrador'), findsOneWidget);
-    expect(find.text('Código de barrio existente (opcional)'), findsOneWidget);
+    expect(find.text('Crear barrio'), findsOneWidget);
+    expect(find.text('Usar mi ubicación'), findsOneWidget);
+
+    // "Barrio existente" pide solo el código (sin nombre ni coordenadas).
+    await tester.tap(find.byKey(PlatformAdminScreen.existingModeKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Código del barrio'), findsOneWidget);
+    expect(find.text('Nombre del barrio'), findsNothing);
+    expect(find.text('Latitud'), findsNothing);
+    expect(find.text('Asignar administrador'), findsOneWidget);
   });
 
   testWidgets('el administrador de barrio tiene su código para compartir', (

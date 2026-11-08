@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:sqflite/sqflite.dart';
+
 import '../../../../core/database_sqlite/local_id.dart';
 import '../../../../core/database_sqlite/record_validation.dart';
 import '../../../../core/database_sqlite/sqlite_database.dart';
@@ -109,6 +111,10 @@ class EmergencyRepositoryImpl implements EmergencyRepository {
     if (current.reporterUserId == helperUserId) {
       throw ArgumentError.value(helperUserId, 'helperUserId', 'No puedes ofrecer ayuda en tu propio pedido');
     }
+    // El servidor lo rechazaría y quedaría "Sin enviar" para siempre.
+    if (current.status == ReportStatus.atendido) {
+      throw StateError('Este pedido ya fue atendido');
+    }
     final updated = current.copyWith(
       status: ReportStatus.vecinosEnCamino,
       helperUserId: helperUserId,
@@ -122,12 +128,10 @@ class EmergencyRepositoryImpl implements EmergencyRepository {
   Future<void> _save(VulnerableReport report) async {
     final db = await _db.database;
     await db.transaction((txn) async {
-      await txn.rawInsert(
-        'INSERT OR REPLACE INTO ${VulnerableReportModel.table} '
-        '(id, tenant_id, reporter_user_id, urgency_level, vulnerability_type, description, '
-        'lat, lng, status, helper_user_id, is_deleted, updated_at, sync_status) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        VulnerableReportModel.toSqlite(report, syncStatus: SqliteTables.syncPending).values.toList(),
+      await txn.insert(
+        VulnerableReportModel.table,
+        VulnerableReportModel.toSqlite(report, syncStatus: SqliteTables.syncPending),
+        conflictAlgorithm: ConflictAlgorithm.replace,
       );
       await _outboxDao.queueMutation(
         tenantId: report.tenantId,

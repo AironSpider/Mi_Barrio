@@ -90,7 +90,7 @@ void main() {
 
   testWidgets('sin grupos registrados avisa con un mensaje claro', (tester) async {
     await open(tester);
-    expect(find.text('Tu junta vecinal aún no registró grupos de apoyo.'), findsOneWidget);
+    expect(find.text('Grupos de apoyo: tu junta vecinal aún no registró ninguno.'), findsOneWidget);
   });
 
   testWidgets('accesible en emergencia: áreas táctiles, etiquetas y contraste', (tester) async {

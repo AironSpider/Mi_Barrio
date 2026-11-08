@@ -46,6 +46,20 @@ class AuthRemoteDatasource {
     'join_code': joinCode.trim().toUpperCase(),
   });
 
+  /// Nombre del barrio de un código de invitación (ruta pública, sin sesión).
+  /// null = el código no existe. Lanza [AuthException] si no hay conexión.
+  Future<String?> lookupNeighborhoodName(String joinCode) async {
+    final code = Uri.encodeComponent(joinCode.trim().toUpperCase());
+    final response = await _request(
+      () => _client
+          .get(Uri.parse('$_baseUrl/api/v1/tenants/by-code/$code'))
+          .timeout(const Duration(seconds: 8)),
+    );
+    if (response.statusCode == 404 || response.statusCode == 422) return null;
+    final name = _decodeResponse(response)['name'];
+    return name is String && name.trim().isNotEmpty ? name.trim() : null;
+  }
+
   Future<Map<String, dynamic>> getCurrentUser(String token) async {
     final response = await _request(
       () => _client

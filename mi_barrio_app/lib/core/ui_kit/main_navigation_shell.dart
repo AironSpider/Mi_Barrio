@@ -20,8 +20,11 @@ class ShellTab {
     required this.icon,
     required this.selectedIcon,
     required this.builder,
+    this.showsPublish = true,
   });
 
+  /// false = la pestaña no muestra el botón flotante "Publicar"/"Pedir ayuda".
+  final bool showsPublish;
   final String id;
   final String label;
   final IconData icon;
@@ -57,6 +60,7 @@ class ShellTabs {
     ShellTab(
       id: 'tu',
       label: 'Tú',
+      showsPublish: false,
       icon: Icons.person_outline_rounded,
       selectedIcon: Icons.person_rounded,
       builder: (_) => const ProfileScreen(),
@@ -73,6 +77,7 @@ class ShellTabs {
         icon: Icons.storefront_outlined,
         selectedIcon: Icons.storefront_rounded,
         builder: _merchantBusiness,
+        showsPublish: false,
       ),
       all.last,
     ];
@@ -167,10 +172,6 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (widget.isEmergencyMode) ...[
-              const SizedBox(width: 8),
-              const Flexible(child: _EmergencyChip()),
-            ],
           ],
         ),
         actions: [
@@ -199,9 +200,8 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           if (widget.isEmergencyMode)
             Semantics(
               key: MainNavigationShell.emergencyBannerKey,
-              label: 'Modo emergencia activo',
               liveRegion: true,
-              child: Container(height: 4, color: AppPalette.emergencyStripe),
+              child: const _EmergencyBanner(),
             ),
           GlobalSyncStatusBar(phase: widget.syncPhase),
           Expanded(
@@ -218,10 +218,15 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           ),
         ],
       ),
-      floatingActionButton: QuickPublishFab(
-        isEmergencyMode: widget.isEmergencyMode,
-        onPressed: _handlePublish,
-      ),
+      // En emergencia "Pedir ayuda" está en todas las pestañas.
+      floatingActionButton:
+          widget.isEmergencyMode ||
+              (_index < tabs.length && tabs[_index].showsPublish)
+          ? QuickPublishFab(
+              isEmergencyMode: widget.isEmergencyMode,
+              onPressed: _handlePublish,
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
@@ -239,47 +244,53 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   }
 }
 
-/// Chip "Emergencia" en la barra superior: el estado no se comunica solo con color.
-class _EmergencyChip extends StatelessWidget {
-  const _EmergencyChip();
+/// Franja "Modo emergencia" de ancho completo bajo la barra superior.
+/// El estado no se comunica solo con color: ícono + texto.
+class _EmergencyBanner extends StatelessWidget {
+  const _EmergencyBanner();
 
   @override
   Widget build(BuildContext context) {
     final texto = Theme.of(context).textTheme;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Semantics(
-        label: 'Modo emergencia activo',
-        excludeSemantics: true,
-        child: Container(
-          key: MainNavigationShell.emergencyChipKey,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppPalette.card,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.warning_amber_rounded,
-                size: 18,
-                color: AppPalette.emergencyOnPrimaryContainer,
-              ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  'Emergencia',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: texto.labelMedium?.copyWith(
-                    color: AppPalette.emergencyOnPrimaryContainer,
-                  ),
-                ),
-              ),
-            ],
-          ),
+    return Container(
+      key: MainNavigationShell.emergencyChipKey,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        color: AppPalette.emergencyBackground,
+        border: Border(
+          bottom: BorderSide(color: AppPalette.emergencyStripe, width: 3),
         ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 24,
+            color: AppPalette.emergencyOnPrimaryContainer,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Modo emergencia. ',
+                    style: texto.labelLarge?.copyWith(
+                      color: AppPalette.emergencyOnPrimaryContainer,
+                    ),
+                  ),
+                  TextSpan(
+                    text: 'Primero lo urgente y lo más cercano.',
+                    style: texto.bodyMedium?.copyWith(
+                      color: AppPalette.emergencyOnPrimaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

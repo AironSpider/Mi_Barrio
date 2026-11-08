@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/ui_kit/app_theme.dart';
+import '../../../../core/ui_kit/star_rating_display.dart';
 import 'visto_bueno_badge.dart';
 
 class ServiceCard extends StatelessWidget {
@@ -14,9 +15,17 @@ class ServiceCard extends StatelessWidget {
     this.description,
     this.isPending = false,
     this.isAvailableInEmergency = false,
+    this.ratingAvg,
+    this.isOwn = false,
     this.onEndorse,
     this.onTap,
   });
+
+  /// Promedio de estrellas (null = sin calificaciones con estrellas).
+  final double? ratingAvg;
+
+  /// true = es un servicio del propio vecino.
+  final bool isOwn;
 
   final String title;
   final String categoryLabel;
@@ -37,7 +46,7 @@ class ServiceCard extends StatelessWidget {
 
     return Card(
       elevation: 0,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
@@ -84,6 +93,23 @@ class ServiceCard extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        if (ratingAvg != null) ...[
+                          const SizedBox(height: 4),
+                          StarRatingDisplay(
+                            rating: ratingAvg!,
+                            count: endorsementsCount,
+                            size: 18,
+                          ),
+                        ],
+                        if (isOwn) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Este es tu servicio',
+                            style: texto.labelMedium?.copyWith(
+                              color: colores.accentText,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
