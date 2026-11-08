@@ -6,18 +6,9 @@ services:
     region: ohio
     dockerfilePath: ./mi_barrio_backend/Dockerfile
     dockerContext: ./mi_barrio_backend
-    healthCheckPath: /health
+    healthCheckPath: /health/live
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: mi-barrio-db
-          property: connectionString
+        sync: false
       - key: MI_BARRIO_JWT_SECRET
         generateValue: true
-
-databases:
-  - name: mi-barrio-db
-    databaseName: mi_barrio
-    user: mi_barrio
-    plan: free
-    region: ohio

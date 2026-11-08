@@ -56,6 +56,12 @@ app.include_router(auth_router)
 app.include_router(platform_router)
 
 
+@app.get("/health/live", tags=["System"])
+async def liveness_check():
+    """Liveness probe that does not wake the external PostgreSQL database."""
+    return {"status": "alive"}
+
+
 def _expected_migration() -> str | None:
     """Última migración del repo (head de Alembic)."""
     try:

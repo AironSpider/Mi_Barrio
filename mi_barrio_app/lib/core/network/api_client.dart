@@ -17,7 +17,7 @@ class ApiConfig {
   ApiConfig._();
 
   static const _fromBuild = String.fromEnvironment('API_BASE_URL');
-  static const timeout = Duration(seconds: 10);
+  static const timeout = Duration(seconds: 30);
 
   static String get baseUrl {
     if (_fromBuild.isNotEmpty) return _fromBuild;

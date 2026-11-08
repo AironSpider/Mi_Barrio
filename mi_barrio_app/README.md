@@ -65,11 +65,11 @@ Android. No expongas el puerto de desarrollo a redes públicas.
 
 ### Demo desde cualquier red
 
-El repositorio incluye `render.yaml` para desplegar la API y PostgreSQL en
-Render. Conecta el repositorio a Render y crea un Blueprint desde ese archivo.
-Cuando termine el despliegue, Render mostrará una URL HTTPS fija para
-`mi-barrio-api`; comprueba que `https://TU-URL/health` indique
-`"migrations_up_to_date": true`.
+El repositorio incluye `render.yaml` para desplegar la API en Render. Crea
+primero un PostgreSQL en Neon y configura su cadena de conexión como
+`DATABASE_URL` del servicio durante la creación del Blueprint. Render crea una
+URL HTTPS fija para `mi-barrio-api`; comprueba `/health/live` y
+`/health` (este último confirma la conexión y las migraciones de Neon).
 
 Compila o ejecuta la app una vez con esa URL:
 
@@ -83,11 +83,12 @@ La URL queda incluida en ese build: el APK podrá conectarse desde cualquier
 red sin cambiar la IP de la computadora ni recompilar para cada lugar. No
 compartas el archivo `.env` ni pongas secretos en `--dart-define`.
 
-El Blueprint usa planes gratuitos para facilitar la primera prueba. Render
-puede suspender la API tras inactividad y su PostgreSQL gratuito expira; puede
-haber demora en la primera solicitud y no se debe usar para datos duraderos.
-Para una demo sin espera ni expiración, cambia ambos servicios a planes pagos
-antes de cargar cuentas o datos reales.
+Opcionalmente, configura Cron-job.org con un GET a
+`https://TU-URL/health/live` cada 10 minutos para reducir el cold start de
+Render. No uses `/health` para el cron: ese endpoint consulta la base y evita
+que Neon escale a cero. Aunque el cron ayude con Render, el compute gratis de
+Neon puede dormir; el primer acceso puede tardar y no hay garantía de
+disponibilidad inmediata en planes gratuitos.
 
 ## Pruebas
 

@@ -284,7 +284,7 @@ class SyncWorker {
             'mutations': mutations,
           }),
         )
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 30));
 
     if (response.statusCode != 200) {
       if (response.statusCode == 401) {
@@ -421,7 +421,7 @@ class SyncWorker {
                 'Authorization': 'Bearer $token',
             },
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode != 200) {
         if (response.statusCode == 401) {

@@ -20,19 +20,43 @@ docker build -t mi-barrio-api . && docker run --rm -p 8000:8000 --env-file .env 
 Comprobar: abre <http://localhost:8000/health> → `"migrations_up_to_date": true`.
 Documentación interactiva: <http://localhost:8000/docs>.
 
-## Despliegue público para la demo
+## Despliegue público para la demo (Neon + Render)
 
-En la raíz del repositorio hay un `render.yaml` que crea la API Docker y una
-base PostgreSQL en Render. Despliega el Blueprint desde el panel de Render. El
-archivo genera `MI_BARRIO_JWT_SECRET` en el proveedor y conecta la base mediante
-`DATABASE_URL`; no copies ni subas tu `.env`.
+En [Neon](https://neon.com/), crea un proyecto PostgreSQL y copia desde
+**Connect** la cadena de conexión (puedes usar el endpoint pooled). En Render,
+crea un Blueprint desde este repositorio y pega esa cadena como `DATABASE_URL`
+cuando el panel la solicite. Usa la cadena PostgreSQL con SSL; el backend la
+adapta a `asyncpg`, incluyendo `sslmode=require` y
+`channel_binding=require`. Render genera `MI_BARRIO_JWT_SECRET`; nunca copies
+el `.env` local ni una URL con contraseña al repositorio.
 
-Al finalizar, comprueba la URL HTTPS del servicio en `/health`. Render gratuito
-puede dormir el servicio por inactividad y su PostgreSQL gratuito expira. Sube
-ambos a planes pagos si necesitas API siempre activa o persistencia más allá de
-la prueba. Para inicializar el barrio demo y el SUPER_ADMIN, usa los comandos
-de bootstrap/seed contra la base del despliegue una sola vez; conserva esos
-secretos solo en el panel o en tu entorno local.
+El contexto de Docker apunta a `mi_barrio_backend`, el puerto usa el
+`$PORT` que entrega Render y las migraciones corren al iniciar el contenedor.
+El arranque **no** crea cuentas ni ejecuta el seed: `seed_demo.py` requiere
+`SEED_DEMO_PASSWORD` y es idempotente, y el SUPER_ADMIN se crea una sola vez
+con `python -m app.features.auth_barrio.platform_admin_bootstrap`. Para crear
+esa cuenta en el Neon desplegado, ejecuta el bootstrap desde una terminal local
+con `DATABASE_URL` apuntando temporalmente a Neon. No guardes esa URL en Git ni
+la envíes por chat.
+
+Verifica `https://TU-URL/health/live` para la vida de la API y
+`https://TU-URL/health` para comprobar conectividad con Neon y que las
+migraciones están al día.
+
+### Mantener Render despierto (opcional)
+
+En Cron-job.org crea un GET cada 10 minutos a
+`https://TU-URL/health/live`. Ese endpoint y el health check de Docker no
+consultan PostgreSQL: mantienen activa la API sin impedir que Neon ahorre
+recursos. El primer acceso tras varios minutos puede tardar mientras Neon
+reactiva su compute; los timeouts de la app permiten hasta 30 segundos.
+
+Esto reduce la posibilidad de cold start de Render, pero no es una garantía de
+disponibilidad: Render puede reiniciar/suspender servicios gratuitos y Neon
+Free escala su compute a cero tras inactividad y tiene cuotas mensuales. Revisa
+los límites vigentes de [Render Free](https://render.com/docs/free) y
+[Neon Free](https://neon.com/pricing). El `/health` normal sí consulta la base,
+así que no lo uses como keep-alive frecuente si quieres que Neon pueda dormir.
 
 ## Sin Docker (desarrollo)
 
