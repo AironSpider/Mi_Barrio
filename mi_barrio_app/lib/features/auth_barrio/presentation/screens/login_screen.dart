@@ -507,7 +507,7 @@ class _SlowServerHintState extends State<_SlowServerHint> {
             Expanded(
               child: Text(
                 'Está tardando un poco: el servidor se está activando. '
-                'Puede tomar hasta 30 segundos.',
+                'Puede tomar hasta 1 minuto.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

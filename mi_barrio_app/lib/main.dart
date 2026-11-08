@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'core/barrio_context/emergency_mode_provider.dart';
 import 'core/barrio_context/tenant_session.dart';
+import 'core/network/api_client.dart';
 import 'core/network/connectivity_monitor.dart';
 import 'core/sync_manager/sync_coordinator.dart';
 import 'core/ui_kit/app_theme.dart';
@@ -31,6 +32,7 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
   await ConnectivityMonitor.instance.start();
+  ApiClient.wakeUp(); // Render gratis tarda ~50 s en despertar
   // Dev 2: estado de emergencia guardado + sincronización automática
   // (al abrir, al volver internet, tras cada publicación y cada 60 s).
   await EmergencyModeProvider.instance.load();
@@ -58,10 +60,23 @@ class MiBarrioApp extends StatefulWidget {
 
 class _MiBarrioAppState extends State<MiBarrioApp> {
   late bool _isEmergencyMode;
+  AppLifecycleListener? _lifecycle;
 
   @override
   void initState() {
     super.initState();
+    // Al volver a la app: el aviso de "volvió internet" pudo perderse mientras
+    // estaba en segundo plano. Se vuelve a preguntar y se sincroniza.
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        ApiClient.wakeUp();
+        unawaited(
+          ConnectivityMonitor.instance.refresh().then(
+            (_) => SyncCoordinator.instance.syncNow(),
+          ),
+        );
+      },
+    );
     _isEmergencyMode =
         widget.initialEmergencyMode ||
         EmergencyModeProvider.instance.isActive.value;
@@ -79,6 +94,7 @@ class _MiBarrioAppState extends State<MiBarrioApp> {
 
   @override
   void dispose() {
+    _lifecycle?.dispose();
     EmergencyModeProvider.instance.isActive.removeListener(
       _onEmergencyModeChanged,
     );

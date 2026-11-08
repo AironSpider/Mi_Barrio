@@ -1,8 +1,16 @@
 import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 
 enum ConnectionStatus { online, offline }
 
+/// Indica si el teléfono TIENE una red (Wi-Fi, datos, etc.).
+///
+/// Es solo una pista: tener red no garantiza llegar al servidor, y el sistema
+/// a veces no avisa un cambio (app en segundo plano, VPN, anclaje USB). Por
+/// eso [refresh] vuelve a preguntar y la sincronización lo usa antes de
+/// rendirse con "Modo offline".
 class ConnectivityMonitor {
   ConnectivityMonitor._();
   static final ConnectivityMonitor instance = ConnectivityMonitor._();
@@ -18,24 +26,41 @@ class ConnectivityMonitor {
 
   /// Llamar una vez al inicio de la app (en main()).
   Future<void> start() async {
-    _current = _toStatus(await _connectivity.checkConnectivity());
+    await refresh();
     _controller.add(_current); // estado inicial
-    _sub ??= _connectivity.onConnectivityChanged.listen((results) {
-      final status = _toStatus(results);
-      if (status != _current) { // solo emite cuando cambia
-        _current = status;
-        _controller.add(status);
-      }
-    });
+    _sub ??= _connectivity.onConnectivityChanged.listen(
+      (results) => _set(toStatus(results)),
+      // Si el sistema falla al avisar, no quedarse "offline" para siempre.
+      onError: (Object _) => _set(ConnectionStatus.online),
+    );
   }
 
-  // En connectivity_plus 6.x los eventos son una lista de interfaces activas.
-  ConnectionStatus _toStatus(List<ConnectivityResult> results) {
-    final online = results.any((r) =>
-        r == ConnectivityResult.wifi ||
-        r == ConnectivityResult.mobile ||
-        r == ConnectivityResult.ethernet);
-    return online ? ConnectionStatus.online : ConnectionStatus.offline;
+  /// Vuelve a preguntar al sistema (al volver a la app o antes de decir
+  /// "offline"). Si el sistema no responde, se asume que hay red y que la
+  /// petición HTTP decida.
+  Future<ConnectionStatus> refresh() async {
+    try {
+      _set(toStatus(await _connectivity.checkConnectivity()));
+    } catch (_) {
+      _set(ConnectionStatus.online);
+    }
+    return _current;
+  }
+
+  void _set(ConnectionStatus status) {
+    if (status == _current) return; // solo emite cuando cambia
+    _current = status;
+    _controller.add(status);
+  }
+
+  /// En connectivity_plus 6.x los eventos son una lista de interfaces activas.
+  /// Solo es "offline" si no hay NINGUNA (lista vacía o solo `none`): una VPN,
+  /// un anclaje (`other`) o bluetooth también pueden llevar internet.
+  @visibleForTesting
+  static ConnectionStatus toStatus(List<ConnectivityResult> results) {
+    final sinRed =
+        results.isEmpty || results.every((r) => r == ConnectivityResult.none);
+    return sinRed ? ConnectionStatus.offline : ConnectionStatus.online;
   }
 
   Future<void> dispose() async {

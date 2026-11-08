@@ -57,6 +57,16 @@ class SyncCoordinator {
 
   SyncWorker? _worker;
   bool Function() _isOnline = () => true;
+
+  /// Segunda opinión antes de decir "offline": vuelve a preguntar al sistema.
+  /// Sin esto, si se perdía el aviso de "volvió internet", la app quedaba en
+  /// "Modo offline" para siempre (ni el respaldo de 60 s lo arreglaba).
+  Future<bool> Function() _recheckOnline = () async => true;
+
+  /// Cada start()/stop() sube este número. Si llega uno más nuevo mientras
+  /// otro espera, el viejo no instala nada: dos start() seguidos (login +
+  /// refresco del perfil) dejaban timers y suscripciones duplicados.
+  int _generation = 0;
   String Function() _tenantId = () => TenantSession.instance.tenantId;
 
   StreamSubscription<ConnectionStatus>? _connectionSub;
@@ -73,18 +83,29 @@ class SyncCoordinator {
     SyncWorker? worker,
     Stream<ConnectionStatus>? connectionChanges,
     bool Function()? isOnline,
+    Future<bool> Function()? recheckOnline,
     String Function()? tenantId,
     Duration interval = const Duration(seconds: 60),
     bool syncImmediately = true,
     List<Duration> retryDelays = defaultRetryDelays,
   }) async {
-    await stop();
+    final generation = ++_generation;
+    await _stop();
+    if (generation != _generation) return; // lo reemplazó otro start()/stop()
     _worker = worker ?? SyncWorker(baseUrl: ApiConfig.baseUrl);
     _retryDelays = retryDelays;
     lastError.value = null;
     _isOnline =
         isOnline ??
         () => ConnectivityMonitor.instance.current == ConnectionStatus.online;
+    // Con un isOnline de prueba, la segunda opinión es el mismo isOnline.
+    _recheckOnline =
+        recheckOnline ??
+        (isOnline != null
+            ? () async => isOnline()
+            : () async =>
+                  await ConnectivityMonitor.instance.refresh() ==
+                  ConnectionStatus.online);
     if (tenantId != null) _tenantId = tenantId;
 
     _connectionSub = (connectionChanges ?? ConnectivityMonitor.instance.stream)
@@ -126,7 +147,7 @@ class SyncCoordinator {
     try {
       do {
         _runAgain = false;
-        if (!_isOnline()) {
+        if (!_isOnline() && !await _recheckOnline()) {
           phase.value = SyncPhase.offline;
           outcome = _Outcome.offline;
           break;
@@ -155,8 +176,16 @@ class SyncCoordinator {
         } else {
           phase.value = SyncPhase.error;
           lastError.value = push.success ? pull.message : push.message;
-          final transient = (!push.success && push.retryable) || (!pull.success && pull.retryable);
+          final transient =
+              (!push.success && push.retryable) ||
+              (!pull.success && pull.retryable);
           outcome = transient ? _Outcome.retry : _Outcome.stop;
+          // Se fue la señal en plena sincronización (modo avión): es
+          // "Modo offline", no un error rojo con reintentos.
+          if (transient && !await _recheckOnline()) {
+            phase.value = SyncPhase.offline;
+            outcome = _Outcome.offline;
+          }
           if (kDebugMode) {
             debugPrint(
               '[Sync] push: ${push.message ?? 'ok'} | pull: ${pull.message ?? 'ok'}',
@@ -208,7 +237,12 @@ class SyncCoordinator {
     _periodic = Timer.periodic(interval, (_) => syncNow());
   }
 
-  Future<void> stop() async {
+  Future<void> stop() {
+    _generation++;
+    return _stop();
+  }
+
+  Future<void> _stop() async {
     await _connectionSub?.cancel();
     await _queueSub?.cancel();
     _periodic?.cancel();

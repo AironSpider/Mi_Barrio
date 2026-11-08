@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
@@ -17,7 +18,9 @@ class ApiConfig {
   ApiConfig._();
 
   static const _fromBuild = String.fromEnvironment('API_BASE_URL');
-  static const timeout = Duration(seconds: 30);
+
+  /// Render gratis tarda ~50 s en despertar: con 30 s el primer login fallaba.
+  static const timeout = Duration(seconds: 60);
 
   static String get baseUrl {
     if (_fromBuild.isNotEmpty) return _fromBuild;
@@ -77,5 +80,27 @@ class ApiClient {
       throw Exception(message?.toString() ?? 'No se pudo completar la acción');
     }
     return body;
+  }
+
+  /// true si el backend responde a /health/live (útil porque "tener Wi-Fi"
+  /// no garantiza que el servidor sea alcanzable). /health/live no toca la
+  /// base de datos, así que no espera a que Neon despierte.
+  Future<bool> isServerReachable({
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    try {
+      final r = await _client.get(uri('/health/live')).timeout(timeout);
+      return r.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Despierta al servidor sin esperar la respuesta (al abrir la app y al
+  /// volver a ella), para que esté listo cuando el vecino toque "Ingresar".
+  static void wakeUp() {
+    unawaited(
+      ApiClient().isServerReachable(timeout: const Duration(seconds: 60)),
+    );
   }
 }

@@ -229,7 +229,7 @@ void main() {
       LoginScreen.slowServerAfter + const Duration(milliseconds: 100),
     );
     expect(find.byKey(LoginScreen.slowServerKey), findsOneWidget);
-    expect(find.textContaining('hasta 30 segundos'), findsOneWidget);
+    expect(find.textContaining('hasta 1 minuto'), findsOneWidget);
   });
 
   test('friendlyError traduce los mensajes técnicos', () {
