@@ -27,6 +27,12 @@ Para que funcione de verdad faltan **3 configuraciones** (10–15 minutos). Sin 
 | `SMTP_USER` | el correo, ej. `mibarrio.app@gmail.com` |
 | `SMTP_PASSWORD` | las 16 letras (sin espacios) |
 
+> **Render gratis bloquea el SMTP** (en los logs: `Network is unreachable`). Ahí usa **Brevo** (gratis, 300 correos/día):
+> 1. Crea cuenta en https://www.brevo.com con el Gmail del equipo.
+> 2. **Senders, Domains & Dedicated IPs → Senders**: agrega y verifica el Gmail del equipo como remitente.
+> 3. **SMTP & API → API Keys → Generate a new API key** → cópiala.
+> 4. En Render → Environment agrega `BREVO_API_KEY` = esa clave. Si existe, se usa Brevo en vez de SMTP (el remitente es `SMTP_USER`, o `BREVO_SENDER_EMAIL` si la pones).
+
 Opcionales: `SMTP_FROM_NAME` (por defecto "Mi Barrio"), `SMTP_HOST` (`smtp.gmail.com`), `SMTP_PORT` (`587`).
 Gmail permite ~500 correos al día: de sobra para la demo.
 
