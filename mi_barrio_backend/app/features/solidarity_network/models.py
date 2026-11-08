@@ -1,9 +1,12 @@
-from sqlalchemy import String, Float, Boolean, Text
+import uuid
+
+from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, SmallInteger, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.core.database import Base
 from app.shared.base_model import BarrioBaseMixin
-import uuid
+
 
 class SolidarityPost(Base, BarrioBaseMixin):
     __tablename__ = "solidarity_posts"
@@ -17,3 +20,41 @@ class SolidarityPost(Base, BarrioBaseMixin):
     status: Mapped[str] = mapped_column(String(30), default="DISPONIBLE", nullable=False)
     lat: Mapped[float] = mapped_column(Float, nullable=False)
     lng: Mapped[float] = mapped_column(Float, nullable=False)
+    # Foto opcional (JPEG comprimido en base64). No viaja en el pull: se pide aparte.
+    photo_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Quién está ayudando: lo pone el servidor al coordinar (para las reseñas).
+    coordinator_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+
+class PostComment(Base, BarrioBaseMixin):
+    """Comentario público de un vecino en un favor."""
+    __tablename__ = "post_comments"
+
+    post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("solidarity_posts.id"), nullable=False)
+    author_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    body: Mapped[str] = mapped_column(String(500), nullable=False)
+
+
+class FavorReview(Base, BarrioBaseMixin):
+    """Reseña al completar un favor: el autor califica a quien ayudó y viceversa."""
+    __tablename__ = "favor_reviews"
+    __table_args__ = (
+        UniqueConstraint("post_id", "reviewer_user_id", name="uq_favor_review_once"),
+        CheckConstraint("rating >= 1 AND rating <= 5", name="ck_favor_review_rating"),
+    )
+
+    post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("solidarity_posts.id"), nullable=False)
+    reviewer_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    reviewed_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    comment: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+
+class FavorMessage(Base, BarrioBaseMixin):
+    """Mensaje del chat de un favor. Conversación = (favor, vecino que no es el autor)."""
+    __tablename__ = "favor_messages"
+
+    post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("solidarity_posts.id"), nullable=False)
+    neighbor_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    sender_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    body: Mapped[str] = mapped_column(String(1000), nullable=False)

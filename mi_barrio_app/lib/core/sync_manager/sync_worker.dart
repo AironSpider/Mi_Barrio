@@ -120,6 +120,13 @@ class SyncWorker {
       'lng',
       'is_deleted',
       'updated_at',
+      // Solo bajada: nombre público y contacto del autor, foto y quién ayuda.
+      'author_name',
+      'contact_phone',
+      'contact_whatsapp',
+      'has_photo',
+      'coordinator_user_id',
+      'coordinator_name',
     ],
     'local_services': [
       'id',
@@ -178,6 +185,7 @@ class SyncWorker {
     'is_available_in_emergency',
     'is_deleted',
     'is_active',
+    'has_photo',
   };
 
   SyncWorker({required this.baseUrl, http.Client? client})

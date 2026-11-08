@@ -1,15 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/auth/auth_session_store.dart';
 import '../../../../core/location/gps_service.dart';
+import '../../data/datasources/auth_remote_datasource.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
 
+/// Trae los barrios de la plataforma (lo inyectan los tests).
+typedef NeighborhoodsLoader = Future<List<NeighborhoodSummary>> Function();
+
 class PlatformAdminScreen extends ConsumerStatefulWidget {
-  const PlatformAdminScreen({super.key, required this.user, this.gps});
+  const PlatformAdminScreen({
+    super.key,
+    required this.user,
+    this.gps,
+    this.loadNeighborhoods,
+  });
 
   final UserEntity user;
+
+  /// Por defecto, `GET /api/v1/platform/neighborhoods` con la sesión actual.
+  final NeighborhoodsLoader? loadNeighborhoods;
 
   /// Para "Usar mi ubicación" (los tests pasan uno falso).
   final GpsService? gps;
@@ -18,6 +33,8 @@ class PlatformAdminScreen extends ConsumerStatefulWidget {
   static const existingModeKey = ValueKey('platform_mode_existing');
   static const useLocationKey = ValueKey('platform_use_location');
   static const submitKey = ValueKey('platform_submit');
+  static ValueKey<String> neighborhoodKey(String id) =>
+      ValueKey('platform_neighborhood_$id');
 
   @override
   ConsumerState<PlatformAdminScreen> createState() =>
@@ -43,8 +60,56 @@ class _PlatformAdminScreenState extends ConsumerState<PlatformAdminScreen> {
   bool _existing = false;
   bool _lastWasExisting = false;
 
+  // Barrios reales de la plataforma (desde el servidor).
+  List<NeighborhoodSummary>? _neighborhoods;
+  String? _listError;
+  bool _loadingList = false;
+  final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNeighborhoods();
+  }
+
+  Future<void> _loadNeighborhoods() async {
+    setState(() {
+      _loadingList = true;
+      _listError = null;
+    });
+    try {
+      final loader =
+          widget.loadNeighborhoods ??
+          () => AuthRemoteDatasource().listNeighborhoods(
+            AuthSessionStore.instance.token ?? '',
+          );
+      final list = await loader();
+      if (!mounted) return;
+      setState(() => _neighborhoods = list);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _listError = 'No se pudieron cargar los barrios: $error');
+    } finally {
+      if (mounted) setState(() => _loadingList = false);
+    }
+  }
+
+  /// "Asignar administrador" en un barrio sin junta: llena el formulario.
+  void _assignAdminTo(NeighborhoodSummary n) {
+    setState(() {
+      _existing = true;
+      _existingJoinCode.text = n.inviteCode;
+    });
+    _scroll.animateTo(
+      _scroll.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   void dispose() {
+    _scroll.dispose();
     _neighborhood.dispose();
     _existingJoinCode.dispose();
     _adminName.dispose();
@@ -97,6 +162,7 @@ class _PlatformAdminScreenState extends ConsumerState<PlatformAdminScreen> {
         _created = created;
         _sending = false;
       });
+      if (created != null) unawaited(_loadNeighborhoods());
     }
   }
 
@@ -142,6 +208,7 @@ class _PlatformAdminScreenState extends ConsumerState<PlatformAdminScreen> {
         ],
       ),
       body: ListView(
+        controller: _scroll,
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
         children: [
           Text(
@@ -155,6 +222,16 @@ class _PlatformAdminScreenState extends ConsumerState<PlatformAdminScreen> {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
+          _NeighborhoodsSection(
+            neighborhoods: _neighborhoods,
+            loading: _loadingList,
+            error: _listError,
+            onRefresh: _loadNeighborhoods,
+            onAssignAdmin: _assignAdminTo,
+          ),
+          const SizedBox(height: 24),
+          Text('Dar de alta', style: theme.textTheme.titleLarge),
+          const SizedBox(height: 8),
           SegmentedButton<bool>(
             showSelectedIcon: false,
             style: SegmentedButton.styleFrom(minimumSize: const Size(48, 52)),
@@ -418,6 +495,153 @@ class _PlatformAdminScreenState extends ConsumerState<PlatformAdminScreen> {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Lista real de barrios: nombre, código, si tiene junta y si está en emergencia.
+class _NeighborhoodsSection extends StatelessWidget {
+  const _NeighborhoodsSection({
+    required this.neighborhoods,
+    required this.loading,
+    required this.error,
+    required this.onRefresh,
+    required this.onAssignAdmin,
+  });
+
+  final List<NeighborhoodSummary>? neighborhoods;
+  final bool loading;
+  final String? error;
+  final VoidCallback onRefresh;
+  final ValueChanged<NeighborhoodSummary> onAssignAdmin;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final list = neighborhoods;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                list == null ? 'Barrios' : 'Barrios (${list.length})',
+                style: theme.textTheme.titleLarge,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Actualizar lista',
+              onPressed: loading ? null : onRefresh,
+              icon: loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (error != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    error!,
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
+                  TextButton(
+                    onPressed: onRefresh,
+                    child: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (list == null)
+          const SizedBox.shrink()
+        else if (list.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Todavía no hay barrios. Crea el primero aquí abajo.',
+                style: theme.textTheme.bodyLarge,
+              ),
+            ),
+          )
+        else
+          for (final n in list)
+            Card(
+              key: PlatformAdminScreen.neighborhoodKey(n.id),
+              margin: const EdgeInsets.only(bottom: 10),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(n.name, style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        InputChip(
+                          avatar: const Icon(Icons.vpn_key_rounded, size: 18),
+                          label: Text(n.inviteCode),
+                          tooltip: 'Copiar código',
+                          onPressed: () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: n.inviteCode),
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Código ${n.inviteCode} copiado',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                        Chip(
+                          avatar: Icon(
+                            n.hasAdmin
+                                ? Icons.verified_user_rounded
+                                : Icons.person_off_rounded,
+                            size: 18,
+                          ),
+                          label: Text(
+                            n.hasAdmin ? 'Con junta' : 'Sin administrador',
+                          ),
+                        ),
+                        if (n.isEmergencyActive)
+                          const Chip(
+                            avatar: Icon(Icons.warning_amber_rounded, size: 18),
+                            label: Text('En emergencia'),
+                          ),
+                      ],
+                    ),
+                    if (!n.hasAdmin) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => onAssignAdmin(n),
+                        icon: const Icon(Icons.person_add_alt_1_rounded),
+                        label: const Text('Asignar administrador'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+      ],
     );
   }
 }

@@ -32,6 +32,7 @@ class QuickPublishLauncher {
           lng: ubicacion.lng,
           flowType: datos.flowType,
           isEmergencyContext: datos.isEmergencyContext,
+          photoB64: datos.photoB64,
         );
         DoneConfirmation.show(
           messenger,

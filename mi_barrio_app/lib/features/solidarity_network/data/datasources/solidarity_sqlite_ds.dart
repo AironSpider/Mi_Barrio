@@ -1,3 +1,5 @@
+import 'package:sqflite/sqflite.dart';
+
 import '../../../../core/database_sqlite/local_id.dart';
 import '../../../../core/database_sqlite/record_validation.dart';
 import '../../../../core/database_sqlite/sqlite_database.dart';
@@ -13,6 +15,9 @@ class SolidaritySqliteDatasource {
 
   final LocalDatabase _db;
   final SyncOutboxDao _outboxDao;
+
+  /// Tope de la foto (JPEG comprimido en base64), igual que las calificaciones.
+  static const maxPhotoB64Length = 80 * 1024;
 
   /// Guarda una publicación al instante (Clic 3: "Publicar Ahora").
   ///
@@ -32,7 +37,15 @@ class SolidaritySqliteDatasource {
     String flowType = SolidarityFlowType.solicitoAyuda,
     String? description,
     bool isEmergencyContext = false,
+    String? photoB64,
   }) async {
+    if (photoB64 != null && photoB64.length > maxPhotoB64Length) {
+      throw ArgumentError.value(
+        '(${photoB64.length} caracteres)',
+        'photoB64',
+        'La foto es demasiado grande; elige otra o tómala de nuevo',
+      );
+    }
     RecordValidation.uuid(tenantId, 'tenantId');
     RecordValidation.uuid(authorUserId, 'authorUserId');
     RecordValidation.oneOf(modality, SolidarityModality.values, 'modality');
@@ -56,22 +69,51 @@ class SolidaritySqliteDatasource {
       lng: lng,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
       syncStatus: SqliteTables.syncPending,
+      hasPhoto: photoB64 != null,
     );
 
     final db = await _db.database;
     await db.transaction((txn) async {
       await txn.insert(SolidarityPostModel.table, post.toSqlite());
+      if (photoB64 != null) await _savePhoto(txn, tenantId, post.id, photoB64);
       await _outboxDao.queueMutation(
         tenantId: tenantId,
         targetTable: SolidarityPostModel.table,
         recordId: post.id,
         operation: OutboxOperation.upsert,
-        payload: post.toSyncPayload(),
+        // La foto viaja solo al crear; los cambios de estado no la reenvían.
+        payload: {...post.toSyncPayload(), 'photo_b64': ?photoB64},
         executor: txn,
       );
     });
     return post;
   }
+
+  /// Foto del favor guardada en el teléfono (null si no se descargó aún).
+  Future<String?> localPhoto(String postId) async {
+    final db = await _db.database;
+    final rows = await db.query('post_photos',
+        columns: ['photo_b64'], where: 'post_id = ?', whereArgs: [postId], limit: 1);
+    return rows.isEmpty ? null : rows.first['photo_b64'] as String?;
+  }
+
+  /// Guarda la foto descargada para verla luego sin internet.
+  Future<void> cachePhoto(String tenantId, String postId, String photoB64) async {
+    final db = await _db.database;
+    await _savePhoto(db, tenantId, postId, photoB64);
+  }
+
+  static Future<void> _savePhoto(
+    DatabaseExecutor db,
+    String tenantId,
+    String postId,
+    String photoB64,
+  ) =>
+      db.insert(
+        'post_photos',
+        {'post_id': postId, 'tenant_id': tenantId, 'photo_b64': photoB64},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
 
   /// Publicaciones activas del barrio, de la más reciente a la más antigua.
   ///
@@ -162,7 +204,11 @@ class SolidaritySqliteDatasource {
     if (current.status == SolidarityStatus.completado) {
       throw StateError('Este favor ya fue completado');
     }
-    return _saveStatus(current, SolidarityStatus.enCoordinacion);
+    return _saveStatus(
+      current,
+      SolidarityStatus.enCoordinacion,
+      coordinatorUserId: coordinatorUserId,
+    );
   }
 
   Future<SolidarityPostModel> _requirePost(String tenantId, String postId) async {
@@ -174,24 +220,18 @@ class SolidaritySqliteDatasource {
   }
 
   /// Guarda el nuevo estado y su mutación en la cola en una sola transacción.
+  /// "Disponible" otra vez = ya nadie está ayudando (igual que el servidor).
   Future<SolidarityPostModel> _saveStatus(
     SolidarityPostModel current,
-    String status,
-  ) async {
-    final updated = SolidarityPostModel(
-      id: current.id,
-      tenantId: current.tenantId,
-      authorUserId: current.authorUserId,
-      flowType: current.flowType,
-      modality: current.modality,
-      title: current.title,
-      description: current.description,
-      isEmergencyContext: current.isEmergencyContext,
+    String status, {
+    String? coordinatorUserId,
+  }) async {
+    final updated = current.copyWith(
       status: status,
-      lat: current.lat,
-      lng: current.lng,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
       syncStatus: SqliteTables.syncPending,
+      coordinatorUserId: coordinatorUserId,
+      clearCoordinator: status == SolidarityStatus.disponible,
     );
     final db = await _db.database;
     await db.transaction((txn) async {
@@ -201,6 +241,8 @@ class SolidaritySqliteDatasource {
           'status': updated.status,
           'updated_at': updated.updatedAt,
           'sync_status': updated.syncStatus,
+          'coordinator_user_id': updated.coordinatorUserId,
+          'coordinator_name': updated.coordinatorName,
         },
         where: 'id = ? AND tenant_id = ?',
         whereArgs: [updated.id, updated.tenantId],

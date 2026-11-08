@@ -60,3 +60,31 @@ class NeighborhoodProvisionEntity {
   final String adminFullName;
   final String adminEmail;
 }
+
+/// Un barrio de la plataforma, como lo ve el superadministrador.
+class NeighborhoodSummary {
+  const NeighborhoodSummary({
+    required this.id,
+    required this.name,
+    required this.inviteCode,
+    required this.isEmergencyActive,
+    required this.adminCount,
+  });
+
+  factory NeighborhoodSummary.fromJson(Map<String, dynamic> json) =>
+      NeighborhoodSummary(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        inviteCode: json['invite_code']?.toString() ?? '',
+        isEmergencyActive: json['is_emergency_active'] == true,
+        adminCount: (json['admin_count'] as num?)?.toInt() ?? 0,
+      );
+
+  final String id;
+  final String name;
+  final String inviteCode;
+  final bool isEmergencyActive;
+  final int adminCount;
+
+  bool get hasAdmin => adminCount > 0;
+}

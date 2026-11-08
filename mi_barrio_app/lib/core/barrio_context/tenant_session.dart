@@ -1,27 +1,25 @@
-/// Sesión del barrio (tenant) y del vecino actual.
+/// Sesión del barrio (tenant) y del vecino que inició sesión.
 ///
-/// Sprint 5: barrio de demostración fijo (mismo que usa el modal de publicación).
-/// Sprint 9: se reemplaza por la sesión real (código de junta vecinal + registro).
+/// Todos los valores vienen del servidor al iniciar sesión
+/// ([applyAuthenticatedUser]); la app no trae barrios ni usuarios fijos.
+/// Sin sesión los campos quedan vacíos ([hasNeighborhood] = false).
 class TenantSession {
   TenantSession._();
   static final TenantSession instance = TenantSession._();
 
-  static const demoTenantId = 'a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d';
-  static const demoUserId = '5f3a2c1b-1234-4abc-9def-0123456789ab';
-  static const demoTenantName = 'Junta Vecinal Demo (Piura)';
-  static const demoCenterLat = -5.1945;
-  static const demoCenterLng = -80.6328;
-
-  String tenantId = demoTenantId;
-  String userId = demoUserId;
-  String tenantName = demoTenantName;
-  double centerLat = demoCenterLat;
-  double centerLng = demoCenterLng;
+  String tenantId = '';
+  String userId = '';
+  String tenantName = '';
+  double centerLat = 0;
+  double centerLng = 0;
 
   /// Rol de API actual: VECINO, COMERCIANTE, ADMIN_BARRIO o SUPER_ADMIN.
   String role = 'VECINO';
   String? inviteCode;
   bool isApproved = true;
+
+  /// true si hay un vecino con barrio en sesión.
+  bool get hasNeighborhood => tenantId.isNotEmpty;
 
   bool get isComerciante => role == 'COMERCIANTE';
 
@@ -45,21 +43,21 @@ class TenantSession {
     centerLng = authenticatedCenterLng;
   }
 
+  /// El superadministrador no pertenece a ningún barrio.
   void applyPlatformAdmin(String authenticatedUserId) {
     clearAuthenticatedUser();
     userId = authenticatedUserId;
-    tenantName = '';
     role = 'SUPER_ADMIN';
   }
 
   void clearAuthenticatedUser() {
-    tenantId = demoTenantId;
-    userId = demoUserId;
-    tenantName = demoTenantName;
+    tenantId = '';
+    userId = '';
+    tenantName = '';
     role = 'VECINO';
     inviteCode = null;
     isApproved = true;
-    centerLat = demoCenterLat;
-    centerLng = demoCenterLng;
+    centerLat = 0;
+    centerLng = 0;
   }
 }

@@ -62,6 +62,10 @@ class ApiClient {
           .post(uri(path), headers: _headers(tenantId), body: jsonEncode(body))
           .timeout(ApiConfig.timeout);
 
+  Future<http.Response> delete(String path, String tenantId) => _client
+      .delete(uri(path), headers: _headers(tenantId))
+      .timeout(ApiConfig.timeout);
+
   Future<http.Response> patch(String path, String tenantId, Object body) =>
       _client
           .patch(uri(path), headers: _headers(tenantId), body: jsonEncode(body))

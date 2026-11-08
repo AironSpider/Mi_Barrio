@@ -29,13 +29,18 @@ class ContactLauncher {
 
   static Uri telUri(String raw) => Uri(scheme: 'tel', path: normalize(raw));
 
-  static Uri whatsappUri(String raw) => Uri.https('wa.me', '/${international(raw)}');
+  static Uri whatsappUri(String raw, {String? text}) => Uri.https(
+        'wa.me',
+        '/${international(raw)}',
+        text == null || text.isEmpty ? null : {'text': text},
+      );
 
   /// Abre el marcador. Devuelve false si el teléfono no pudo (ej. tablet sin SIM).
   static Future<bool> call(String raw) => _open(telUri(raw));
 
   /// Abre WhatsApp (o el navegador si no está instalado).
-  static Future<bool> whatsapp(String raw) => _open(whatsappUri(raw));
+  static Future<bool> whatsapp(String raw, {String? text}) =>
+      _open(whatsappUri(raw, text: text));
 
   static Future<bool> _open(Uri uri) async {
     try {

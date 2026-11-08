@@ -9,7 +9,7 @@ from app.core.auth_security import decode_access_token
 from app.core.database import async_session_factory
 
 
-async def _account_is_active(claims: dict) -> bool:
+async def account_is_active(claims: dict) -> bool:
     """El token es válido solo si la cuenta sigue activa, en el mismo barrio y con el
     mismo rol. Así una cuenta borrada o degradada deja de operar al instante."""
     # Import local: los modelos importan core.database y evitamos ciclos.
@@ -68,7 +68,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     )
                 try:
                     request.state.auth_claims = decode_access_token(token)
-                    if not await _account_is_active(request.state.auth_claims):
+                    if not await account_is_active(request.state.auth_claims):
                         return JSONResponse(
                             status_code=status.HTTP_401_UNAUTHORIZED,
                             headers={"WWW-Authenticate": "Bearer"},
