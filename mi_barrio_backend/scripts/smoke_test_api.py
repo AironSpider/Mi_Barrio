@@ -73,10 +73,16 @@ def main():
     check("Swagger muestra X-Tenant-ID en /services", s == 200 and "X-Tenant-ID" in str(b["paths"]["/api/v1/services"]))
 
     # ── Servicios (oficios) ──
+    # Desde "Servicios para todos": vecinos y comerciantes publican; el admin del barrio no.
     s, b = call("POST", "/api/v1/services", {
-        "provider_user_id": ME, "category": "GASFITERIA", "title": "Vecina intenta ofrecer",
+        "provider_user_id": ME, "category": "GASFITERIA", "title": "Vecina ofrece gasfitería",
         "description": "x", "lat": LAT, "lng": LNG})
-    check("un VECINO no puede publicar servicios -> 403", s == 403, f"{s} {b}")
+    check("un VECINO puede publicar servicios -> 201",
+          s == 201 and isinstance(b, dict) and b.get("provider_user_id") == ME, f"{s} {b}")
+    s, b = call("POST", "/api/v1/services", {
+        "provider_user_id": ME, "category": "GASFITERIA", "title": "Admin intenta ofrecer",
+        "description": "x", "lat": LAT, "lng": LNG}, who=hood["admin_token"])
+    check("el admin del barrio no publica servicios -> 403", s == 403, f"{s} {b}")
     # Sin aprobación de la junta: el comerciante recién registrado publica al instante.
     check("comerciante nuevo queda activo al registrarse", comerciante["is_approved"] is True)
     s, svc = call("POST", "/api/v1/services", {
