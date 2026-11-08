@@ -56,7 +56,6 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
     _datasource = widget.datasource ?? SolidaritySqliteDatasource();
     _sync = SyncCoordinator.instance;
     _sync.phase.addListener(_onSyncPhaseChanged);
-    _sync.lastError.addListener(_onLastSyncErrorChanged);
     EmergencyModeProvider.instance.isActive.addListener(_onEmergencyChanged);
     _queueSubscription = SyncOutboxDao.onQueued.listen((tenantId) {
       if (tenantId == _tenantId) _loadPosts();
@@ -69,7 +68,6 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
   @override
   void dispose() {
     _sync.phase.removeListener(_onSyncPhaseChanged);
-    _sync.lastError.removeListener(_onLastSyncErrorChanged);
     EmergencyModeProvider.instance.isActive.removeListener(_onEmergencyChanged);
     unawaited(_queueSubscription.cancel());
     super.dispose();
@@ -85,10 +83,6 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
         _sync.phase.value == SyncPhase.error) {
       _loadPosts();
     }
-  }
-
-  void _onLastSyncErrorChanged() {
-    if (mounted) setState(() {});
   }
 
   Future<void> _loadPosts() async {
@@ -147,12 +141,6 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final syncError = _sync.lastError.value;
-    final hasSyncError =
-        _sync.phase.value == SyncPhase.error &&
-        syncError != null &&
-        syncError.isNotEmpty;
-
     return RefreshIndicator(
       onRefresh: _loadPosts,
       child: ListView(
@@ -171,7 +159,7 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
-          _buildSyncControls(context, hasSyncError, syncError),
+          _buildSyncControls(context),
           const SizedBox(height: 12),
           // En emergencia: grupos de apoyo del barrio antes del muro (Sprint 11).
           if (EmergencyModeProvider.instance.isActive.value) ...[
@@ -255,53 +243,34 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
     ];
   }
 
-  Widget _buildSyncControls(
-    BuildContext context,
-    bool hasSyncError,
-    String? syncError,
-  ) {
-    final phase = _sync.phase.value;
-    final syncing = phase == SyncPhase.syncing;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  /// Solo el botón de actualizar: el estado de la sincronización (offline,
+  /// reintentos, errores) ya lo muestra la barra global en todas las pestañas.
+  Widget _buildSyncControls(BuildContext context) {
+    final syncing = _sync.phase.value == SyncPhase.syncing;
+    return Row(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                phase == SyncPhase.offline
-                    ? 'Sin conexión: puedes publicar y se enviará al volver internet.'
-                    : syncing
-                    ? 'Actualizando publicaciones del barrio…'
-                    : 'Las publicaciones se actualizan automáticamente.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-            IconButton(
-              tooltip: 'Actualizar muro',
-              onPressed: syncing
-                  ? null
-                  : () {
-                      unawaited(_sync.syncNow());
-                      unawaited(_loadPosts());
-                    },
-              icon: syncing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh_rounded),
-            ),
-          ],
-        ),
-        if (hasSyncError)
-          _buildMessage(
-            context,
-            icon: Icons.cloud_off_rounded,
-            message:
-                'No se pudo sincronizar. La publicación sigue guardada en este teléfono y se reintentará. $syncError',
+        Expanded(
+          child: Text(
+            'Las publicaciones se actualizan automáticamente.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
+        ),
+        IconButton(
+          tooltip: 'Actualizar muro',
+          onPressed: syncing
+              ? null
+              : () {
+                  unawaited(_sync.syncNow());
+                  unawaited(_loadPosts());
+                },
+          icon: syncing
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.refresh_rounded),
+        ),
       ],
     );
   }

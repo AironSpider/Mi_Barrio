@@ -28,6 +28,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _name = TextEditingController();
   final _phone = TextEditingController();
   final _address = TextEditingController();
+  final _emailContacto = TextEditingController();
   final _whatsapp = TextEditingController();
   final _facebook = TextEditingController();
   final _instagram = TextEditingController();
@@ -42,7 +43,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _error;
 
   List<TextEditingController> get _controllers =>
-      [_name, _phone, _address, _whatsapp, _facebook, _instagram, _businessName];
+      [_name, _phone, _address, _emailContacto, _whatsapp, _facebook, _instagram, _businessName];
 
   @override
   void initState() {
@@ -68,6 +69,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'name': _name.text.trim(),
         'phone': _phone.text.trim(),
         'address': _address.text.trim(),
+        'emailContacto': _emailContacto.text.trim(),
         'whatsapp': _whatsapp.text.trim(),
         'facebook': _facebook.text.trim(),
         'instagram': _instagram.text.trim(),
@@ -91,6 +93,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _name.text = profile?.fullName ?? '';
       _phone.text = profile?.phone ?? '';
       _address.text = profile?.addressReference ?? '';
+      _emailContacto.text = profile?.emailContacto ?? '';
       _whatsapp.text = profile?.whatsapp ?? '';
       _facebook.text = profile?.facebookUrl ?? '';
       _instagram.text = profile?.instagramUrl ?? '';
@@ -121,6 +124,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         homeLat: _profile?.homeLat ?? session.centerLat,
         homeLng: _profile?.homeLng ?? session.centerLng,
         email: _profile?.email,
+        emailContacto: _emailContacto.text,
         whatsapp: _whatsapp.text,
         facebookUrl: _facebook.text,
         instagramUrl: _instagram.text,
@@ -151,6 +155,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   static String _friendly(String? field) => switch (field) {
         'fullName' => 'Escribe tu nombre y apellido.',
         'phone' => 'El teléfono debe tener solo números (6 a 20), con + opcional.',
+        'emailContacto' => 'Revisa el correo de contacto (ejemplo: nombre@correo.com).',
         'whatsapp' => 'El WhatsApp debe tener solo números (6 a 20), con + opcional.',
         'facebookUrl' => 'El enlace de Facebook debe empezar con https://',
         'instagramUrl' => 'El enlace de Instagram debe empezar con https://',
@@ -174,6 +179,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     capitalization: TextCapitalization.sentences),
                 _section(theme, 'Redes y contacto',
                     hint: 'Se usan para que tus vecinos te contacten cuando publiques un servicio.'),
+                _field(_emailContacto, 'Correo de contacto (opcional)',
+                    keyboard: TextInputType.emailAddress, icon: Icons.mail_outline_rounded),
                 _field(_whatsapp, 'WhatsApp (opcional)', keyboard: TextInputType.phone,
                     icon: Icons.chat_rounded),
                 _field(_facebook, 'Facebook (https://…)', keyboard: TextInputType.url,

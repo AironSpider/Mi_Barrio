@@ -8,7 +8,12 @@ import 'package:mi_barrio_app/core/ui_kit/main_navigation_shell.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/providers/auth_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _bar(ValueNotifier<SyncPhase> phase, {double scale = 1}) {
+Widget _bar(
+  ValueNotifier<SyncPhase> phase, {
+  double scale = 1,
+  ValueNotifier<Duration?>? retry,
+  ValueNotifier<DateTime?>? success,
+}) {
   return MaterialApp(
     theme: AppTheme.day(),
     home: MediaQuery(
@@ -16,7 +21,13 @@ Widget _bar(ValueNotifier<SyncPhase> phase, {double scale = 1}) {
         size: const Size(360, 640),
         textScaler: TextScaler.linear(scale),
       ),
-      child: Scaffold(body: GlobalSyncStatusBar(phase: phase)),
+      child: Scaffold(
+        body: GlobalSyncStatusBar(
+          phase: phase,
+          nextRetry: retry ?? ValueNotifier<Duration?>(null),
+          lastSuccess: success ?? ValueNotifier<DateTime?>(DateTime(2026)),
+        ),
+      ),
     ),
   );
 }
@@ -55,6 +66,46 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('antes de la primera sincronización dice "Conectando", no "Sincronizado"', (
+    tester,
+  ) async {
+    final phase = ValueNotifier(SyncPhase.idle);
+    final success = ValueNotifier<DateTime?>(null);
+    await tester.pumpWidget(_bar(phase, success: success));
+    expect(find.text(GlobalSyncStatusBar.connectingText), findsOneWidget);
+    expect(find.text(GlobalSyncStatusBar.syncedText), findsNothing);
+
+    success.value = DateTime.now();
+    await tester.pumpAndSettle();
+    expect(find.text(GlobalSyncStatusBar.syncedText), findsOneWidget);
+  });
+
+  testWidgets('si el servidor falla muestra "Reintentando en N s"', (tester) async {
+    final handle = tester.ensureSemantics();
+    final phase = ValueNotifier(SyncPhase.error);
+    final retry = ValueNotifier<Duration?>(const Duration(seconds: 4));
+    await tester.pumpWidget(_bar(phase, retry: retry));
+    final texto = GlobalSyncStatusBar.retryText(const Duration(seconds: 4));
+    expect(find.text(texto), findsOneWidget);
+    expect(find.bySemanticsLabel(texto), findsOneWidget);
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+
+    // Se agotan los reintentos rápidos: vuelve al mensaje de error normal.
+    retry.value = null;
+    await tester.pumpAndSettle();
+    expect(find.text(GlobalSyncStatusBar.errorText), findsOneWidget);
+    handle.dispose();
+  });
+
+  testWidgets('reintento con texto al 200 % no desborda', (tester) async {
+    await tester.pumpWidget(_bar(
+      ValueNotifier(SyncPhase.error),
+      scale: 2,
+      retry: ValueNotifier<Duration?>(const Duration(seconds: 16)),
+    ));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('cambia de "Modo offline" a "Sincronizado" al volver la señal', (
     tester,

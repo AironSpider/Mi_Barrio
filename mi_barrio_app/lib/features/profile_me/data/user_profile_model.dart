@@ -48,6 +48,7 @@ class UserProfileModel {
     this.role = UserRole.vecino,
     this.tutorialCompleted = false,
     this.email,
+    this.emailContacto,
     this.whatsapp,
     this.facebookUrl,
     this.instagramUrl,
@@ -72,6 +73,9 @@ class UserProfileModel {
   final String role;
   final bool tutorialCompleted;
   final String? email;
+
+  /// Correo para que los vecinos te contacten (distinto del correo de la cuenta).
+  final String? emailContacto;
   final String? whatsapp;
   final String? facebookUrl;
   final String? instagramUrl;
@@ -104,6 +108,7 @@ class UserProfileModel {
         'role': role,
         'tutorial_completed': tutorialCompleted ? 1 : 0,
         'email': email,
+        'email_contacto': emailContacto,
         'whatsapp': whatsapp,
         'facebook_url': facebookUrl,
         'instagram_url': instagramUrl,
@@ -127,6 +132,7 @@ class UserProfileModel {
         'home_lng': homeLng,
         'tutorial_completed': tutorialCompleted,
         'email': email,
+        'email_contacto': emailContacto,
         'whatsapp': whatsapp,
         'facebook_url': facebookUrl,
         'instagram_url': instagramUrl,
@@ -149,6 +155,7 @@ class UserProfileModel {
         role: r['role'] as String? ?? UserRole.vecino,
         tutorialCompleted: (r['tutorial_completed'] as int? ?? 0) == 1,
         email: r['email'] as String?,
+        emailContacto: r['email_contacto'] as String?,
         whatsapp: r['whatsapp'] as String?,
         facebookUrl: r['facebook_url'] as String?,
         instagramUrl: r['instagram_url'] as String?,

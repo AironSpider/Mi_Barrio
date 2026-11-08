@@ -28,7 +28,7 @@ RULES = {
     ]),
     "local_services": ("title", ["E2E%", "[SMOKE]%"]),
     "vulnerable_reports": ("description", ["[SMOKE]%", "E2E%", "Adulto mayor solo", "Señora con dolor%"]),
-    "users": ("full_name", ["Vecina E2E", "Usuario de prueba", "Cuenta de verificación", "Comerciante E2E%"]),
+    "users": ("full_name", ["Vecina E2E", "Usuario de prueba", "Vecino de prueba", "Cuenta de verificación", "Comerciante E2E%"]),
 }
 
 

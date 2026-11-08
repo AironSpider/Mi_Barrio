@@ -101,6 +101,42 @@ void main() {
     expect(outbox, isEmpty);
   });
 
+  Future<void> tapSave(WidgetTester tester) async {
+    await tester.ensureVisible(find.byKey(EditProfileScreen.saveButtonKey));
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(EditProfileScreen.saveButtonKey));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('guarda el correo de contacto y lo envía como email_contacto', (tester) async {
+    await open(tester);
+    await tester.enterText(field('Correo de contacto (opcional)'), 'rosa.contacto@correo.com');
+    await tester.pump();
+    await tapSave(tester);
+
+    final rows = await tester.runAsync(() async => (await local.database).query('users'));
+    expect(rows!.single['email_contacto'], 'rosa.contacto@correo.com');
+    final outbox = await tester.runAsync(() async => (await local.database).query('sync_outbox'));
+    final payload = jsonDecode(outbox!.single['payload_json'] as String) as Map;
+    expect(payload['email_contacto'], 'rosa.contacto@correo.com');
+
+    // Al reabrir la pantalla, el correo sigue ahí.
+    await open(tester);
+    expect(find.text('rosa.contacto@correo.com'), findsOneWidget);
+  });
+
+  testWidgets('un correo de contacto inválido muestra un mensaje humano y no guarda', (tester) async {
+    await open(tester);
+    await tester.enterText(field('Correo de contacto (opcional)'), 'rosa.correo');
+    await tester.pump();
+    await tapSave(tester);
+    expect(find.textContaining('correo de contacto'), findsOneWidget);
+    final outbox = await tester.runAsync(() async => (await local.database).query('sync_outbox'));
+    expect(outbox, isEmpty);
+  });
+
   testWidgets('cumple áreas táctiles, etiquetas y contraste', (tester) async {
     final handle = tester.ensureSemantics();
     await open(tester);

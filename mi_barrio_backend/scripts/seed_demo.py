@@ -23,6 +23,8 @@ if str(BACKEND_DIR) not in sys.path:
 
 JOIN_CODE = "BARRIO-01"
 CENTER_LAT, CENTER_LNG = -5.19449, -80.63282  # Plaza de Armas de Piura
+# Mismo id que usan la migración de grupos y los scripts de prueba.
+DEMO_TENANT_ID = uuid.UUID("a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d")
 NS = uuid.UUID("6f1d2c3a-5b7e-4c90-a1b2-0d3e4f5a6b7c")  # namespace fijo del seed
 
 
@@ -44,51 +46,59 @@ USERS = [
 
 # key, categoria, titulo, descripcion, proveedor, disponible_en_emergencia, dlat, dlng
 SERVICES = [
-    ("s1", "GASFITERIA", "Gasfitero a domicilio", "Reparo fugas, griferias y tuberias. Atiendo el mismo dia.", "comerciante", True, -0.0042, 0.0033),
-    ("s2", "ELECTRICIDAD", "Electricista certificado", "Instalaciones, tableros y cortocircuitos. Tambien de noche.", "comerciante", True, -0.0038, 0.0038),
-    ("s3", "CARPINTERIA", "Carpinteria y muebles", "Puertas, ventanas y arreglos de muebles de madera.", "v1", False, 0.0052, 0.0042),
+    ("s1", "GASFITERIA", "Gasfitero a domicilio", "Reparo fugas, griferías y tuberías. Atiendo el mismo día.", "comerciante", True, -0.0042, 0.0033),
+    ("s2", "ELECTRICIDAD", "Electricista certificado", "Instalaciones, tableros y cortocircuitos. También de noche.", "comerciante", True, -0.0038, 0.0038),
+    ("s3", "CARPINTERIA", "Carpintería y muebles", "Puertas, ventanas y arreglos de muebles de madera.", "v1", False, 0.0052, 0.0042),
     ("s4", "CERRAJERIA", "Cerrajero 24 horas", "Apertura de puertas, cambio de chapas y copias de llaves.", "comerciante", False, -0.0035, 0.0030),
-    ("s5", "CLASES", "Clases de refuerzo escolar", "Matematicas y comunicacion para primaria y secundaria.", "v2", False, -0.0028, -0.0047),
+    ("s5", "CLASES", "Clases de refuerzo escolar", "Matemáticas y comunicación para primaria y secundaria.", "v2", False, -0.0028, -0.0047),
     ("s6", "PASEADOR_MASCOTAS", "Paseo de perros", "Paseos de 30 minutos por las tardes, cerca del parque.", "v3", False, -0.0058, 0.0012),
-    ("s7", "SOPORTE_EMERGENCIA", "Botiquin y primeros auxilios", "Curaciones basicas y orientacion en caso de emergencia.", "v4", False, 0.0068, -0.0028),
-    ("s8", "GASFITERIA", "Instalacion de calentadores", "Instalo y reviso calentadores de agua y duchas electricas.", "v1", False, 0.0057, 0.0038),
+    ("s7", "SOPORTE_EMERGENCIA", "Botiquín y primeros auxilios", "Curaciones básicas y orientación en caso de emergencia.", "v4", False, 0.0068, -0.0028),
+    ("s8", "GASFITERIA", "Instalación de calentadores", "Instalo y reviso calentadores de agua y duchas eléctricas.", "v1", False, 0.0057, 0.0038),
 ]
 
 # servicio -> [(quien califica, estrellas, comentario)]
 RATINGS = {
-    "s1": [("vecina", 5, "Llego rapido y dejo todo limpio."), ("v2", 5, "Muy buen trabajo."), ("v3", 4, "Puntual y honesto.")],
-    "s2": [("vecina", 5, "Resolvio un corte de luz en una hora."), ("v1", 4, "Buen precio."), ("v4", 5, "Muy recomendado.")],
-    "s3": [("vecina", 4, "Arreglo mi puerta sin problema."), ("v2", 5, "Trabajo prolijo.")],
-    "s4": [("v1", 5, "Abrio mi puerta en minutos."), ("v3", 4, "Atencion amable."), ("v4", 3, "Demoro un poco.")],
-    "s5": [("vecina", 5, "Mi hijo mejoro sus notas."), ("v1", 4, "Paciente con los ninos.")],
+    "s1": [("vecina", 5, "Llegó rápido y dejó todo limpio."), ("v2", 5, "Muy buen trabajo."), ("v3", 4, "Puntual y honesto.")],
+    "s2": [("vecina", 5, "Resolvió un corte de luz en una hora."), ("v1", 4, "Buen precio."), ("v4", 5, "Muy recomendado.")],
+    "s3": [("vecina", 4, "Arregló mi puerta sin problema."), ("v2", 5, "Trabajo prolijo.")],
+    "s4": [("v1", 5, "Abrió mi puerta en minutos."), ("v3", 4, "Atención amable."), ("v4", 3, "Demoró un poco.")],
+    "s5": [("vecina", 5, "Mi hijo mejoró sus notas."), ("v1", 4, "Paciente con los niños.")],
     "s6": [("v2", 5, "Mi perro vuelve feliz."), ("vecina", 5, "Muy responsable.")],
-    "s7": [("vecina", 5, "Me ayudo con una curacion."), ("v2", 4, "Sabe lo que hace.")],
-    "s8": [("v3", 4, "Instalo mi calentador bien."), ("v4", 4, "Cumplio con el plazo.")],
+    "s7": [("vecina", 5, "Me ayudó con una curacion."), ("v2", 4, "Sabe lo que hace.")],
+    "s8": [("v3", 4, "Instaló mi calentador bien."), ("v4", 4, "Cumplió con el plazo.")],
 }
 
 # key, flow, modalidad, titulo, descripcion, autor, emergencia, estado, dlat, dlng
 POSTS = [
     ("p1", "OFREZCO_AYUDA", "PRESTAMO_HERRAMIENTA", "Presto taladro y escalera", "Disponibles los fines de semana. Se devuelven limpios.", "v1", False, "DISPONIBLE", 0.0050, 0.0035),
-    ("p2", "SOLICITO_AYUDA", "AYUDA_TEMPORAL", "Necesito ayuda para mudar un ropero", "Solo una hora por la manana. Con gusto devuelvo el favor.", "vecina", False, "DISPONIBLE", 0.0032, -0.0018),
+    ("p2", "SOLICITO_AYUDA", "AYUDA_TEMPORAL", "Necesito ayuda para mudar un ropero", "Solo una hora por la mañana. Con gusto devuelvo el favor.", "vecina", False, "DISPONIBLE", 0.0032, -0.0018),
     ("p3", "OFREZCO_AYUDA", "INTERCAMBIO_HABILIDAD", "Cambio clases de guitarra por arreglo de bicicleta", "Clases para principiantes.", "v2", False, "EN_COORDINACION", -0.0030, -0.0045),
     ("p4", "OFREZCO_AYUDA", "RECURSO_CRITICO", "Camilla plegable disponible", "La presto para trasladar a una persona. Retiro en mi casa.", "v3", True, "DISPONIBLE", -0.0055, 0.0015),
-    ("p5", "OFREZCO_AYUDA", "RECURSO_CRITICO", "Generador electrico y bidones de agua", "Puedo compartir agua potable y cargar celulares.", "v4", True, "DISPONIBLE", 0.0066, -0.0025),
-    ("p6", "OFREZCO_AYUDA", "MOVILIDAD_SOLIDARIA", "Llevo a adultos mayores al centro de salud", "Tengo auto, salgo por las mananas.", "comerciante", False, "DISPONIBLE", -0.0038, 0.0034),
+    ("p5", "OFREZCO_AYUDA", "RECURSO_CRITICO", "Generador eléctrico y bidones de agua", "Puedo compartir agua potable y cargar celulares.", "v4", True, "DISPONIBLE", 0.0066, -0.0025),
+    ("p6", "OFREZCO_AYUDA", "MOVILIDAD_SOLIDARIA", "Llevo a adultos mayores al centro de salud", "Tengo auto, salgo por las mañanas.", "comerciante", False, "DISPONIBLE", -0.0038, 0.0034),
 ]
 
 # key, urgencia, tipo, descripcion, reporta, dlat, dlng
 REPORTS = [
     ("r1", "CRITICA", "ATENCION_MEDICA", "Adulto mayor con dificultad para respirar, vive solo.", "v3", -0.0057, 0.0008),
     ("r2", "ALTA", "MOVILIDAD_REDUCIDA", "Vecina en silla de ruedas, el agua entro a su casa.", "v2", -0.0027, -0.0049),
-    ("r3", "MEDIA", "FALTA_SUMINISTROS", "Familia con ninos sin agua potable desde ayer.", "v1", 0.0054, 0.0039),
+    ("r3", "MEDIA", "FALTA_SUMINISTROS", "Familia con niños sin agua potable desde ayer.", "v1", 0.0054, 0.0039),
 ]
 
-# key, nombre, tipo, descripcion, telefono, punto de encuentro, coordinador, dlat, dlng
+# Grupos de apoyo: los MISMOS 3 (mismo id) que crea la migración f4a5b6c7d8e9,
+# así nunca quedan duplicados. El seed les completa teléfono y coordinador.
+# id, nombre, tipo, descripcion, telefono, punto de encuentro, coordinador, lat, lng
 GROUPS = [
-    ("g1", "Brigada de primeros auxilios", "PRIMEROS_AUXILIOS", "Vecinos capacitados en curaciones y reanimacion.", "+51900000101", "Parque central del barrio", "v4", 0.0012, 0.0008),
-    ("g2", "Cuadrilla de rescate", "RESCATE", "Apoyo para evacuar personas y despejar escombros.", "+51900000102", "Esquina de la comisaria", "v3", -0.0020, 0.0025),
-    ("g3", "Olla comun solidaria", "OLLA_COMUN", "Alimentos calientes para familias afectadas.", "+51900000103", "Local comunal", "vecina", 0.0030, -0.0022),
+    ("5a1c0e2b-0001-4c3d-8e9f-0a1b2c3d4e01", "Brigada de primeros auxilios", "PRIMEROS_AUXILIOS",
+     "Vecinos con curso de primeros auxilios y botiquín.", "+51900000101", "Losa deportiva", "v4", -5.1940, -80.6320),
+    ("5a1c0e2b-0002-4c3d-8e9f-0a1b2c3d4e02", "Albergue parroquial", "ALBERGUE",
+     "Espacio techado para familias con vivienda afectada.", "+51900000102", "Parroquia del barrio", "v3", -5.1958, -80.6341),
+    ("5a1c0e2b-0003-4c3d-8e9f-0a1b2c3d4e03", "Olla común Mi Barrio", "ALIMENTOS",
+     "Almuerzo diario para adultos mayores y familias afectadas.", "+51900000103", "Comedor popular", "vecina", -5.1932, -80.6352),
 ]
+# Grupos que creaban versiones anteriores del seed (duplicaban a la migración):
+# se desactivan (is_active = false), no se borran.
+OLD_SEED_GROUP_KEYS = ["g1", "g2", "g3"]
 
 
 async def run() -> None:
@@ -111,7 +121,8 @@ async def run() -> None:
     engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     added = {"usuarios": 0, "servicios": 0, "calificaciones": 0,
-             "favores": 0, "sos": 0, "grupos": 0}
+             "favores": 0, "sos": 0, "grupos": 0,
+             "grupos completados": 0, "grupos duplicados desactivados": 0}
 
     async def put(db, obj, counter: str) -> None:
         if await db.get(type(obj), obj.id) is None:
@@ -122,7 +133,7 @@ async def run() -> None:
         # ---- barrio
         tenant = (await db.execute(select(Tenant).where(Tenant.join_code == JOIN_CODE))).scalar_one_or_none()
         if tenant is None:
-            tenant = Tenant(id=uid("tenant"), name="Barrio Centro Piura (demo)", join_code=JOIN_CODE,
+            tenant = Tenant(id=DEMO_TENANT_ID, name="Barrio Centro Piura (demo)", join_code=JOIN_CODE,
                             center_lat=CENTER_LAT, center_lng=CENTER_LNG, is_emergency_active=False)
             db.add(tenant)
             await db.flush()
@@ -183,13 +194,24 @@ async def run() -> None:
                 urgency_level=urgency, vulnerability_type=vtype, description=desc,
                 lat=CENTER_LAT + dlat, lng=CENTER_LNG + dlng, status="PENDIENTE_APOYO"), "sos")
 
-        # ---- grupos de apoyo
-        for key, name, gtype, desc, phone, meeting, coord, dlat, dlng in GROUPS:
-            await put(db, SupportGroup(
-                id=uid("group:" + key), tenant_id=tid, name=name, group_type=gtype,
-                description=desc, contact_phone=phone, meeting_point=meeting,
-                coordinator_user_id=user_ids[coord], lat=CENTER_LAT + dlat,
-                lng=CENTER_LNG + dlng, is_active=True), "grupos")
+        # ---- grupos de apoyo (mismos ids que la migración: se crean o se completan)
+        for gid, name, gtype, desc, phone, meeting, coord, lat, lng in GROUPS:
+            group = await db.get(SupportGroup, uuid.UUID(gid))
+            if group is None:
+                db.add(SupportGroup(
+                    id=uuid.UUID(gid), tenant_id=tid, name=name, group_type=gtype,
+                    description=desc, contact_phone=phone, meeting_point=meeting,
+                    coordinator_user_id=user_ids[coord], lat=lat, lng=lng, is_active=True))
+                added["grupos"] += 1
+            elif group.contact_phone is None or group.coordinator_user_id is None:
+                group.contact_phone = group.contact_phone or phone
+                group.coordinator_user_id = group.coordinator_user_id or user_ids[coord]
+                added["grupos completados"] += 1
+        for key in OLD_SEED_GROUP_KEYS:
+            old = await db.get(SupportGroup, uid("group:" + key))
+            if old is not None and old.is_active:
+                old.is_active = False
+                added["grupos duplicados desactivados"] += 1
 
         await db.commit()
     await engine.dispose()

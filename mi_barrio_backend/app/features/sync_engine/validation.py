@@ -69,7 +69,7 @@ _RULES: dict[str, dict[str, tuple[str, object]]] = {
         "whatsapp": ("phone_opt", None),
         "facebook_url": ("https_url_opt", 300),
         "instagram_url": ("https_url_opt", 300),
-        "email_contacto": ("text_opt", (0, 254)),
+        "email_contacto": ("email_opt", 254),
         "photo_b64": ("text_opt", (0, 110_000)),
         "publisher_type": ("enum_opt", _one_of(PublisherType)),
         "publisher_category": ("text_opt", (0, 50)),
@@ -79,6 +79,8 @@ _RULES: dict[str, dict[str, tuple[str, object]]] = {
 
 _PHONE = re.compile(r"^\+?[0-9 ]{6,20}$")
 _HTTPS_URL = re.compile(r"^https://[^\s]+$")
+# Mismo patrón que la app (profile_local_storage.dart).
+_EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 
 _BOOL_FIELDS = {"is_deleted", "is_emergency_context", "is_available_in_emergency", "tutorial_completed"}
 
@@ -120,6 +122,11 @@ def validate_payload(table: str, payload: dict) -> None:
                 continue
             if not isinstance(value, str) or not _PHONE.match(value):
                 raise ValueError(f"{field} inválido: usa solo dígitos (6 a 20), con + opcional")
+        elif rule == "email_opt":
+            if value is None:
+                continue
+            if not isinstance(value, str) or len(value) > param or not _EMAIL.match(value):
+                raise ValueError(f"{field} debe ser un correo válido de hasta {param} caracteres")
         elif rule == "https_url_opt":
             if value is None:
                 continue

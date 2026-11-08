@@ -87,7 +87,7 @@ void main() {
   group('SQLite v5: tabla support_groups', () {
     test('instalación nueva crea la tabla en v5', () async {
       final d = await db();
-      expect(await d.getVersion(), 5);
+      expect(await d.getVersion(), SqliteTables.schemaVersion);
       final names = (await d.rawQuery("SELECT name FROM sqlite_master WHERE type='table'"))
           .map((r) => r['name'])
           .toSet();
@@ -133,6 +133,43 @@ void main() {
       expect((await d.query('vulnerable_reports')).single['id'], 'sos-1');
       expect(await d.query('sync_outbox'), hasLength(1));
       expect(await d.query('support_groups'), isEmpty);
+    });
+
+    test('un teléfono en v5 sube a v6: agrega users.email_contacto sin perder el perfil', () async {
+      final dir = await Directory.systemTemp.createTemp('mi_barrio_v5');
+      final path = '${dir.path}${Platform.pathSeparator}v5.db';
+      addTearDown(() async {
+        await local.close();
+        await dir.delete(recursive: true);
+      });
+      final v5 = await databaseFactoryFfi.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 5,
+          onCreate: (d, _) async {
+            for (final sql in SqliteTables.createAll) {
+              // La tabla users de v5 todavía no tenía email_contacto.
+              await d.execute(sql == SqliteTables.createUsers
+                  ? sql.replaceFirst('email_contacto TEXT,', '')
+                  : sql);
+            }
+          },
+        ),
+      );
+      await v5.insert('users', {
+        'id': me, 'tenant_id': tenant, 'full_name': 'Rosa', 'home_lat': lat, 'home_lng': lng,
+        'whatsapp': '+51 900 000 000', 'updated_at': '2026-11-07T10:00:00Z',
+      });
+      await v5.close();
+
+      await local.resetForTesting(path: path);
+      final d = await db();
+      expect(await d.getVersion(), SqliteTables.schemaVersion);
+      final columns = (await d.rawQuery('PRAGMA table_info(users)')).map((c) => c['name']);
+      expect(columns, contains('email_contacto'));
+      final row = (await d.query('users')).single;
+      expect(row['whatsapp'], '+51 900 000 000');
+      expect(row['email_contacto'], isNull);
     });
   });
 

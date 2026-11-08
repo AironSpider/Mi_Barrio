@@ -100,6 +100,7 @@ def main() -> int:
         "Facebook que no es enlace": {"facebook_url": "facebook.com/rosa"},
         "Facebook con HTTP": {"facebook_url": "http://facebook.com/rosa"},
         "Instagram con HTTP": {"instagram_url": "http://instagram.com/rosa"},
+        "correo de contacto sin @": {"email_contacto": "rosa.correo"},
         "enlace javascript:": {"instagram_url": "javascript:alert(1)"},
         "tipo de publicador inválido": {"publisher_type": "MULTINACIONAL"},
         "nombre de negocio de 121 caracteres": {"publisher_name": "x" * 121},

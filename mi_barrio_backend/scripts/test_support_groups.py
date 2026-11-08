@@ -7,6 +7,8 @@ Cubre GET/POST /api/v1/emergency/support-groups (permisos, orden por cercanía,
 filtro, validaciones) y que los grupos bajen en el pull para usarlos sin internet.
 Crea un barrio de prueba propio (nunca toca BARRIO-01).
 """
+import asyncio
+import os
 import sys
 import uuid
 
@@ -18,6 +20,27 @@ if hasattr(sys.stdout, "reconfigure"):
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
 LAT, LNG = -5.1945, -80.6328
 results: list[tuple[bool, str, str]] = []
+
+DEMO_TENANT = "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d"
+DEMO_GROUP_NAMES = {"Brigada de primeros auxilios", "Albergue parroquial", "Olla común Mi Barrio"}
+
+
+async def _demo_active_groups() -> list[dict]:
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from app.core.database import DATABASE_URL
+
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    async with engine.connect() as conn:
+        rows = (await conn.execute(text(
+            "SELECT id, name, contact_phone FROM support_groups "
+            "WHERE tenant_id = CAST(:t AS uuid) AND is_active AND NOT is_deleted ORDER BY name"
+        ), {"t": DEMO_TENANT})).mappings().all()
+    await engine.dispose()
+    return [{"id": str(r["id"]), "name": r["name"], "contact_phone": r["contact_phone"]} for r in rows]
+
 
 
 def check(name, ok, detail=""):
@@ -90,31 +113,31 @@ def main() -> int:
     check("el pull incremental no los repite si no cambiaron",
           s == 200 and not [g for g in pull2["delta"].get("support_groups", []) if g["id"] in ids][4:], f"{s}")
 
-    # ── El barrio demo trae sus 3 grupos de la migración ──
-    demo = register(BASE, "BARRIO-01", "VECINO")
-    s, demo_groups = http(BASE, "GET", "/api/v1/emergency/support-groups",
-                          tenant="a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d", token=demo["token"])
-    expected_demo_names = {
-        "Brigada de primeros auxilios",
-        "Albergue parroquial",
-        "Olla común Mi Barrio",
-    }
-    demo_ids = {
-        group["id"] for group in demo_groups
-        if group["name"] in expected_demo_names
-    } if s == 200 else set()
-    check("BARRIO-01 lista los 3 grupos del seed",
-          s == 200 and len(demo_ids) == len(expected_demo_names), f"{s} {demo_groups}")
-    s, demo_pull = http(
-        BASE, "GET", "/api/v1/sync/pull",
-        tenant="a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d",
-        token=demo["token"],
-    )
-    pulled_demo_ids = {
-        group["id"] for group in demo_pull.get("delta", {}).get("support_groups", [])
-    } if s == 200 else set()
-    check("el pull de BARRIO-01 incluye los 3 grupos del seed",
-          s == 200 and demo_ids <= pulled_demo_ids, f"{s} {pulled_demo_ids}")
+    # ── El barrio demo: sus 3 grupos, sin duplicados (solo LECTURA) ──
+    # Se lee directo de la base: así esta prueba no crea cuentas en BARRIO-01.
+    demo_groups = asyncio.run(_demo_active_groups())
+    demo_names = [g["name"] for g in demo_groups]
+    check("BARRIO-01 tiene activos los 3 grupos del seed y de la migración",
+          set(demo_names) == DEMO_GROUP_NAMES, demo_names)
+    check("BARRIO-01 no tiene grupos repetidos", len(demo_names) == len(set(demo_names)), demo_names)
+    check("los grupos demo tienen teléfono (botón llamar / WhatsApp)",
+          all(g["contact_phone"] for g in demo_groups), demo_groups)
+
+    # El pull de BARRIO-01 con la cuenta demo (solo si hay clave de demo).
+    demo_password = os.environ.get("SEED_DEMO_PASSWORD", "")
+    if not demo_password:
+        print("OMITIDO: pull de BARRIO-01 (define SEED_DEMO_PASSWORD para probarlo)")
+    else:
+        s, login = http(BASE, "POST", "/api/v1/auth/login",
+                        {"email": "demo.vecina@mibarrio.demo", "password": demo_password})
+        check("la vecina demo inicia sesión", s == 200, f"{s}")
+        if s == 200:
+            s, demo_pull = http(BASE, "GET", "/api/v1/sync/pull", tenant=DEMO_TENANT,
+                                token=login["access_token"])
+            pulled = {g["id"] for g in demo_pull.get("delta", {}).get("support_groups", [])
+                      if g.get("is_active")} if s == 200 else set()
+            check("el pull de BARRIO-01 incluye los 3 grupos activos",
+                  s == 200 and {g["id"] for g in demo_groups} <= pulled, f"{s} {len(pulled)}")
 
     failed = [r for r in results if not r[0]]
     print(f"\n{len(results) - len(failed)}/{len(results)} pruebas OK")

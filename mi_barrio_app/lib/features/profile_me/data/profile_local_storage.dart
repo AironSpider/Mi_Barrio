@@ -35,6 +35,7 @@ class ProfileLocalStorage {
     String phone = '',
     String? addressReference,
     String? email,
+    String? emailContacto,
     String? whatsapp,
     String? facebookUrl,
     String? instagramUrl,
@@ -57,6 +58,11 @@ class ProfileLocalStorage {
     final cleanEmail = clean(email);
     if (cleanEmail != null && !_email.hasMatch(cleanEmail)) {
       throw ArgumentError.value(email, 'email', 'Correo inválido');
+    }
+    final cleanEmailContacto = clean(emailContacto);
+    if (cleanEmailContacto != null &&
+        (cleanEmailContacto.length > 254 || !_email.hasMatch(cleanEmailContacto))) {
+      throw ArgumentError.value(emailContacto, 'emailContacto', 'Correo de contacto inválido');
     }
     final cleanWhatsapp = clean(whatsapp);
     if (cleanWhatsapp != null && !_phone.hasMatch(cleanWhatsapp)) {
@@ -88,6 +94,7 @@ class ProfileLocalStorage {
       role: previous?.role ?? UserRole.vecino,
       tutorialCompleted: tutorialCompleted ?? tutorialSeen,
       email: cleanEmail,
+      emailContacto: cleanEmailContacto,
       whatsapp: cleanWhatsapp,
       facebookUrl: clean(facebookUrl),
       instagramUrl: clean(instagramUrl),

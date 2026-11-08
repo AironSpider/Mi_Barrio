@@ -13,7 +13,7 @@ class SqliteTables {
 
   /// Versión actual del esquema. Súbela al agregar tablas o columnas
   /// y añade el paso correspondiente en [migrations].
-  static const int schemaVersion = 5;
+  static const int schemaVersion = 6;
 
   // ── Valores permitidos (idénticos al contrato del backend) ──
   static const syncPending = 'PENDING';
@@ -93,6 +93,7 @@ class SqliteTables {
       role TEXT NOT NULL DEFAULT 'VECINO',
       tutorial_completed INTEGER NOT NULL DEFAULT 0,
       email TEXT,
+      email_contacto TEXT,
       whatsapp TEXT,
       facebook_url TEXT,
       instagram_url TEXT,
@@ -231,6 +232,7 @@ class SqliteTables {
   /// v3 (Sprint 5): + neighbor_endorsements, users, app_settings.
   /// v4 (Sprint 8): + vulnerable_reports (SOS sin red).
   /// v5 (Sprint 11): + support_groups (grupos de apoyo sin red).
+  /// v6 (Sprint 12): + users.email_contacto (correo de contacto del perfil).
   static const Map<int, List<String>> migrations = {
     2: [createLocalServices, ...indexes],
     3: [createNeighborEndorsements, createUsers, createAppSettings, ...indexesV3],
@@ -247,6 +249,9 @@ class SqliteTables {
         'publisher_type': 'TEXT',
         'publisher_name': 'TEXT',
       },
+    },
+    6: {
+      'users': {'email_contacto': 'TEXT'},
     },
   };
 }
