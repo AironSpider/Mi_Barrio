@@ -90,6 +90,8 @@ void main() {
     );
 
     expect(find.text('Ingresar'), findsOneWidget);
+    await tester.ensureVisible(find.text('Crear una cuenta'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Crear una cuenta'));
     await tester.pumpAndSettle();
 
