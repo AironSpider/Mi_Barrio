@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from datetime import datetime, timedelta, timezone
 import uuid
 
 from app.core.database import get_db_session
-from app.core.tenant_middleware import get_current_principal
+from app.core.tenant_middleware import get_current_principal, get_current_tenant_id
 from app.features.sync_engine.schemas import (
     SyncPullResponse,
     SyncPushRequest,
@@ -37,13 +37,6 @@ PULL_MODELS = {
 }
 
 
-def _parse_tenant(x_tenant_id: str) -> uuid.UUID:
-    try:
-        return uuid.UUID(x_tenant_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-ID inválido")
-
-
 def _serialize(record) -> dict:
     item = {}
     for col in record.__table__.columns:
@@ -60,11 +53,10 @@ def _serialize(record) -> dict:
 @router.post("/push", response_model=SyncPushResponse)
 async def push_offline_mutations(
     request: SyncPushRequest,
-    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
-    tenant_uuid = _parse_tenant(x_tenant_id)
     if len(request.mutations) > MAX_BATCH:
         raise HTTPException(
             status_code=413,
@@ -94,7 +86,7 @@ async def pull_delta(
         default=None,
         description="Usar el `server_timestamp` del pull anterior (ISO-8601 UTC). Vacío = todo.",
     ),
-    x_tenant_id: str = Header(..., alias="X-Tenant-ID"),
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Cambios del barrio desde el último pull + estado del barrio (Modo Emergencia).
@@ -102,14 +94,12 @@ async def pull_delta(
     Filtra por `server_updated_at` (reloj del servidor), no por `updated_at`
     (reloj del celular): así un post creado offline y subido tarde sí aparece.
     """
-    tenant_uuid = _parse_tenant(x_tenant_id)
-
     cutoff = None
     if since:
         try:
             parsed_since = datetime.fromisoformat(since.replace("Z", "+00:00"))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usar ISO-8601.")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Formato de fecha inválido. Usar ISO-8601.") from exc
         if parsed_since.tzinfo is None:
             parsed_since = parsed_since.replace(tzinfo=timezone.utc)
         cutoff = parsed_since - PULL_SAFETY_MARGIN

@@ -1,16 +1,12 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import lookup_limit
 from app.core.database import get_db_session
-from app.core.tenant_middleware import (
-    get_current_principal,
-    get_current_tenant_id,
-    require_role,
-)
+from app.core.tenant_middleware import get_current_tenant_id, require_role
 from app.features.auth_barrio.models import Tenant
 from app.features.auth_barrio.schemas import (
     EmergencyToggleRequest,

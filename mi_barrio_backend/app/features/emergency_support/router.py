@@ -5,8 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db_session
-# AQUÍ ESTÁ EL IMPORT QUE FALTABA
-from app.core.tenant_middleware import get_current_principal, get_current_tenant_id
+from app.core.tenant_middleware import get_current_principal, get_current_tenant_id, require_role
 
 from app.features.emergency_support.models import SupportGroup, VulnerableReport
 from app.features.emergency_support.schemas import (
@@ -77,15 +76,20 @@ async def attend_emergency_report(
         VulnerableReport.id == report_id,
         VulnerableReport.tenant_id == tenant_uuid,
         VulnerableReport.is_deleted.is_(False),
-    )
-    result = await db.execute(stmt)
-    report = result.scalar_one_or_none()
+    ).with_for_update()
+    report = (await db.execute(stmt)).scalar_one_or_none()
 
     if not report:
         raise HTTPException(status_code=404, detail="Reporte no encontrado")
+    # Igual que el sync: un pedido ya atendido no vuelve a "vecinos en camino".
+    helper_id = uuid.UUID(principal["sub"])
+    if report.reporter_user_id == helper_id:
+        raise HTTPException(status_code=403, detail="No puedes ofrecer ayuda en tu propio pedido")
+    if report.status == "ATENDIDO":
+        raise HTTPException(status_code=409, detail="Este pedido ya fue atendido")
 
     report.status = "VECINOS_EN_CAMINO"
-    report.helper_user_id = uuid.UUID(principal["sub"])
+    report.helper_user_id = helper_id
     report.updated_at = datetime.now(timezone.utc)
     
     await db.commit()
@@ -127,12 +131,10 @@ async def list_support_groups(
 async def create_support_group(
     payload: SupportGroupCreate,
     tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
-    principal: dict = Depends(get_current_principal),
+    principal: dict = Depends(require_role(["ADMIN_BARRIO"])),
     db: AsyncSession = Depends(get_db_session),
 ):
     """Registra un grupo de apoyo. Solo el administrador del barrio (ADMIN_BARRIO)."""
-    if principal.get("role") != "ADMIN_BARRIO":
-        raise HTTPException(status_code=403, detail="Solo el administrador del barrio registra grupos de apoyo")
     if (payload.lat is None) != (payload.lng is None):
         raise HTTPException(status_code=422, detail="Envía lat y lng juntos")
     group = SupportGroup(tenant_id=tenant_uuid, **payload.model_dump())

@@ -48,10 +48,3 @@ def register_failure(email: str, ip: str) -> None:
 def register_success(email: str, ip: str) -> None:
     with _lock:
         _by_account.pop((email, ip), None)
-
-
-def reset() -> None:
-    """Solo para pruebas."""
-    with _lock:
-        _by_account.clear()
-        _by_ip.clear()

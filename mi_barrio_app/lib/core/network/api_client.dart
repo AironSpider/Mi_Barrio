@@ -1,32 +1,33 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../auth/auth_session_store.dart';
 
 /// Dirección del backend FastAPI.
 ///
-/// Se puede fijar al compilar:
-///   flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000
-/// Por defecto:
-/// - Emulador Android → http://10.0.2.2:8000 (la PC vista desde el emulador)
-/// - Windows / Linux  → http://localhost:8000
+/// Por defecto, el servidor de PRODUCCIÓN en Render (funciona desde cualquier
+/// red: datos móviles, otro Wi-Fi, APK de demo).
+///
+/// Para desarrollar con el backend local, fijarlo al compilar:
+///   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000      (emulador Android)
+///   flutter run --dart-define=API_BASE_URL=http://localhost:8000     (Linux / Windows)
+///   flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000  (celular, IP de la PC)
 class ApiConfig {
   ApiConfig._();
 
+  static const productionUrl = 'https://mi-barrio-backend-lad7.onrender.com';
   static const _fromBuild = String.fromEnvironment('API_BASE_URL');
 
   /// Render gratis tarda ~50 s en despertar: con 30 s el primer login fallaba.
   static const timeout = Duration(seconds: 60);
 
-  static String get baseUrl {
-    if (_fromBuild.isNotEmpty) return _fromBuild;
-    if (!kIsWeb && Platform.isAndroid) return 'http://10.0.2.2:8000';
-    return 'http://localhost:8000';
-  }
+  /// El plan gratis de Render apaga el servidor tras 15 min sin uso y tarda
+  /// ~1 minuto en volver: login, registro y sesión esperan más.
+  static const coldStartTimeout = Duration(seconds: 90);
+
+  static String get baseUrl => _fromBuild.isNotEmpty ? _fromBuild : productionUrl;
 }
 
 /// Cliente HTTP que agrega siempre el header `X-Tenant-ID` y un timeout.

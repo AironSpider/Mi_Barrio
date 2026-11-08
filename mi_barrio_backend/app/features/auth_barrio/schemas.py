@@ -56,15 +56,6 @@ class AuthResponse(BaseModel):
     user: AuthUserResponse
 
 
-class PlatformAdminResponse(BaseModel):
-    id: uuid.UUID
-    full_name: str
-    email: str
-    role: Literal["SUPER_ADMIN"] = "SUPER_ADMIN"
-    tenant_id: None = None
-    tenant: None = None
-
-
 class NeighborhoodAdminCreate(BaseModel):
     neighborhood_name: str | None = Field(default=None, min_length=2, max_length=100)
     join_code: str | None = Field(default=None, min_length=3, max_length=20)

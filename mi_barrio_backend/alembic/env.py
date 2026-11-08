@@ -1,20 +1,20 @@
 import asyncio
-import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from dotenv import load_dotenv
-from app.features.proximity_services.models import LocalService, NeighborEndorsement
-from app.features.emergency_support.models import SupportGroup, VulnerableReport
 
 from alembic import context
 
 # IMPORTANTE: Importar Base y TODOS los modelos para que Alembic los detecte
+# (se importan por su efecto: registran las tablas en Base.metadata).
 from app.core.database import Base
-from app.features.auth_barrio.models import Tenant, User
-from app.features.solidarity_network.models import SolidarityPost
+import app.features.auth_barrio.models  # noqa: F401
+import app.features.emergency_support.models  # noqa: F401
+import app.features.proximity_services.models  # noqa: F401
+import app.features.solidarity_network.models  # noqa: F401
 
 config = context.config
 load_dotenv()

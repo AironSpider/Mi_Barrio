@@ -56,6 +56,8 @@ class NeighborEndorsementResponse(BaseModel):
     short_comment: Optional[str]
     provider_reply: Optional[str] = None
     replied_at: Optional[datetime] = None
+    # true si tiene foto (se pide aparte en /endorsements/{id}/photo).
+    has_photo: bool = False
     created_at: datetime
     updated_at: datetime
 

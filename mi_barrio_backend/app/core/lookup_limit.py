@@ -28,9 +28,3 @@ def check_and_count(ip: str) -> None:
                 headers={"Retry-After": str(retry)},
             )
         bucket.append(now)
-
-
-def reset() -> None:
-    """Solo para pruebas."""
-    with _lock:
-        _by_ip.clear()

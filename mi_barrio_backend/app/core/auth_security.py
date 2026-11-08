@@ -111,8 +111,8 @@ def decode_access_token(token: str) -> dict:
         return claims
     except HTTPException:
         raise
-    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
-        raise unauthorized
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise unauthorized from exc
 
 
 def _b64encode(value: bytes) -> str:

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
@@ -104,18 +105,27 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
                         ),
                         FilledButton.icon(
                           onPressed: () async {
-                            await Clipboard.setData(
-                              ClipboardData(
-                                text:
-                                    'Únete a ${user.tenantName ?? 'mi barrio'} '
-                                    'en Mi Barrio con el código $joinCode.',
-                              ),
-                            );
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                            final invitation =
+                                'Únete a ${user.tenantName ?? 'mi barrio'} '
+                                'en Mi Barrio con el código $joinCode.';
+                            final messenger = ScaffoldMessenger.of(context);
+                            try {
+                              // Menú del teléfono: WhatsApp, SMS, correo…
+                              await SharePlus.instance.share(
+                                ShareParams(
+                                  text: invitation,
+                                  subject: 'Invitación a Mi Barrio',
+                                ),
+                              );
+                            } catch (_) {
+                              // Sin menú de compartir (ej. escritorio): se copia.
+                              await Clipboard.setData(
+                                ClipboardData(text: invitation),
+                              );
+                              messenger.showSnackBar(
                                 const SnackBar(
                                   content: Text(
-                                    'Invitación copiada. Ya puedes compartirla.',
+                                    'Invitación copiada. Ya puedes pegarla y enviarla.',
                                   ),
                                 ),
                               );

@@ -37,6 +37,18 @@ async def rating_avg_by_service(db: AsyncSession, tenant_id: uuid.UUID) -> dict[
     return {sid: round(float(avg), 1) for sid, avg in rows}
 
 
+async def rating_avg_for_service(
+    db: AsyncSession, tenant_id: uuid.UUID, service_id: uuid.UUID
+) -> float | None:
+    """Promedio de estrellas de UN servicio (1 decimal; None = sin estrellas)."""
+    avg = await db.scalar(
+        select(func.avg(NeighborEndorsement.rating)).where(
+            *_rated(tenant_id), NeighborEndorsement.service_id == service_id
+        )
+    )
+    return None if avg is None else round(float(avg), 1)
+
+
 async def provider_contacts(
     db: AsyncSession, tenant_id: uuid.UUID, provider_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, dict]:

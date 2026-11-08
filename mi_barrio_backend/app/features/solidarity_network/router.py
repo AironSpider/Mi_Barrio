@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.database import get_db_session, get_current_tenant_id
-from app.core.tenant_middleware import get_current_principal
+from app.core.database import get_db_session
+from app.core.tenant_middleware import get_current_principal, get_current_tenant_id
 from app.features.solidarity_network.models import SolidarityPost
 from app.features.solidarity_network.schemas import (
     SolidarityPostCreate,

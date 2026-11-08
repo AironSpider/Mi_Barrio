@@ -95,6 +95,11 @@ async def _validate_endorsement(payload: dict, tenant_uuid: uuid.UUID, db: Async
 
 
 
+def _aware(value: datetime) -> datetime:
+    """Fechas guardadas sin zona se tratan como UTC."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
 def _client_time(value) -> datetime:
     """Hora del celular para Last-Write-Wins, nunca más allá de ahora + 5 minutos."""
     now = datetime.now(timezone.utc)
@@ -102,13 +107,11 @@ def _client_time(value) -> datetime:
         return now
     if not isinstance(value, str):
         raise ValueError("updated_at debe ser una fecha ISO-8601")
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+    parsed = _aware(datetime.fromisoformat(value.replace("Z", "+00:00")))
     return min(parsed, now + MAX_CLOCK_SKEW)
 
 
-def _payload_value_matches(key: str, payload_value, stored_value) -> bool:
+def _payload_value_matches(payload_value, stored_value) -> bool:
     if isinstance(stored_value, uuid.UUID):
         if isinstance(payload_value, str):
             try:
@@ -123,12 +126,7 @@ def _payload_value_matches(key: str, payload_value, stored_value) -> bool:
             parsed = datetime.fromisoformat(payload_value.replace("Z", "+00:00"))
         except ValueError:
             return False
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        stored = stored_value
-        if stored.tzinfo is None:
-            stored = stored.replace(tzinfo=timezone.utc)
-        return parsed == stored
+        return _aware(parsed) == _aware(stored_value)
     return payload_value == stored_value
 
 
@@ -165,16 +163,13 @@ async def _apply_solidarity_coordination(
     for key, value in payload.items():
         if key in ignored_fields:
             continue
-        if key not in columns or not _payload_value_matches(key, value, getattr(post, key)):
+        if key not in columns or not _payload_value_matches(value, getattr(post, key)):
             raise ValueError(
                 f"solo puedes cambiar el estado a EN_COORDINACION: {key} no coincide"
             )
 
     post.status = "EN_COORDINACION"
-    stored_updated_at = post.updated_at
-    if stored_updated_at.tzinfo is None:
-        stored_updated_at = stored_updated_at.replace(tzinfo=timezone.utc)
-    post.updated_at = max(stored_updated_at, _client_time(payload.get("updated_at")))
+    post.updated_at = max(_aware(post.updated_at), _client_time(payload.get("updated_at")))
 
 
 async def _apply_help_offer(
@@ -201,7 +196,7 @@ async def _apply_help_offer(
         raise ValueError("este pedido ya fue atendido")
     report.status = "VECINOS_EN_CAMINO"
     report.helper_user_id = principal_id
-    report.updated_at = max(report.updated_at, _client_time(payload.get("updated_at")))
+    report.updated_at = max(_aware(report.updated_at), _client_time(payload.get("updated_at")))
 
 
 async def process_sync_push(
@@ -247,14 +242,12 @@ async def process_sync_push(
             async with db.begin_nested():
                 validate_payload(table_name, payload)
                 owner_field = OWNER_FIELD.get(model_class)
+                existing_record = await _find_existing(model_class, rec_id, tenant_uuid, payload, db)
 
                 if model_class is SolidarityPost:
-                    existing_post = await _find_existing(
-                        model_class, rec_id, tenant_uuid, payload, db
-                    )
                     if (
-                        existing_post is not None
-                        and existing_post.author_user_id != principal_id
+                        existing_record is not None
+                        and existing_record.author_user_id != principal_id
                     ):
                         await _apply_solidarity_coordination(
                             rec_id,
@@ -296,7 +289,6 @@ async def process_sync_push(
                 if model_class is NeighborEndorsement:
                     touched_services.add(await _validate_endorsement(payload, tenant_uuid, db))
 
-                existing_record = await _find_existing(model_class, rec_id, tenant_uuid, payload, db)
                 # El dueño se verifica también en el registro GUARDADO, no solo en el payload:
                 # así nadie edita ni borra lo de otro diciendo "el autor soy yo".
                 if (
@@ -314,12 +306,8 @@ async def process_sync_push(
                 client_updated_at = _client_time(payload.get("updated_at"))
 
                 if existing_record:
-                    db_updated_at = existing_record.updated_at
-                    if db_updated_at.tzinfo is None:
-                        db_updated_at = db_updated_at.replace(tzinfo=timezone.utc)
-
                     # Last-Write-Wins: solo sobreescribimos si el celular tiene un dato más nuevo
-                    if db_updated_at <= client_updated_at:
+                    if _aware(existing_record.updated_at) <= client_updated_at:
                         for key, val in payload.items():
                             if (
                                 hasattr(existing_record, key)

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show SocketException;
 
 import 'package:http/http.dart' as http;
 
@@ -67,7 +68,7 @@ class AuthRemoteDatasource {
             Uri.parse('$_baseUrl/api/v1/auth/me'),
             headers: {'Authorization': 'Bearer $token'},
           )
-          .timeout(ApiConfig.timeout),
+          .timeout(ApiConfig.coldStartTimeout),
     );
     return _decodeResponse(response);
   }
@@ -103,7 +104,7 @@ class AuthRemoteDatasource {
               'center_lng': centerLng,
             }),
           )
-          .timeout(ApiConfig.timeout),
+          .timeout(ApiConfig.coldStartTimeout),
     );
     final data = _decodeResponse(response);
     final neighborhood = data['neighborhood'];
@@ -131,10 +132,15 @@ class AuthRemoteDatasource {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )
-          .timeout(ApiConfig.timeout),
+          .timeout(ApiConfig.coldStartTimeout),
     );
     return _decodeResponse(response);
   }
+
+  static const _noInternet = AuthException(
+    'No pudimos conectar con el servidor. Revisa tus datos móviles o el Wi-Fi '
+    'y vuelve a intentar.',
+  );
 
   Future<http.Response> _request(
     Future<http.Response> Function() request,
@@ -145,10 +151,14 @@ class AuthRemoteDatasource {
       rethrow;
     } on TimeoutException {
       throw const AuthException(
-        'No pudimos contactar al servidor. Verifica que esté encendido, '
-        'que tu celular y la computadora estén en la misma red Wi-Fi y '
-        'que la app use la IP de la computadora.',
+        'El servidor tardó demasiado en responder. Puede estar despertando: '
+        'espera unos segundos y vuelve a intentar.',
       );
+    } on SocketException {
+      throw _noInternet;
+    } on http.ClientException {
+      // `http` envuelve aquí los errores de conexión (sin red, DNS, etc.).
+      throw _noInternet;
     } catch (error) {
       throw AuthException('No se pudo conectar con el servidor: $error');
     }

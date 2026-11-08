@@ -66,9 +66,9 @@ void main() {
     );
   });
 
-  test('timeout reports useful network setup guidance', () async {
+  test('timeout explains the server may be waking up (Render free)', () async {
     final datasource = AuthRemoteDatasource(
-      baseUrl: 'http://192.168.1.20:8000',
+      baseUrl: 'https://example.onrender.com',
       client: MockClient((_) async {
         throw TimeoutException('request timed out');
       }),
@@ -86,8 +86,26 @@ void main() {
         isA<AuthException>().having(
           (error) => error.message,
           'message',
-          contains('misma red Wi-Fi'),
+          contains('despertando'),
         ),
+      ),
+    );
+  });
+
+  test('no connection asks to check mobile data or Wi-Fi', () async {
+    final datasource = AuthRemoteDatasource(
+      baseUrl: 'https://example.onrender.com',
+      client: MockClient((_) async {
+        throw http.ClientException('Failed host lookup');
+      }),
+    );
+
+    await expectLater(
+      datasource.login(email: 'a@b.com', password: 'password123'),
+      throwsA(
+        isA<AuthException>()
+            .having((error) => error.message, 'message', contains('datos móviles o el Wi-Fi'))
+            .having((error) => error.statusCode, 'statusCode', isNull),
       ),
     );
   });

@@ -182,7 +182,8 @@ class _NeighborMapState extends State<NeighborMap> {
               if (_showStreets)
                 TileLayer(
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'pe.mibarrio.app',
+                  // = applicationId de Android (OpenStreetMap pide identificar la app).
+                  userAgentPackageName: 'com.example.mi_barrio_app',
                   maxNativeZoom: 19,
                 ),
               MarkerLayer(

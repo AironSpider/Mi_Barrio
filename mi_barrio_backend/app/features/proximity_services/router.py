@@ -22,6 +22,7 @@ from app.features.proximity_services.schemas import (
 )
 from app.features.proximity_services.service import (
     rating_avg_by_service,
+    rating_avg_for_service,
     rating_avg_subquery,
     recalculate_service_rating,
 )
@@ -168,13 +169,12 @@ async def endorse_service(
     service = await recalculate_service_rating(db, payload.service_id)
     await db.commit()
 
-    averages = await rating_avg_by_service(db, tenant_uuid)
     return {
         "success": True,
         "message": "Calificación registrada",
         "data": {
             "service_id": str(payload.service_id),
-            "rating_avg": averages.get(payload.service_id),
+            "rating_avg": await rating_avg_for_service(db, tenant_uuid, payload.service_id),
             "endorsements_count": service.endorsements_count if service else 0,
         },
     }
@@ -204,7 +204,12 @@ async def list_service_endorsements(
             NeighborEndorsement.is_deleted.is_(False),
         ).order_by(NeighborEndorsement.created_at.desc())
     )).scalars().all()
-    return endorsements
+    return [
+        NeighborEndorsementResponse.model_validate(e).model_copy(
+            update={"has_photo": e.photo_b64 is not None}
+        )
+        for e in endorsements
+    ]
 
 
 @router.post("/{service_id}/recommendations/{rec_id}/reply", response_model=NeighborEndorsementResponse)

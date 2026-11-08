@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../barrio_context/tenant_session.dart';
+import '../../features/emergency_support/presentation/providers/emergency_provider.dart';
 import '../../features/solidarity_network/data/datasources/solidarity_sqlite_ds.dart';
 import 'done_confirmation.dart';
 import 'quick_publish_modal.dart';
@@ -20,13 +21,15 @@ class QuickPublishLauncher {
       context,
       isEmergencyMode: isEmergencyMode,
       onPublish: (datos) async {
+        // Ubicación real para el mapa del barrio (GPS); sin GPS, el centro.
+        final ubicacion = await HelpLocator.resolve();
         await _datasource.publishInThreeClicks(
           tenantId: TenantSession.instance.tenantId,
           authorUserId: TenantSession.instance.userId,
           modality: datos.modality,
           title: datos.title,
-          lat: TenantSession.instance.centerLat,
-          lng: TenantSession.instance.centerLng,
+          lat: ubicacion.lat,
+          lng: ubicacion.lng,
           flowType: datos.flowType,
           isEmergencyContext: datos.isEmergencyContext,
         );

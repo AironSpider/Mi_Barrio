@@ -97,3 +97,37 @@ def register(base: str, join_code: str, role: str, name: str = "Vecino de prueba
         "password": password,
         "is_approved": r["user"].get("is_approved", True),
     }
+
+
+async def _platform_admin(action: str, email: str, password: str = "") -> None:
+    from sqlalchemy import delete
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from app.core.auth_security import hash_password
+    from app.core.database import DATABASE_URL
+    from app.features.auth_barrio.models import PlatformAdmin
+
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+        if action == "create":
+            db.add(PlatformAdmin(full_name="Superadmin de pruebas", email=email,
+                                 password_hash=hash_password(password)))
+        else:
+            await db.execute(delete(PlatformAdmin).where(PlatformAdmin.email == email))
+        await db.commit()
+    await engine.dispose()
+
+
+def temporary_platform_admin() -> dict:
+    """SUPER_ADMIN solo para la prueba. Llamar a `remove_platform_admin` al final:
+    si quedara en la base, el bootstrap real (`platform_admin_bootstrap`) se negaría
+    a crear el primer superadministrador."""
+    email = f"superadmin.{secrets.token_hex(4)}@pruebas.test"
+    password = secrets.token_urlsafe(16)
+    asyncio.run(_platform_admin("create", email, password))
+    return {"email": email, "password": password}
+
+
+def remove_platform_admin(email: str) -> None:
+    asyncio.run(_platform_admin("delete", email))

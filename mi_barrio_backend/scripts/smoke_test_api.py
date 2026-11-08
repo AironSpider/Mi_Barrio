@@ -10,7 +10,13 @@ import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from _test_env import http, isolated_neighborhood, register
+from _test_env import (
+    http,
+    isolated_neighborhood,
+    register,
+    remove_platform_admin,
+    temporary_platform_admin,
+)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -175,6 +181,8 @@ def main():
           and endorsements[0]["short_comment"] == "Excelente"
           and "photo_b64" not in endorsements[0], f"{s} {endorsements}")
     endorsement_id = endorsements[0]["id"] if s == 200 and endorsements else str(uuid.uuid4())
+    check("GET /services/{id}/endorsements marca has_photo (sin mandar la foto)",
+          s == 200 and endorsements and endorsements[0].get("has_photo") is True, f"{endorsements}")
     s, photo = call("GET", f"/api/v1/endorsements/{endorsement_id}/photo")
     check("GET /endorsements/{id}/photo devuelve la foto separada",
           s == 200 and photo.get("photo_b64") == photo_b64, f"{s} {photo}")
@@ -276,6 +284,15 @@ def main():
           s == 200 and b.get("status") == "VECINOS_EN_CAMINO" and b.get("helper_user_id") == PROVIDER, f"{s} {b}")
     s, b = call("PATCH", f"/api/v1/emergency/{uuid.uuid4()}/attend")
     check("PATCH attend inexistente -> 404", s == 404, f"{s}")
+    s, b = call("PATCH", f"/api/v1/emergency/{rid}/attend")
+    check("PATCH attend del propio SOS -> 403", s == 403, f"{s} {b}")
+    # Quien pidió ayuda lo marca ATENDIDO (por sync); ya nadie puede "ir en camino".
+    s, b = call("POST", "/api/v1/sync/push", {"client_sync_timestamp": now(), "mutations": [{
+        "target_table": "vulnerable_reports", "record_id": rid, "operation": "UPSERT",
+        "payload": {"id": rid, "reporter_user_id": ME, "status": "ATENDIDO", "updated_at": now(1)}}]})
+    check("el autor marca su SOS como ATENDIDO (sync)", s == 200 and b["processed_record_ids"] == [rid], f"{s} {b}")
+    s, b = call("PATCH", f"/api/v1/emergency/{rid}/attend", who=vecino2)
+    check("PATCH attend de un SOS ATENDIDO -> 409", s == 409, f"{s} {b}")
     s, b = call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": True})
     check("un VECINO no puede activar la emergencia del barrio -> 403", s == 403, f"{s} {b}")
     s, b = call("PATCH", "/api/v1/tenants/emergency-toggle", {"is_emergency_active": True}, who=hood["admin_token"])
@@ -405,6 +422,39 @@ def main():
     s, b = call("GET", "/api/v1/sync/pull", who=ajeno, tenant=OTHER_TENANT)
     leaked = [x for v in b.get("delta", {}).values() for x in v if x.get("tenant_id") == TENANT] if s == 200 else []
     check("pull de otro barrio no filtra datos", s == 200 and not leaked, f"{s} {len(leaked)}")
+
+    # ── Superadministrador (plataforma) ──
+    sa = temporary_platform_admin()
+    try:
+        s, b = http(BASE, "POST", "/api/v1/auth/login", {"email": sa["email"], "password": sa["password"]})
+        user = b.get("user", {}) if isinstance(b, dict) else {}
+        check("SUPER_ADMIN inicia sesión (sin barrio)",
+              s == 200 and user.get("role") == "SUPER_ADMIN" and user.get("tenant") is None, f"{s} {b}")
+        sa_token = b.get("access_token") if s == 200 else None
+        s, b = http(BASE, "GET", "/api/v1/auth/me", token=sa_token)
+        check("GET /auth/me del SUPER_ADMIN", s == 200 and b.get("role") == "SUPER_ADMIN", f"{s} {b}")
+        admin_email = f"admin.{uuid.uuid4().hex[:8]}@pruebas.test"
+        admin_password = uuid.uuid4().hex
+        s, created = http(BASE, "POST", "/api/v1/platform/neighborhoods", {
+            "neighborhood_name": "Smoke superadmin", "admin_full_name": "Junta smoke",
+            "admin_email": admin_email, "admin_password": admin_password,
+            "center_lat": LAT, "center_lng": LNG}, token=sa_token)
+        new_code = created.get("neighborhood", {}).get("join_code") if isinstance(created, dict) else None
+        check("SUPER_ADMIN crea un barrio de prueba con su administrador",
+              s == 201 and bool(new_code) and created["administrator"]["role"] == "ADMIN_BARRIO", f"{s} {created}")
+        s, b = http(BASE, "GET", "/api/v1/platform/neighborhoods", token=sa_token)
+        row = next((x for x in b if x.get("invite_code") == new_code), {}) if s == 200 else {}
+        check("GET /platform/neighborhoods lista el barrio con 1 administrador",
+              row.get("admin_count") == 1, f"{s} {row}")
+        s, b = http(BASE, "POST", "/api/v1/auth/login", {"email": admin_email, "password": admin_password})
+        check("el administrador creado inicia sesión",
+              s == 200 and b["user"]["role"] == "ADMIN_BARRIO", f"{s} {b}")
+        s, b = http(BASE, "GET", "/api/v1/platform/neighborhoods", token=vecino["token"])
+        check("un VECINO no gestiona barrios -> 403", s == 403, f"{s} {b}")
+        s, b = http(BASE, "GET", "/api/v1/services", tenant=TENANT, token=sa_token)
+        check("el SUPER_ADMIN no opera dentro de un barrio -> 403", s == 403, f"{s} {b}")
+    finally:
+        remove_platform_admin(sa["email"])
 
     failed = [r for r in results if not r[0]]
     print(f"\n{len(results) - len(failed)}/{len(results)} pruebas OK  (barrios de prueba {TENANT}, {OTHER_TENANT})")

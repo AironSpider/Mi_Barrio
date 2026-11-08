@@ -18,7 +18,6 @@ from app.features.auth_barrio.schemas import (
     LoginRequest,
     NeighborhoodAdminCreate,
     NeighborhoodAdminCreated,
-    PlatformAdminResponse,
     RegisterRequest,
     TenantResponse,
 )
@@ -58,27 +57,38 @@ def _too_many_attempts(seconds: int) -> HTTPException:
     )
 
 
-def _auth_response(
-    user: User,
-    tenant: Tenant,
-    access_token: str | None = None,
-) -> AuthResponse:
+def _user_response(user: User, tenant: Tenant) -> AuthUserResponse:
+    return AuthUserResponse(
+        id=user.id,
+        tenant_id=user.tenant_id,
+        full_name=user.full_name,
+        email=user.email,
+        role=user.role,
+        is_approved=user.is_approved,
+        tenant=TenantResponse.model_validate(tenant),
+    )
+
+
+def _platform_admin_response(admin: PlatformAdmin) -> AuthUserResponse:
+    """El superadministrador no pertenece a ningún barrio (tenant = None)."""
+    return AuthUserResponse(
+        id=admin.id,
+        tenant_id=None,
+        full_name=admin.full_name,
+        email=admin.email,
+        role="SUPER_ADMIN",
+        tenant=None,
+    )
+
+
+def _auth_response(user: User, tenant: Tenant) -> AuthResponse:
     return AuthResponse(
-        access_token=access_token
-        or create_access_token(
+        access_token=create_access_token(
             user_id=user.id,
             tenant_id=user.tenant_id,
             role=user.role,
         ),
-        user=AuthUserResponse(
-            id=user.id,
-            tenant_id=user.tenant_id,
-            full_name=user.full_name,
-            email=user.email,
-            role=user.role,
-            is_approved=user.is_approved,
-            tenant=TenantResponse.model_validate(tenant),
-        ),
+        user=_user_response(user, tenant),
     )
 
 
@@ -111,11 +121,6 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
         tutorial_completed=False,
     )
     db.add(user)
-    access_token = create_access_token(
-        user_id=user.id,
-        tenant_id=user.tenant_id,
-        role=user.role,
-    )
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -125,7 +130,7 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
             detail="Ya existe una cuenta con ese correo",
         ) from exc
     await db.refresh(user)
-    return _auth_response(user, tenant, access_token)
+    return _auth_response(user, tenant)
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -160,11 +165,7 @@ async def login(
                 tenant_id=None,
                 role="SUPER_ADMIN",
             ),
-            user=PlatformAdminResponse(
-                id=platform_admin.id,
-                full_name=platform_admin.full_name,
-                email=platform_admin.email,
-            ),
+            user=_platform_admin_response(platform_admin),
         )
 
     user = await db.scalar(
@@ -206,11 +207,7 @@ async def current_user(
         )
         if admin is None:
             raise HTTPException(status_code=401, detail="La sesión ya no es válida")
-        return PlatformAdminResponse(
-            id=admin.id,
-            full_name=admin.full_name,
-            email=admin.email,
-        )
+        return _platform_admin_response(admin)
     user = await db.scalar(
         select(User).where(User.id == user_id, User.is_deleted.is_(False))
     )
@@ -219,15 +216,7 @@ async def current_user(
     tenant = await db.get(Tenant, user.tenant_id)
     if tenant is None:
         raise HTTPException(status_code=403, detail="El barrio de la cuenta no está disponible")
-    return AuthUserResponse(
-        id=user.id,
-        tenant_id=user.tenant_id,
-        full_name=user.full_name,
-        email=user.email,
-        role=user.role,
-        is_approved=user.is_approved,
-        tenant=TenantResponse.model_validate(tenant),
-    )
+    return _user_response(user, tenant)
 
 
 platform_router = APIRouter(prefix="/api/v1/platform", tags=["Platform administration"])
@@ -297,11 +286,7 @@ async def create_neighborhood(
                 detail="Este barrio ya tiene un administrador asignado",
             )
     else:
-        if payload.center_lat is None or payload.center_lng is None:
-            raise HTTPException(
-                status_code=422,
-                detail="Se requieren coordenadas para crear un barrio nuevo",
-            )
+        # El schema ya exige nombre y coordenadas cuando no viene join_code.
         tenant = None
         for _ in range(5):
             tenant = Tenant(
@@ -355,14 +340,7 @@ async def create_neighborhood(
     await db.refresh(neighborhood_admin)
     return NeighborhoodAdminCreated(
         neighborhood=TenantResponse.model_validate(tenant),
-        administrator=AuthUserResponse(
-            id=neighborhood_admin.id,
-            tenant_id=neighborhood_admin.tenant_id,
-            full_name=neighborhood_admin.full_name,
-            email=neighborhood_admin.email,
-            role="ADMIN_BARRIO",
-            tenant=TenantResponse.model_validate(tenant),
-        ),
+        administrator=_user_response(neighborhood_admin, tenant),
     )
 
 

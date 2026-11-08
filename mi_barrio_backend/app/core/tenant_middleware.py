@@ -2,7 +2,6 @@ import uuid
 from collections.abc import Sequence
 from fastapi import Header, Request, HTTPException, status
 from fastapi import Depends
-from fastapi.security import APIKeyHeader
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -29,7 +28,6 @@ async def _account_is_active(claims: dict) -> bool:
             and user.role == claims.get("role")
         )
 
-tenant_header_scheme = APIKeyHeader(name="X-Tenant-ID", auto_error=False)
 
 EXEMPT_PATHS = {
     "/health",
@@ -168,11 +166,11 @@ def get_current_tenant_id(
             )
         try:
             tenant_id = uuid.UUID(raw_header)
-        except ValueError:
+        except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Header 'X-Tenant-ID' inválido",
-            )
+            ) from exc
     return tenant_id
 
 
