@@ -22,10 +22,11 @@ class FilterPill extends StatelessWidget {
     final texto = Theme.of(context).textTheme;
 
     final colores = MiBarrioColors.of(context);
-    // Seleccionada: píldora cian #21BCFF con texto #0F172A (8.2:1).
+    // Seleccionada: celeste suave #E0F2FE, texto y borde azul #075985 (6.6:1)
+    // y un ✓, para que no dependa solo del color.
     final fondo = selected ? colores.pill : AppPalette.card;
     final frente = selected ? colores.onPill : esquema.onSurfaceVariant;
-    final borde = selected ? colores.pill : esquema.outlineVariant;
+    final borde = selected ? colores.onPill : esquema.outlineVariant;
     final iconoFinal = selected ? Icons.check_rounded : icon;
 
     return Semantics(

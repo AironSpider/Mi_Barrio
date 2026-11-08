@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
 
-/// Paleta de Mi Barrio (v2, basada en psicología del color).
+/// Paleta de Mi Barrio (v3, teoría del color + daltonismo).
 ///
-/// - **Marca** (definida por el equipo): verde para la economía local diaria,
-///   naranja para emergencia, cian para etiquetas.
+/// - **Marca**: verde azulado para la economía local diaria, naranja para
+///   emergencia, celeste suave para etiquetas.
+/// - **v3 (aprobada por el equipo)**: el verde `#1E7A2E` y el naranja `#C2381B`
+///   tenían la misma luminosidad y, para un daltónico (deuteranopía), los dos se
+///   veían oliva: el cambio a emergencia casi no se notaba. El verde azulado
+///   `#0F766E` se ve gris azulado y se distingue del naranja.
 /// - **Acción accesible**: el mismo tono, más oscuro, para botones y texto.
-///   El verde `#2AA63E` y el naranja `#F54927` no llegan al contraste 4.5:1 con
-///   texto blanco, así que se usan en íconos, bordes y franjas (3:1, permitido),
-///   y sus versiones oscuras en botones con texto.
+///   Los tonos de marca se usan en íconos, bordes y franjas (3:1, permitido).
 ///
 /// `test/ui_kit/app_theme_test.dart` verifica todos los contrastes (WCAG AA).
 class AppPalette {
   AppPalette._();
 
   // ── Marca (tal como la definió el equipo) ──
-  static const Color brandGreen = Color(0xFF2AA63E); // Modo normal: íconos, Visto Bueno
+  // Verde azulado (antes #2AA63E). Se mantiene el nombre para no romper código.
+  static const Color brandGreen = Color(0xFF0D9488); // Modo normal: íconos, bordes (3.7:1)
   static const Color brandOrange = Color(0xFFF54927); // Emergencia: franja, bordes, íconos
-  static const Color brandCyan = Color(0xFF21BCFF); // Etiquetas y píldoras
+  static const Color brandCyan = Color(0xFF21BCFF); // Cian de marca (ya no en etiquetas)
+  static const Color tagSoft = Color(0xFFE0F2FE); // Etiquetas y píldoras: celeste suave
 
   // ── Superficies ──
   static const Color background = Color(0xFFF3F4F6); // Lienzo base
@@ -28,13 +32,13 @@ class AppPalette {
   static const Color textPrimary = Color(0xFF1E293B);
   // #64748B daba 4.32:1 sobre el fondo #F3F4F6; este tono (mismo matiz) da 4.6:1.
   static const Color textSecondary = Color(0xFF606F85);
-  static const Color textOnPill = Color(0xFF0F172A); // Texto sobre #21BCFF (8.2:1)
+  static const Color textOnPill = Color(0xFF075985); // Texto sobre #E0F2FE (6.6:1)
 
   // ── Acción accesible: Modo normal (verde) ──
-  static const Color dayPrimary = Color(0xFF1E7A2E); // Botones con texto blanco (5.4:1)
+  static const Color dayPrimary = Color(0xFF0F766E); // Botones con texto blanco (5.5:1)
   static const Color dayOnPrimary = Colors.white;
-  static const Color dayPrimaryContainer = Color(0xFFE7F6EA);
-  static const Color dayOnPrimaryContainer = Color(0xFF166534);
+  static const Color dayPrimaryContainer = Color(0xFFE6F5F3);
+  static const Color dayOnPrimaryContainer = Color(0xFF115E59);
   static const Color daySecondary = Color(0xFF0369A1);
   static const Color daySurface = card;
   static const Color dayOnSurface = textPrimary;
@@ -52,15 +56,18 @@ class AppPalette {
   static const Color emergencyStripe = brandOrange;
 
   // ── Semánticos (siempre con ícono + texto, nunca solo color) ──
-  static const Color urgencyCritical = Color(0xFFB3261E);
+  // Carmesí (antes #B3261E): se distingue mejor del naranja de emergencia.
+  static const Color urgencyCritical = Color(0xFF9F1239);
   static const Color urgencyHigh = Color(0xFF8A5300);
   static const Color urgencyMedium = Color(0xFF0369A1);
-  static const Color syncPending = Color(0xFF8A5300);
-  static const Color pendingBackground = Color(0xFFFFF3DC);
+  // Pendiente = gris azulado neutro ("guardado, esperando"); antes compartía
+  // el ámbar de "urgencia alta" y se confundían.
+  static const Color syncPending = Color(0xFF475569);
+  static const Color pendingBackground = Color(0xFFEEF2F6);
   static const Color syncSynced = Color(0xFF166534);
   static const Color syncedBackground = Color(0xFFE7F6EA);
-  static const Color syncFailed = Color(0xFFB3261E);
-  static const Color failedBackground = Color(0xFFFDECEA);
+  static const Color syncFailed = urgencyCritical;
+  static const Color failedBackground = Color(0xFFFDE8EE);
   static const Color starFilled = Color(0xFFC46A00);
   static const Color starEmpty = Color(0xFF7B8798);
 
@@ -70,7 +77,7 @@ class AppPalette {
   static const Color softBackground = emergencyBackground;
   static const Color pendingText = syncPending;
   static const Color tagText = textOnPill;
-  static const Color tagBackground = brandCyan;
+  static const Color tagBackground = tagSoft;
   static const Color pillBackground = hover;
 }
 
@@ -89,7 +96,7 @@ class MiBarrioColors extends ThemeExtension<MiBarrioColors> {
     this.brand = AppPalette.brandGreen,
     this.accentText = AppPalette.dayOnPrimaryContainer,
     this.accentSoft = AppPalette.dayPrimaryContainer,
-    this.pill = AppPalette.brandCyan,
+    this.pill = AppPalette.tagSoft,
     this.onPill = AppPalette.textOnPill,
     this.hover = AppPalette.hover,
     this.background = AppPalette.background,
@@ -236,7 +243,7 @@ class AppTheme {
       onPrimaryContainer: AppPalette.dayOnPrimaryContainer,
       secondary: AppPalette.daySecondary,
       onSecondary: Colors.white,
-      tertiary: AppPalette.brandCyan,
+      tertiary: AppPalette.tagSoft,
       onTertiary: AppPalette.textOnPill,
       error: AppPalette.urgencyCritical,
       onError: Colors.white,
@@ -272,7 +279,7 @@ class AppTheme {
       onPrimaryContainer: AppPalette.emergencyOnPrimaryContainer,
       secondary: AppPalette.emergencySecondary,
       onSecondary: Colors.white,
-      tertiary: AppPalette.brandCyan,
+      tertiary: AppPalette.tagSoft,
       onTertiary: AppPalette.textOnPill,
       error: AppPalette.urgencyCritical,
       onError: Colors.white,
@@ -425,7 +432,7 @@ class AppTheme {
       ),
       chipTheme: base.chipTheme.copyWith(
         labelStyle: textTheme.labelLarge,
-        selectedColor: AppPalette.brandCyan,
+        selectedColor: AppPalette.tagSoft,
         secondaryLabelStyle: textTheme.labelLarge?.copyWith(
           color: AppPalette.textOnPill,
         ),

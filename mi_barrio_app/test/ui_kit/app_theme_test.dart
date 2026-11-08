@@ -97,13 +97,30 @@ void main() {
         AppPalette.emergencyPrimary);
   });
 
+  test('v3: los dos modos se distinguen también para un daltónico', () {
+    // Un daltónico rojo-verde distingue el eje azul-amarillo. El verde anterior
+    // (#1E7A2E) casi no tenía azul y se veía oliva, igual que el naranja.
+    // El verde azulado lleva azul; el naranja, rojo.
+    final day = AppTheme.day().colorScheme.primary;
+    final emergency = AppTheme.emergency().colorScheme.primary;
+    expect(day.b, greaterThan(day.r * 3));
+    expect(emergency.r, greaterThan(emergency.b * 3));
+  });
+
+  test('v3: "Pendiente" ya no usa el color de "urgencia alta"', () {
+    final c = AppTheme.day().extension<MiBarrioColors>()!;
+    expect(c.syncPending, isNot(c.urgencyHigh));
+    expect(c.urgencyCritical, isNot(AppPalette.emergencyPrimary));
+  });
+
   test('respeta la paleta del equipo como identidad de cada modo', () {
     final day = AppTheme.day();
     final emergency = AppTheme.emergency();
     expect(day.extension<MiBarrioColors>()!.brand, AppPalette.brandGreen);
     expect(emergency.extension<MiBarrioColors>()!.brand, AppPalette.brandOrange);
-    expect(day.extension<MiBarrioColors>()!.pill, const Color(0xFF21BCFF));
-    expect(day.extension<MiBarrioColors>()!.onPill, const Color(0xFF0F172A));
+    expect(day.extension<MiBarrioColors>()!.pill, const Color(0xFFE0F2FE));
+    expect(day.extension<MiBarrioColors>()!.onPill, const Color(0xFF075985));
+    expect(day.colorScheme.primary, const Color(0xFF0F766E));
     expect(day.scaffoldBackgroundColor, const Color(0xFFF3F4F6));
     expect(day.cardTheme.color, const Color(0xFFFFFFFF));
     expect(day.colorScheme.onSurface, const Color(0xFF1E293B));
