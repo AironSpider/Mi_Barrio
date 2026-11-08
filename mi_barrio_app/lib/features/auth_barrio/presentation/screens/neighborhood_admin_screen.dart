@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../moderation/presentation/reports_panel.dart';
+import '../../../moderation/presentation/suspended_accounts_card.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/neighborhood_emergency_card.dart';
@@ -141,6 +142,10 @@ class NeighborhoodAdminScreen extends ConsumerWidget {
               ),
             ),
           ),
+          if (user.tenantId != null) ...[
+            const SizedBox(height: 16),
+            SuspendedAccountsCard(tenantId: user.tenantId!),
+          ],
         ],
       ),
     );

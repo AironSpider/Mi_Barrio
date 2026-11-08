@@ -43,7 +43,31 @@ PROTECTED_FIELDS = {
     "password_hash",
     "coordinator_user_id",  # lo pone el servidor al coordinar
     "is_under_review",  # lo decide la moderación (3 reportes / administrador)
+    # Cuenta: solo el servidor los decide (código del correo, Google, moderación).
+    "email_verified",
+    "google_sub",
+    "is_suspended",
+    "suspended_at",
+    "reports_reset_at",
 }
+
+# Perfil propio (tabla users): SOLO estos campos se aceptan por sync. Es una
+# lista de permitidos (no de prohibidos): una columna nueva de la cuenta queda
+# protegida aunque nadie se acuerde de agregarla arriba.
+USER_SYNC_FIELDS = {
+    "full_name", "phone", "address_reference", "home_lat", "home_lng",
+    "whatsapp", "facebook_url", "instagram_url", "email_contacto", "photo_b64",
+    "publisher_type", "publisher_category", "publisher_name",
+    "tutorial_completed", "is_deleted",
+}
+
+
+def _writable(model_class, key: str) -> bool:
+    if key in PROTECTED_FIELDS:
+        return False
+    if model_class is User:
+        return key in USER_SYNC_FIELDS
+    return True
 
 # Dueño de cada tabla: solo él puede crear o modificar sus registros.
 OWNER_FIELD = {
@@ -346,7 +370,7 @@ async def process_sync_push(
                         for key, val in payload.items():
                             if (
                                 hasattr(existing_record, key)
-                                and key not in PROTECTED_FIELDS
+                                and _writable(model_class, key)
                                 and key not in IMMUTABLE_ON_UPDATE
                             ):
                                 setattr(existing_record, key, _coerce(key, val))
@@ -364,7 +388,7 @@ async def process_sync_push(
                         "updated_at": client_updated_at,
                     }
                     for key, val in payload.items():
-                        if hasattr(model_class, key) and key not in PROTECTED_FIELDS:
+                        if hasattr(model_class, key) and _writable(model_class, key):
                             clean_payload[key] = _coerce(key, val)
                     db.add(model_class(**clean_payload))
 
@@ -385,8 +409,17 @@ async def process_sync_push(
 
     # 3 reportes de vecinos distintos: la publicación pasa a revisión.
     needs_admin = False
+    reported_owners: set[uuid.UUID] = set()
     for target_type, target_id in reported_targets:
         if await moderation.apply_review_threshold(db, tenant_uuid, target_type, target_id):
+            needs_admin = True
+        target = await moderation.load_target(db, target_type, target_id, tenant_uuid)
+        if target is not None:
+            reported_owners.add(moderation.owner_of(target))
+    # 3 vecinos distintos reportaron sus publicaciones: la cuenta se suspende
+    # hasta que el jefe del barrio la reactive.
+    for owner_id in reported_owners:
+        if await moderation.apply_suspension_threshold(db, tenant_uuid, owner_id):
             needs_admin = True
 
     # Si quien ofrece servicios cambió su perfil (teléfono/WhatsApp), sus servicios

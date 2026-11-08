@@ -96,6 +96,18 @@ void main() {
     expect(notifier.state.status, AuthStatus.error);
     expect(notifier.state.message, 'Credenciales inválidas');
   });
+
+  test('cuenta suspendida: la sesión se cierra y el ingreso explica por qué', () async {
+    final notifier = AuthNotifier(_FakeAuthRepository());
+    addTearDown(notifier.dispose);
+    await notifier.login(email: 'ana@example.com', password: 'password123');
+
+    await notifier.expireSession(
+      reason: 'Tu cuenta está suspendida. Habla con el jefe de tu barrio.',
+    );
+    expect(notifier.state.status, AuthStatus.unauthenticated);
+    expect(notifier.state.message, contains('jefe de tu barrio'));
+  });
 }
 
 class _FakeAuthRepository implements AuthRepository {

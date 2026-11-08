@@ -187,6 +187,8 @@ class AuthRepositoryImpl implements AuthRepository {
         } finally {
           await _sessionStore.clear();
         }
+        // Cuenta suspendida: se avisa en la pantalla de ingreso por qué.
+        if (error.message.toLowerCase().contains('suspendida')) rethrow;
         return null;
       }
       // Sin red o servidor caído / despertando (5xx, ej. Render free): entra

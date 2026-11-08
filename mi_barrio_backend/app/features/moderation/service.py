@@ -3,7 +3,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.realtime import hub
@@ -11,7 +11,7 @@ from app.features.auth_barrio.models import Tenant, User
 from app.features.moderation.models import ContentReport
 from app.features.proximity_services.models import LocalService
 from app.features.solidarity_network.models import SolidarityPost
-from app.shared.contract_values import REPORTS_TO_REVIEW
+from app.shared.contract_values import REPORTS_TO_REVIEW, REPORTS_TO_SUSPEND
 
 logger = logging.getLogger("mi_barrio.moderation")
 
@@ -71,6 +71,114 @@ async def apply_review_threshold(
     # Así el pull la vuelve a bajar y los celulares la ocultan.
     target.updated_at = datetime.now(timezone.utc)
     return True
+
+
+# Reportes que cuentan para suspender: los pendientes y los que el jefe del
+# barrio confirmó borrando la publicación. Si la restauró, el reporte no cuenta.
+_COUNTED_STATUSES = ("PENDIENTE", "ELIMINADO")
+
+
+def owner_of(target) -> uuid.UUID:
+    return getattr(target, _OWNER[type(target)])
+
+
+async def reporters_against(db: AsyncSession, tenant_id: uuid.UUID, user: User) -> int:
+    """Cuántos vecinos DISTINTOS reportaron publicaciones de [user] (desde su
+    última reactivación)."""
+    own_content = union_all(
+        select(SolidarityPost.id).where(
+            SolidarityPost.tenant_id == tenant_id, SolidarityPost.author_user_id == user.id
+        ),
+        select(LocalService.id).where(
+            LocalService.tenant_id == tenant_id, LocalService.provider_user_id == user.id
+        ),
+    ).subquery()
+    stmt = select(func.count(func.distinct(ContentReport.reporter_user_id))).where(
+        ContentReport.tenant_id == tenant_id,
+        ContentReport.target_id.in_(select(own_content.c.id)),
+        ContentReport.status.in_(_COUNTED_STATUSES),
+        ContentReport.is_deleted.is_(False),
+    )
+    if user.reports_reset_at is not None:
+        stmt = stmt.where(ContentReport.created_at > user.reports_reset_at)
+    return int(await db.scalar(stmt) or 0)
+
+
+async def apply_suspension_threshold(
+    db: AsyncSession, tenant_id: uuid.UUID, owner_id: uuid.UUID
+) -> bool:
+    """Con reportes de 3 vecinos distintos, la cuenta se suspende.
+    Devuelve True si acaba de suspenderse."""
+    user = await db.get(User, owner_id, with_for_update=True)
+    if (
+        user is None
+        or user.is_deleted
+        or user.is_suspended
+        or user.tenant_id != tenant_id
+        or user.role not in ("VECINO", "COMERCIANTE")
+    ):
+        return False
+    if await reporters_against(db, tenant_id, user) < REPORTS_TO_SUSPEND:
+        return False
+    user.is_suspended = True
+    user.suspended_at = datetime.now(timezone.utc)
+    logger.info("Moderación: cuenta %s suspendida por reportes", owner_id)
+    return True
+
+
+async def admin_names(db: AsyncSession, tenant_id: uuid.UUID | None) -> list[str]:
+    """Nombres de los jefes del barrio (para decirle al vecino con quién hablar)."""
+    if tenant_id is None:
+        return []
+    return list((await db.execute(
+        select(User.full_name).where(
+            User.tenant_id == tenant_id,
+            User.role == "ADMIN_BARRIO",
+            User.is_deleted.is_(False),
+        ).order_by(User.full_name)
+    )).scalars().all())
+
+
+def suspended_message(names: list[str]) -> str:
+    who = f": {', '.join(names)}" if names else ""
+    return (
+        "Tu cuenta está suspendida porque varios vecinos reportaron tus "
+        f"publicaciones. Para reactivarla, habla con el jefe de tu barrio{who}."
+    )
+
+
+async def list_suspended(db: AsyncSession, tenant_id: uuid.UUID) -> list[dict]:
+    users = (await db.execute(
+        select(User).where(
+            User.tenant_id == tenant_id,
+            User.is_suspended.is_(True),
+            User.is_deleted.is_(False),
+        ).order_by(User.suspended_at.desc())
+    )).scalars().all()
+    return [
+        {
+            "user_id": str(u.id),
+            "full_name": u.full_name,
+            "email": u.email,
+            "suspended_at": u.suspended_at,
+            "report_count": await reporters_against(db, tenant_id, u),
+        }
+        for u in users
+    ]
+
+
+async def reactivate(db: AsyncSession, tenant_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    """El jefe del barrio reactiva la cuenta. Los reportes anteriores dejan de
+    contar: hacen falta 3 reportes NUEVOS para volver a suspenderla."""
+    user = await db.get(User, user_id, with_for_update=True)
+    if user is None or user.is_deleted or user.tenant_id != tenant_id:
+        raise LookupError("cuenta no encontrada")
+    now = datetime.now(timezone.utc)
+    user.is_suspended = False
+    user.suspended_at = None
+    user.reports_reset_at = now
+    await db.commit()
+    logger.info("Moderación: cuenta %s reactivada", user_id)
 
 
 async def notify_admins(db: AsyncSession, tenant_id: uuid.UUID) -> None:

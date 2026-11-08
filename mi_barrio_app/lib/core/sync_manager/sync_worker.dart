@@ -283,7 +283,9 @@ class SyncWorker {
 
     if (response.statusCode != 200) {
       if (response.statusCode == 401) {
-        await AuthSessionStore.instance.invalidate();
+        await AuthSessionStore.instance.invalidate(
+          AuthSessionStore.reasonFrom(response.body),
+        );
       }
       return _BatchOutcome(
         httpFailed: true,
@@ -394,7 +396,9 @@ class SyncWorker {
 
       if (response.statusCode != 200) {
         if (response.statusCode == 401) {
-          await AuthSessionStore.instance.invalidate();
+          await AuthSessionStore.instance.invalidate(
+            AuthSessionStore.reasonFrom(response.body),
+          );
         }
         return PullResult(
           success: false,

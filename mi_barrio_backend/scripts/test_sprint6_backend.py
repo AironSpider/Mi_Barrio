@@ -104,7 +104,7 @@ def main() -> int:
     check("health: migraciones al día", h["data"].get("migrations_up_to_date") is True, h)
 
     # Barrio propio para la prueba: nunca se toca el barrio demo BARRIO-01.
-    from _test_env import isolated_neighborhood
+    from _test_env import isolated_neighborhood, register
 
     hood = isolated_neighborhood(BASE, "Prueba Sprint 6")
     T, ADMIN_TOKEN, JOIN_CODE = hood["tenant_id"], hood["admin_token"], hood["join_code"]
@@ -193,7 +193,13 @@ def main() -> int:
     check("pull trae vulnerable_reports nuevos", rep.get("id") in rep_ids, pull_r)
     s, other = call("GET", "/api/v1/sync/pull", tenant=str(uuid.uuid4()))
     check("el token bloquea el pull de otro barrio", s == 403, other)
-    s, att = call("PATCH", f"/api/v1/emergency/{rep.get('id')}/attend?helper_user_id={ME}")
+    # Ayuda OTRO vecino (nadie puede atender su propio pedido: 403).
+    own_token = ACCESS_TOKEN
+    helper = register(BASE, JOIN_CODE, "VECINO", "Vecino que ayuda")
+    ACCESS_TOKEN = helper["token"]
+    s, att = call("PATCH", f"/api/v1/emergency/{rep.get('id')}/attend?helper_user_id={helper['id']}")
+    check("otro vecino atiende el SOS", s == 200, att)
+    ACCESS_TOKEN = own_token
     s, pull_a = call("GET", f"/api/v1/sync/pull?since={pull_r['server_timestamp']}")
     attended = [x for x in pull_a["delta"]["vulnerable_reports"] if x["id"] == rep.get("id")]
     check("atender el SOS (REST) llega en el pull por server_updated_at",

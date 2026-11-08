@@ -19,6 +19,7 @@ from app.features.auth_barrio import account_codes
 from app.features.auth_barrio.auth_router import (
     _auth_response,
     _client_ip,
+    ensure_not_suspended,
     _hash,
     _too_many_attempts,
 )
@@ -57,6 +58,12 @@ async def _tenant_or_403(db: AsyncSession, user: User) -> Tenant:
     if tenant is None:
         raise HTTPException(status_code=403, detail="La cuenta ya no pertenece a un barrio activo")
     return tenant
+
+
+async def _session_for(db: AsyncSession, user: User) -> AuthResponse:
+    """Sesión nueva, salvo que la cuenta esté suspendida por reportes."""
+    await ensure_not_suspended(db, user)
+    return _auth_response(user, await _tenant_or_403(db, user))
 
 
 def _sent(message: str, code: str | None) -> CodeSentResponse:
@@ -108,7 +115,7 @@ async def verify_email(
         await db.commit()
         await db.refresh(user)
     rate_limit.register_success(email, ip)
-    return _auth_response(user, await _tenant_or_403(db, user))
+    return await _session_for(db, user)
 
 
 # ─────────────────────────── Recuperar contraseña ───────────────────────────
@@ -153,7 +160,7 @@ async def reset_password(
     await db.commit()
     await db.refresh(user)
     rate_limit.register_success(email, ip)
-    return _auth_response(user, await _tenant_or_403(db, user))
+    return await _session_for(db, user)
 
 
 @router.post("/password/set", response_model=AuthResponse)
@@ -187,7 +194,7 @@ async def set_password(
     user.password_hash = await _hash(payload.password)
     await db.commit()
     await db.refresh(user)
-    return _auth_response(user, await _tenant_or_403(db, user))
+    return await _session_for(db, user)
 
 
 # ─────────────────────────── Entrar con Google ───────────────────────────
@@ -220,7 +227,7 @@ async def google_login(
             user.email_verified = True
             await db.commit()
             await db.refresh(user)
-        return _auth_response(user, await _tenant_or_403(db, user))
+        return await _session_for(db, user)
 
     # Cuenta nueva: hace falta saber a qué barrio entra.
     if not payload.join_code:

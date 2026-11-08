@@ -8,13 +8,15 @@ class AuthSessionStore {
 
   static final instance = AuthSessionStore._();
   static const _sessionKey = 'auth_session_v1';
-  final StreamController<void> _sessionExpired =
-      StreamController<void>.broadcast();
+  /// Emite el motivo para mostrarle al vecino (p. ej. "Tu cuenta está
+  /// suspendida…"), o null si solo venció la sesión.
+  final StreamController<String?> _sessionExpired =
+      StreamController<String?>.broadcast();
 
   String? _token;
 
   String? get token => _token;
-  Stream<void> get onSessionExpired => _sessionExpired.stream;
+  Stream<String?> get onSessionExpired => _sessionExpired.stream;
 
   Future<void> save(Map<String, dynamic> session) async {
     final token = session['token'];
@@ -55,8 +57,25 @@ class AuthSessionStore {
     await preferences.remove(_sessionKey);
   }
 
-  Future<void> invalidate() async {
+  Future<void> invalidate([String? reason]) async {
     await clear();
-    _sessionExpired.add(null);
+    _sessionExpired.add(reason);
+  }
+
+  /// Motivo de un 401 que vale la pena mostrar (cuenta suspendida). null si
+  /// solo venció la sesión. [body] es el cuerpo JSON de la respuesta.
+  static String? reasonFrom(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        final text = (decoded['error'] ?? decoded['detail'])?.toString();
+        if (text != null && text.toLowerCase().contains('suspendida')) {
+          return text;
+        }
+      }
+    } on FormatException {
+      return null;
+    }
+    return null;
   }
 }

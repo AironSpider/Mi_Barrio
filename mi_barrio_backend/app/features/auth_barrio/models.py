@@ -67,6 +67,13 @@ class User(Base, BarrioBaseMixin):
         Boolean, default=True, server_default=true(), nullable=False
     )
     google_sub: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Moderación: con reportes de 3 vecinos distintos la cuenta se suspende
+    # hasta que el jefe del barrio la reactive (ver moderation.service).
+    is_suspended: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reports_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class PlatformAdmin(Base):

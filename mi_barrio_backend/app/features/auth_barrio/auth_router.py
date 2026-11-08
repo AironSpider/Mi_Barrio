@@ -58,6 +58,16 @@ def _too_many_attempts(seconds: int) -> HTTPException:
     )
 
 
+async def ensure_not_suspended(db: AsyncSession, user: User) -> None:
+    """Cuenta suspendida por reportes: no entra y se le dice con quién hablar."""
+    if not user.is_suspended:
+        return
+    from app.features.moderation import service as moderation
+
+    names = await moderation.admin_names(db, user.tenant_id)
+    raise HTTPException(status_code=403, detail=moderation.suspended_message(names))
+
+
 def _user_response(user: User, tenant: Tenant) -> AuthUserResponse:
     return AuthUserResponse(
         id=user.id,
@@ -214,6 +224,7 @@ async def login(
     if tenant is None:
         raise HTTPException(status_code=403, detail="La cuenta ya no pertenece a un barrio activo")
     rate_limit.register_success(email, ip)
+    await ensure_not_suspended(db, user)
     return _auth_response(user, tenant)
 
 

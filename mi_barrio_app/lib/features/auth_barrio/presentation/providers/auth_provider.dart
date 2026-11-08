@@ -64,11 +64,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._repository, {AuthState? initialState})
     : super(initialState ?? const AuthState.restoring()) {
     _sessionExpiredSubscription = AuthSessionStore.instance.onSessionExpired
-        .listen((_) => unawaited(expireSession()));
+        .listen((reason) => unawaited(expireSession(reason: reason)));
   }
 
   final AuthRepository _repository;
-  late final StreamSubscription<void> _sessionExpiredSubscription;
+  late final StreamSubscription<String?> _sessionExpiredSubscription;
 
   /// [keepPendingData] = true cuando la sesión VENCE (401): los cambios hechos
   /// sin internet se conservan para subirlos al volver a entrar.
@@ -114,6 +114,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = user == null
           ? const AuthState.unauthenticated()
           : AuthState.authenticated(user);
+    } on AuthException catch (error) {
+      // Cuenta suspendida: la pantalla de ingreso explica con quién hablar.
+      state = error.statusCode == 401 || error.statusCode == 403
+          ? AuthState(status: AuthStatus.unauthenticated, message: error.message)
+          : AuthState(
+              status: AuthStatus.error,
+              message: 'No se pudo restaurar la sesión: ${error.message}',
+            );
     } catch (error) {
       state = AuthState(
         status: AuthStatus.error,
@@ -299,7 +307,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return null;
   }
 
-  Future<void> expireSession() async {
+  /// [reason]: por qué se cerró (p. ej. cuenta suspendida), para mostrarlo
+  /// en la pantalla de ingreso. null = la sesión simplemente venció.
+  Future<void> expireSession({String? reason}) async {
     if (state.status == AuthStatus.unauthenticated ||
         state.status == AuthStatus.loading) {
       return;
@@ -308,7 +318,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState.loading();
     try {
       await _endCurrentSession(currentUser, keepPendingData: true);
-      state = const AuthState.unauthenticated();
+      state = AuthState(status: AuthStatus.unauthenticated, message: reason);
     } catch (error) {
       state = AuthState(
         status: AuthStatus.error,

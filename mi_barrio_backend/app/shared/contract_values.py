@@ -44,6 +44,9 @@ ReportReason = Literal[
 ]
 # Con estos reportes de vecinos DISTINTOS la publicación pasa a revisión.
 REPORTS_TO_REVIEW = 3
+# Reportes de vecinos distintos (sobre cualquiera de sus publicaciones) para
+# suspender una cuenta. Solo el jefe del barrio la puede reactivar.
+REPORTS_TO_SUSPEND = 3
 SupportGroupType = Literal[
     "PRIMEROS_AUXILIOS", "RESCATE", "ALBERGUE", "ALIMENTOS", "LOGISTICA", "SALUD_MENTAL",
 ]

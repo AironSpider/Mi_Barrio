@@ -81,6 +81,40 @@ async def resolve_report(
     return await _resolve(db, tenant_uuid, target_type, target_id, action)
 
 
+# ── Cuentas suspendidas (solo el jefe del barrio las reactiva) ──
+class SuspendedAccount(BaseModel):
+    user_id: str
+    full_name: str
+    email: str | None = None
+    suspended_at: datetime | None = None
+    report_count: int
+
+
+@router.get("/suspended", response_model=list[SuspendedAccount])
+async def list_suspended(
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    _: dict = Depends(require_role(["ADMIN_BARRIO"])),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Vecinos suspendidos por reportes, los más recientes primero."""
+    return await service.list_suspended(db, tenant_uuid)
+
+
+@router.post("/suspended/{user_id}/reactivate")
+async def reactivate_account(
+    user_id: uuid.UUID,
+    tenant_uuid: uuid.UUID = Depends(get_current_tenant_id),
+    _: dict = Depends(require_role(["ADMIN_BARRIO"])),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """El vecino habló con el jefe del barrio: vuelve a usar la app."""
+    try:
+        await service.reactivate(db, tenant_uuid, user_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Cuenta no encontrada en este barrio") from exc
+    return {"success": True}
+
+
 # ── Superadministrador (todos los barrios) ──
 @platform_router.get("", response_model=list[ReportedItem])
 async def platform_list_reports(

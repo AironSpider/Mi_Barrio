@@ -279,6 +279,18 @@ class _ConfirmDialog extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 12),
+              // Reportar tiene consecuencias reales: se dice antes de enviar.
+              Text(
+                'Repórtala solo si de verdad es un problema. Cuando 3 vecinos '
+                'distintos reportan a alguien, su cuenta se suspende hasta que '
+                'hable con el jefe del barrio.',
+                key: const ValueKey('report_suspension_notice'),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppPalette.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 24),
               Row(
                 children: [

@@ -61,6 +61,9 @@ En la app, cada norma corresponde a un **motivo de reporte**:
    - **Restaurar:** no rompía las normas y vuelve a verse.
    - **Eliminar:** se borra.
 3. Si el problema es grave (amenazas, delitos, riesgo para alguien), el equipo de Mi Barrio puede actuar **sin esperar** los 3 reportes.
+4. Si **3 vecinos distintos** reportan publicaciones de una misma persona (la misma o varias), su **cuenta se suspende automáticamente**: no puede entrar a la app. Para reactivarla tiene que **hablar con el jefe (administrador) de su barrio**, que es quien la reactiva desde su panel. Al reactivarla, los reportes anteriores dejan de contar.
+5. Los reportes que el administrador descarta (publicación **restaurada**) no cuentan para la suspensión.
+6. Las palabras ofensivas y los mensajes de odio se cambian por asteriscos (\*\*\*) antes de publicarse.
 
 ---
 
@@ -71,7 +74,7 @@ Según qué tan grave sea y si se repite:
 | Nivel | Qué pasa |
 | --- | --- |
 | 1. Aviso | Se oculta o borra el contenido y se avisa a la persona |
-| 2. Suspensión | La cuenta no puede publicar ni chatear por un tiempo |
+| 2. Suspensión | La cuenta no puede entrar a la app hasta que el jefe del barrio la reactive (automática con reportes de 3 vecinos distintos) |
 | 3. Cierre | Se cierra la cuenta y no puede volver a registrarse en el barrio |
 
 Las faltas **graves** (estafa, amenazas, contenido sexual con menores, delitos) llevan al **cierre inmediato** y, si corresponde, se informa a las **autoridades**.

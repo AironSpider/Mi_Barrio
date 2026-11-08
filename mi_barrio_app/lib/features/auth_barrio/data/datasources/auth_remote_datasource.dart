@@ -305,7 +305,11 @@ class AuthRemoteDatasource {
   /// se cierra para que la app vuelva a pedir el ingreso.
   Map<String, dynamic> _decodeWithSession(http.Response response) {
     if (response.statusCode == 401 && AuthSessionStore.instance.token != null) {
-      unawaited(AuthSessionStore.instance.invalidate());
+      unawaited(
+        AuthSessionStore.instance.invalidate(
+          AuthSessionStore.reasonFrom(response.body),
+        ),
+      );
       throw const AuthException(
         'Tu sesión venció. Vuelve a ingresar.',
         statusCode: 401,

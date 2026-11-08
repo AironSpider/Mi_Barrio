@@ -54,7 +54,7 @@ Romper estas reglas puede llevar a la **suspensión o cierre de tu cuenta** (ver
 - La información de cada barrio **se queda en ese barrio**. No se muestra en otros barrios.
 - **No vendemos ni compartimos datos** para publicidad.
 - Podemos usar **números generales y anónimos** para mejorar la app y presentar el proyecto, por ejemplo "120 vecinos y 45 servicios en el barrio X". Esos números **no identifican a nadie**.
-- No usamos tus datos para tomar decisiones automáticas que te afecten. La única regla automática es la de moderación: una publicación con 3 reportes se oculta hasta que una persona la revisa.
+- No usamos tus datos para tomar decisiones automáticas que te afecten, salvo las reglas de moderación: una publicación con 3 reportes se oculta hasta que una persona la revisa, y una cuenta reportada por 3 vecinos distintos se suspende hasta que el jefe del barrio (una persona) la reactiva. Las palabras ofensivas se cambian por asteriscos.
 
 ---
 

@@ -87,7 +87,11 @@ class ApiClient {
       // la junta vecinal quedaban mostrando errores sin salida.
       if (response.statusCode == 401 &&
           AuthSessionStore.instance.token != null) {
-        unawaited(AuthSessionStore.instance.invalidate());
+        unawaited(
+          AuthSessionStore.instance.invalidate(
+            AuthSessionStore.reasonFrom(response.body),
+          ),
+        );
         throw Exception('Tu sesión venció. Vuelve a ingresar.');
       }
       final message = body is Map ? body['detail'] ?? body['error'] : null;

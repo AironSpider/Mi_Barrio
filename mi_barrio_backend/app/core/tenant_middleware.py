@@ -9,6 +9,17 @@ from app.core.auth_security import decode_access_token
 from app.core.database import async_session_factory
 
 
+async def account_is_suspended(claims: dict) -> bool:
+    """La cuenta existe pero el jefe del barrio todavía no la reactivó."""
+    from app.features.auth_barrio.models import User
+
+    if claims.get("role") == "SUPER_ADMIN":
+        return False
+    async with async_session_factory() as db:
+        user = await db.get(User, uuid.UUID(claims["sub"]))
+        return user is not None and bool(user.is_suspended)
+
+
 async def account_is_active(claims: dict) -> bool:
     """El token es válido solo si la cuenta sigue activa, en el mismo barrio y con el
     mismo rol. Así una cuenta borrada o degradada deja de operar al instante."""
@@ -26,6 +37,7 @@ async def account_is_active(claims: dict) -> bool:
             and not user.is_deleted
             and str(user.tenant_id) == claims.get("tenant_id")
             and user.role == claims.get("role")
+            and not user.is_suspended
         )
 
 
@@ -78,12 +90,19 @@ class TenantMiddleware(BaseHTTPMiddleware):
                 try:
                     request.state.auth_claims = decode_access_token(token)
                     if not await account_is_active(request.state.auth_claims):
+                        # 401: la app cierra la sesión. Al volver a ingresar, el
+                        # login le explica la suspensión y con quién hablar.
+                        suspended = await account_is_suspended(request.state.auth_claims)
                         return JSONResponse(
                             status_code=status.HTTP_401_UNAUTHORIZED,
                             headers={"WWW-Authenticate": "Bearer"},
                             content={
                                 "success": False,
-                                "error": "La sesión ya no es válida. Vuelve a iniciar sesión.",
+                                "error": (
+                                    "Tu cuenta está suspendida. Habla con el jefe de tu barrio."
+                                    if suspended
+                                    else "La sesión ya no es válida. Vuelve a iniciar sesión."
+                                ),
                                 "data": None,
                             },
                         )

@@ -201,6 +201,8 @@ Si ves una estafa, spam, algo ofensivo, falso, peligroso o datos personales de o
 
 - Tu reporte es **anónimo**.
 - Con **3 reportes** de vecinos distintos, la publicación se **oculta** hasta que el administrador del barrio la revise.
+- Si **3 vecinos distintos** reportan publicaciones de la misma persona, su **cuenta se suspende**. Para volver a entrar debe **hablar con el jefe de su barrio**; la app le dice quién es.
+- Las palabras ofensivas se cambian solas por asteriscos (\*\*\*).
 
 Más detalle en la [Política de uso](legal/politica_de_uso.md).
 
@@ -255,6 +257,7 @@ Mi Barrio **funciona sin internet**:
 | Dar acceso a vecinos | Comparte el **código del barrio** solo con personas del barrio |
 | Activar o desactivar el modo emergencia | Interruptor **"Modo emergencia"** |
 | Revisar reportes | En tu panel de administrador, sección **"Reportes"**: las publicaciones **"En revisión: oculta"** se pueden **Restaurar** (vuelven a verse) o **Eliminar** |
+| Reactivar una cuenta suspendida | Sección **"Cuentas suspendidas"**: conversa con el vecino y toca **"Reactivar"**. Sus reportes anteriores dejan de contar |
 
 Desactiva el modo emergencia cuando la situación termine, para que la app vuelva a la normalidad.
 
