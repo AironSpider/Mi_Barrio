@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
 
+/// Estado de sincronización de un registro: pendiente, sincronizado o con error.
 enum SyncChipStatus { pending, synced, failed }
 
+/// Etiqueta pequeña que dice si un cambio ya se subió al servidor o sigue pendiente.
 class SyncStatusChip extends StatelessWidget {
   const SyncStatusChip({super.key, required this.status, this.compact = false});
 

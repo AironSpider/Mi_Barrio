@@ -1,5 +1,6 @@
 import '../entities/user_entity.dart';
 
+/// Todo lo que la app puede hacer con cuentas. Se reemplaza por uno falso en las pruebas.
 abstract interface class AuthRepository {
   Future<UserEntity> login({required String email, required String password});
 

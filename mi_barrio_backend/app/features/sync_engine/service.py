@@ -1,3 +1,4 @@
+"""Lógica del sync: validar y aplicar cambios (LWW) y armar el delta paginado del pull."""
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -261,6 +262,7 @@ async def process_sync_push(
     rejected: list[dict] = []
 
     def reject(reason: str) -> None:
+        """Anota un cambio rechazado con su motivo (se devuelve a la app)."""
         rejected.append({"record_id": item.record_id, "target_table": item.target_table, "reason": reason})
     touched_services: set[uuid.UUID] = set()
     reported_targets: set[tuple[str, uuid.UUID]] = set()

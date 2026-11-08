@@ -1,3 +1,4 @@
+/// Rol de la cuenta: valor que usa la API y texto para mostrar.
 enum UserRole {
   vecino('VECINO', 'Vecino'),
   comerciante('COMERCIANTE', 'Comerciante'),
@@ -18,6 +19,7 @@ enum UserRole {
   };
 }
 
+/// La cuenta con sesión iniciada: quién es, su barrio, su rol y si confirmó su correo.
 class UserEntity {
   const UserEntity({
     required this.id,
@@ -56,6 +58,7 @@ class UserEntity {
   final bool hasPassword;
 }
 
+/// Resultado de crear un barrio y su administrador (superadministrador).
 class NeighborhoodProvisionEntity {
   const NeighborhoodProvisionEntity({
     required this.neighborhoodName,

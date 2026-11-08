@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Guarda la sesión (token y datos del usuario) en el teléfono con SharedPreferences.
+/// Avisa por [onSessionExpired] cuando el servidor rechaza el token (401).
 class AuthSessionStore {
   AuthSessionStore._();
 

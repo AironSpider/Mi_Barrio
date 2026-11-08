@@ -31,12 +31,14 @@ VALID_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
 
 @dataclass(frozen=True)
 class GoogleIdentity:
+    """Lo que Google confirma de la persona: su id interno (sub), su correo verificado y su nombre."""
     sub: str
     email: str
     name: str
 
 
 def allowed_client_ids() -> set[str]:
+    """Client IDs de Google aceptados (variable GOOGLE_CLIENT_IDS, separados por comas)."""
     raw = os.getenv("GOOGLE_CLIENT_IDS", "")
     return {part.strip() for part in raw.split(",") if part.strip()}
 
@@ -55,6 +57,7 @@ def _fetch_tokeninfo(id_token: str) -> dict:
 def identity_from_claims(claims: dict, client_ids: set[str], now: float | None = None) -> GoogleIdentity:
     """Valida los datos que devolvió Google. Lanza 401 si algo no cuadra."""
     def invalid(reason: str) -> HTTPException:
+        """Error 401 con un motivo corto para mostrar en la app."""
         return HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"No pudimos confirmar tu cuenta de Google ({reason}). Intenta de nuevo.",
@@ -83,6 +86,7 @@ def identity_from_claims(claims: dict, client_ids: set[str], now: float | None =
 
 
 async def verify_google_id_token(id_token: str) -> GoogleIdentity:
+    """Valida el ID token con Google (tokeninfo) y devuelve la identidad. 503 si GOOGLE_CLIENT_IDS no está configurado; 401 si el token no sirve."""
     client_ids = allowed_client_ids()
     if not client_ids:
         raise HTTPException(

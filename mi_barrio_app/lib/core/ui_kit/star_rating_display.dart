@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
 
+/// Muestra una calificación con estrellas (solo lectura), con texto para lectores de pantalla.
 class StarRatingDisplay extends StatelessWidget {
   const StarRatingDisplay({
     super.key,

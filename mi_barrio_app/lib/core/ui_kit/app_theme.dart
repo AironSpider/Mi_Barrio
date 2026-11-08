@@ -229,6 +229,7 @@ class MiBarrioColors extends ThemeExtension<MiBarrioColors> {
   }
 }
 
+/// Temas de la app (día y emergencia) con áreas táctiles de 48 px y buen contraste.
 class AppTheme {
   AppTheme._();
 

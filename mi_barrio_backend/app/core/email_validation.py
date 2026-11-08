@@ -136,6 +136,7 @@ def _dns_check_enabled() -> bool:
 
 
 async def check_domain(email: str) -> None:
+    """Rechaza (422) correos de dominios que no existen o no reciben correo. Los proveedores conocidos (Gmail, Outlook…) se aceptan sin consultar DNS."""
     domain = email.strip().lower().rpartition("@")[2]
     if domain in KNOWN_PROVIDERS or not _dns_check_enabled():
         return

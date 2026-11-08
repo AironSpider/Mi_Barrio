@@ -33,8 +33,10 @@ class MarkdownView extends StatelessWidget {
   }
 }
 
+/// Tipos de bloque que entiende [MarkdownView].
 enum MdKind { h1, h2, h3, paragraph, bullet, numbered, quote, table, rule }
 
+/// Un bloque del documento: título, párrafo, lista, cita, tabla o línea.
 class MdBlock {
   MdBlock(this.kind, {this.text = '', this.rows = const [], this.number = ''});
 

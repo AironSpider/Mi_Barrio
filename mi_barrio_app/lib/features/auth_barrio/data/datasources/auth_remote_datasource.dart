@@ -8,6 +8,8 @@ import '../../../../core/auth/auth_session_store.dart';
 import '../../../../core/network/api_client.dart';
 import '../../domain/entities/user_entity.dart';
 
+/// Error de cuentas con un mensaje en palabras simples para mostrar al vecino
+/// y, si lo hay, el código HTTP del servidor.
 class AuthException implements Exception {
   const AuthException(this.message, {this.statusCode});
 
@@ -18,6 +20,9 @@ class AuthException implements Exception {
   String toString() => message;
 }
 
+/// Llamadas al servidor de cuentas: login, registro, Google, códigos al correo,
+/// recuperar contraseña, borrar cuenta y barrios del superadministrador.
+/// Traduce los errores de red a mensajes que se entienden.
 class AuthRemoteDatasource {
   AuthRemoteDatasource({String? baseUrl, http.Client? client})
     : _baseUrl = baseUrl ?? ApiConfig.baseUrl,

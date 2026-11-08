@@ -1,3 +1,4 @@
+"""Contraseñas (PBKDF2) y tokens de sesión (JWT HS256 firmado con MI_BARRIO_JWT_SECRET)."""
 import base64
 import hashlib
 import hmac
@@ -28,6 +29,7 @@ def _secret_key() -> bytes:
 
 
 def hash_password(password: str) -> str:
+    """Huella PBKDF2-SHA256 con sal aleatoria: "pbkdf2_sha256$iteraciones$sal$huella". Nunca se guarda la contraseña."""
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS
@@ -36,6 +38,7 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored_hash: str | None) -> bool:
+    """True si la contraseña coincide con la huella guardada. Compara en tiempo constante; sin huella (cuenta de Google) siempre False."""
     if not stored_hash:
         return False
     try:
@@ -59,6 +62,7 @@ def create_access_token(
     tenant_id: uuid.UUID | None,
     role: str,
 ) -> str:
+    """Crea el token de sesión (JWT HS256) con el usuario, su barrio y su rol. Vence en ACCESS_TOKEN_SECONDS (24 h)."""
     now = int(time.time())
     header = _b64encode(json.dumps(_JWT_HEADER, separators=(",", ":")).encode())
     payload = _b64encode(
@@ -79,6 +83,7 @@ def create_access_token(
 
 
 def decode_access_token(token: str) -> dict:
+    """Valida la firma y el vencimiento del token y devuelve sus datos (claims). Lanza 401 si es falso, está alterado o venció."""
     unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Token inválido o vencido",

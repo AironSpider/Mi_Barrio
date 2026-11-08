@@ -1,3 +1,4 @@
+"""Columnas comunes (mixin) de las tablas que pertenecen a un barrio."""
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, func
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 class BarrioBaseMixin:
     # Trae de vuelta (RETURNING) los valores que calcula PostgreSQL al insertar o
     # actualizar, así nunca se dispara una carga perezosa fuera del contexto async.
+    """Columnas comunes de las tablas por barrio: id, tenant_id, borrado lógico y fechas para el sync (updated_at / server_updated_at)."""
     __mapper_args__ = {"eager_defaults": True}
 
     id: Mapped[uuid.UUID] = mapped_column(

@@ -181,6 +181,7 @@ async def list_messages(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Mensajes de una conversación (dueño de la publicación y un vecino). Solo la ven sus dos participantes."""
     ctx = await _context(db, tenant_id, kind, context_id)
     _check_participant(ctx, neighbor_id, uuid.UUID(principal["sub"]))
     messages = (await db.execute(

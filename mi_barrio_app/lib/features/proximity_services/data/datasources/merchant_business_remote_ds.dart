@@ -1,5 +1,6 @@
 import '../../../../core/network/api_client.dart';
 
+/// Llamadas del comerciante al servidor: reseñas de sus servicios y sus respuestas.
 class MerchantBusinessRemoteDatasource {
   MerchantBusinessRemoteDatasource({ApiClient? api})
     : _api = api ?? ApiClient();

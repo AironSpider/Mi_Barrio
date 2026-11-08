@@ -1,3 +1,4 @@
+"""Barrio de la sesión: datos, código de invitación y Modo Emergencia."""
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
@@ -50,6 +51,7 @@ async def get_invite_code(
     principal: dict = Depends(require_role(["ADMIN_BARRIO"])),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Código para invitar vecinos al barrio de la sesión."""
     tenant = await get_tenant_or_404(db, tenant_uuid)
     return {"tenant_id": str(tenant.id), "invite_code": tenant.join_code}
 

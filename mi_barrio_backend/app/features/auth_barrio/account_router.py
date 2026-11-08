@@ -78,6 +78,7 @@ def _sent(message: str, code: str | None) -> CodeSentResponse:
 # ─────────────────────────── Verificar el correo ───────────────────────────
 @router.post("/email/send-code", response_model=CodeSentResponse)
 async def send_verification_code(payload: EmailRequest, db: AsyncSession = Depends(get_db_session)):
+    """Reenvía el código para confirmar el correo. Responde igual exista o no la cuenta (no revela correos)."""
     email = payload.email.lower()
     user = await _active_user(db, email)
     message = "Si la cuenta existe, te enviamos un código al correo."
@@ -95,6 +96,7 @@ async def verify_email(
     request: Request,
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Confirma el correo con el código de 6 números y devuelve la sesión. Limita los intentos por correo e IP."""
     email = payload.email.lower()
     ip = _client_ip(request)
     wait = rate_limit.retry_after(email, ip)
@@ -123,6 +125,7 @@ async def verify_email(
 # ─────────────────────────── Recuperar contraseña ───────────────────────────
 @router.post("/password/forgot", response_model=CodeSentResponse)
 async def forgot_password(payload: EmailRequest, db: AsyncSession = Depends(get_db_session)):
+    """"¿Olvidaste tu contraseña?": envía un código al correo. Responde igual exista o no la cuenta."""
     email = payload.email.lower()
     message = "Si hay una cuenta con ese correo, te enviamos un código para cambiar la contraseña."
     user = await _active_user(db, email)
@@ -140,6 +143,7 @@ async def reset_password(
     request: Request,
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Cambia la contraseña con el código del correo y deja la sesión iniciada. Limita los intentos."""
     email = payload.email.lower()
     ip = _client_ip(request)
     wait = rate_limit.retry_after(email, ip)
@@ -268,5 +272,6 @@ async def google_login(
 
 @router.post("/google", response_model=AuthResponse)
 async def login_with_google(payload: GoogleLoginRequest, db: AsyncSession = Depends(get_db_session)):
+    """Entra con Google, o crea la cuenta la primera vez (428 si falta el código del barrio)."""
     identity = await google_auth.verify_google_id_token(payload.id_token)
     return await google_login(db, identity, payload)

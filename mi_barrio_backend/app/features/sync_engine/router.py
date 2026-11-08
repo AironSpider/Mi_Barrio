@@ -1,3 +1,4 @@
+"""Sincronización offline-first: push (subir cambios) y pull (bajar el delta del barrio)."""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
@@ -58,6 +59,7 @@ async def push_offline_mutations(
     principal: dict = Depends(get_current_principal),
     db: AsyncSession = Depends(get_db_session),
 ):
+    """Recibe los cambios hechos sin internet (lote) y los aplica con "gana el último" (LWW). Devuelve los rechazados con su motivo."""
     if len(request.mutations) > MAX_BATCH:
         raise HTTPException(
             status_code=413,

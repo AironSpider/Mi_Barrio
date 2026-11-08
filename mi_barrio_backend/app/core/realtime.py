@@ -14,15 +14,18 @@ logger = logging.getLogger("mi_barrio.realtime")
 
 
 class RealtimeHub:
+    """Conexiones WebSocket abiertas por usuario (para el chat en vivo). Vive en memoria del proceso."""
     def __init__(self) -> None:
         self._sockets: dict[uuid.UUID, set[WebSocket]] = defaultdict(set)
         self._lock = asyncio.Lock()
 
     async def connect(self, user_id: uuid.UUID, websocket: WebSocket) -> None:
+        """Registra un WebSocket abierto del usuario."""
         async with self._lock:
             self._sockets[user_id].add(websocket)
 
     async def disconnect(self, user_id: uuid.UUID, websocket: WebSocket) -> None:
+        """Quita el WebSocket del usuario; si no le quedan, deja de figurar en línea."""
         async with self._lock:
             sockets = self._sockets.get(user_id)
             if sockets is None:
@@ -32,6 +35,7 @@ class RealtimeHub:
                 self._sockets.pop(user_id, None)
 
     def is_online(self, user_id: uuid.UUID) -> bool:
+        """True si el usuario tiene al menos una conexión abierta."""
         return bool(self._sockets.get(user_id))
 
     async def send(self, user_ids: set[uuid.UUID], payload: dict) -> None:

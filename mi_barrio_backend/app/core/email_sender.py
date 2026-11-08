@@ -47,6 +47,7 @@ def _brevo_sender() -> str:
 
 
 def is_configured() -> bool:
+    """True si hay forma de enviar correos: Brevo (BREVO_API_KEY) o SMTP (SMTP_USER y SMTP_PASSWORD)."""
     return _brevo_configured() or bool(os.getenv("SMTP_USER") and os.getenv("SMTP_PASSWORD"))
 
 
@@ -141,6 +142,7 @@ def _code_html(title: str, intro: str, code: str, outro: str) -> str:
 
 
 async def send_verification_code(to: str, name: str, code: str) -> bool:
+    """Envía el código de 6 números para confirmar el correo. Si no se pudo enviar, deja el código en los logs y devuelve False."""
     first = (name or "vecino").split(" ")[0]
     subject = f"{code} es tu código de Mi Barrio"
     intro = f"Hola, {first}. Escribe este código en la app para confirmar tu correo:"
@@ -153,6 +155,7 @@ async def send_verification_code(to: str, name: str, code: str) -> bool:
 
 
 async def send_password_reset_code(to: str, name: str, code: str) -> bool:
+    """Envía el código de 6 números para cambiar la contraseña. Si no se pudo enviar, deja el código en los logs y devuelve False."""
     first = (name or "vecino").split(" ")[0]
     subject = f"{code} es tu código para cambiar la contraseña"
     intro = f"Hola, {first}. Pediste cambiar tu contraseña de Mi Barrio. Tu código es:"

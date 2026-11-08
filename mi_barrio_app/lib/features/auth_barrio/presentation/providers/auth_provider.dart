@@ -9,6 +9,7 @@ import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
 
+/// En qué estado está la sesión (y con qué rol), para decidir qué pantalla mostrar.
 enum AuthStatus {
   loading,
   authenticatedNeighbor,
@@ -19,6 +20,7 @@ enum AuthStatus {
   error,
 }
 
+/// Estado de la sesión: estado, cuenta y un mensaje de error si lo hay.
 class AuthState {
   const AuthState({
     required this.status,
@@ -60,6 +62,8 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
   (ref) => AuthNotifier(ref.watch(authRepositoryProvider))..restoreSession(),
 );
 
+/// Maneja la sesión: entrar, registrarse, Google, códigos, cerrar sesión y borrar
+/// la cuenta. Las pantallas lo usan a través de [authProvider].
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._repository, {AuthState? initialState})
     : super(initialState ?? const AuthState.restoring()) {
@@ -376,8 +380,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 }
 
+/// Cómo terminó "Entrar con Google".
 enum GoogleSignInOutcome { signedIn, needsNeighborhood, failed }
 
+/// Resultado de "Entrar con Google" y un mensaje si falló.
 class GoogleSignInResult {
   const GoogleSignInResult(this.outcome, [this.message]);
 

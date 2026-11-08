@@ -21,6 +21,7 @@ import '../barrio_context/emergency_mode_provider.dart';
 import '../barrio_context/tenant_session.dart';
 import '../sync_manager/sync_coordinator.dart';
 
+/// Una pestaña de la barra inferior: id, texto e íconos.
 class ShellTab {
   const ShellTab({
     required this.id,
@@ -40,6 +41,7 @@ class ShellTab {
   final WidgetBuilder builder;
 }
 
+/// Las pestañas de la barra inferior y su orden.
 class ShellTabs {
   ShellTabs._();
 
@@ -98,6 +100,8 @@ class ShellTabs {
       const MerchantBusinessScreen();
 }
 
+/// Pantalla principal con la barra inferior (Servicios, Apoyo, Mapa, Tú…),
+/// el aviso de sin conexión y el de Modo Emergencia.
 class MainNavigationShell extends StatefulWidget {
   const MainNavigationShell({
     super.key,

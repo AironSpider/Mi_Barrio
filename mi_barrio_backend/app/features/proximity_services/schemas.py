@@ -1,3 +1,4 @@
+"""Esquemas (Pydantic) de servicios y reseñas."""
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from typing import Annotated, Optional
 from datetime import datetime
@@ -6,6 +7,7 @@ import uuid
 from app.shared.contract_values import MAX_PHOTO_B64, MAX_SERVICE_PHOTOS, FlowType, PublisherType, ServiceCategory
 
 class LocalServiceBase(BaseModel):
+    """Campos comunes de un servicio."""
     provider_user_id: uuid.UUID
     category: str = Field(..., max_length=50)
     title: str = Field(..., max_length=200)
@@ -21,6 +23,7 @@ class LocalServiceBase(BaseModel):
 
 class LocalServiceCreate(LocalServiceBase):
     # Solo valores del contrato: Swagger los muestra como lista y rechaza "string".
+    """Datos para publicar un servicio (valores del contrato)."""
     category: ServiceCategory
     title: str = Field(..., min_length=1, max_length=200, examples=["Don Pedro, gasfitero"])
     publisher_type: Optional[PublisherType] = None
@@ -32,6 +35,7 @@ class LocalServiceCreate(LocalServiceBase):
     )
 
 class LocalServiceResponse(LocalServiceBase):
+    """Un servicio como lo devuelve la API, con su calificación."""
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -47,6 +51,7 @@ class LocalServiceResponse(LocalServiceBase):
     is_under_review: bool = False
 
 class NeighborEndorsementCreate(BaseModel):
+    """Datos de un visto bueno o reseña nueva."""
     service_id: uuid.UUID
     endorser_user_id: uuid.UUID
     # Estrellas 1 a 5; null = deja las estrellas vacías.
@@ -57,6 +62,7 @@ class NeighborEndorsementCreate(BaseModel):
 
 
 class NeighborEndorsementResponse(BaseModel):
+    """Una reseña como la devuelve la API."""
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -75,16 +81,19 @@ class NeighborEndorsementResponse(BaseModel):
 
 
 class EndorsementPhotoResponse(BaseModel):
+    """Foto de una reseña en base64."""
     id: uuid.UUID
     photo_b64: str
     content_type: str = "image/jpeg"
 
 
 class EndorsementReplyRequest(BaseModel):
+    """Respuesta del dueño a una reseña."""
     reply: str = Field(..., min_length=1, max_length=1000)
 
 
 class ServicePhotosResponse(BaseModel):
+    """Fotos de un servicio en base64."""
     id: uuid.UUID
     photos: list[str]
     content_type: str = "image/jpeg"

@@ -1,3 +1,4 @@
+"""Conexión asíncrona a PostgreSQL (SQLAlchemy) y sesión por petición."""
 import os
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
@@ -30,6 +31,7 @@ async_session_factory = async_sessionmaker(
 )
 
 class Base(DeclarativeBase):
+    """Clase base de todos los modelos SQLAlchemy (tablas) del proyecto."""
     pass
 
 
@@ -51,5 +53,6 @@ event.listen(Base, "before_insert", _censor_text_fields, propagate=True)
 event.listen(Base, "before_update", _censor_text_fields, propagate=True)
 
 async def get_db_session() -> AsyncSession:
+    """Dependencia de FastAPI: abre una sesión de base de datos por petición y la cierra al terminar."""
     async with async_session_factory() as session:
         yield session

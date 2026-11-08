@@ -14,7 +14,9 @@ _TOKEN = re.compile(r"(token=)[^&\s\"']+", re.IGNORECASE)
 
 
 class RedactTokens(logging.Filter):
+    """Filtro de logging que reemplaza token=... por token=*** en cada línea."""
     def filter(self, record: logging.LogRecord) -> bool:
+        """Censura el token en el mensaje y deja pasar la línea (nunca la descarta)."""
         message = record.getMessage()
         if "token=" in message.lower():
             record.msg = _TOKEN.sub(r"\1***", message)
@@ -23,6 +25,7 @@ class RedactTokens(logging.Filter):
 
 
 def install() -> None:
+    """Agrega el filtro a los loggers de uvicorn (una sola vez). Se llama al iniciar la app."""
     for name in ("uvicorn.access", "uvicorn.error", "uvicorn"):
         logger = logging.getLogger(name)
         if not any(isinstance(f, RedactTokens) for f in logger.filters):

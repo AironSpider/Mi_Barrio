@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'app_theme.dart';
 
+/// Permite elegir de 1 a 5 estrellas tocándolas.
 class StarRatingInput extends StatelessWidget {
   const StarRatingInput({
     super.key,

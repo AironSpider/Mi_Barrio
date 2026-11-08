@@ -20,6 +20,7 @@ from app.features.auth_barrio.models import PlatformAdmin, User
 
 
 async def create_platform_admin() -> None:
+    """Pide por consola nombre, correo y contraseña y crea el primer superadministrador. Solo funciona una vez: si ya existe uno, se detiene."""
     url = make_url(DATABASE_URL)
     print(f"Base de datos: {url.host}/{url.database}")
     full_name = input("Nombre del superadministrador: ").strip()

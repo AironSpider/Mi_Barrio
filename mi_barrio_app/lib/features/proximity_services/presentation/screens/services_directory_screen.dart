@@ -19,6 +19,7 @@ import '../widgets/service_card.dart';
 import '../widgets/service_detail_sheet.dart';
 import '../widgets/service_category_ui.dart';
 
+/// Pestaña Servicios: buscar, filtrar y ver los servicios del barrio (funciona sin internet).
 class ServicesDirectoryScreen extends StatefulWidget {
   const ServicesDirectoryScreen({
     super.key,

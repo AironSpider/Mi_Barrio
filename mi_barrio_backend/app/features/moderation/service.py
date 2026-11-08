@@ -27,6 +27,7 @@ def _coerce_uuid(value) -> uuid.UUID:
 
 
 async def load_target(db: AsyncSession, target_type: str, target_id, tenant_id: uuid.UUID | None):
+    """La publicación reportada (favor o servicio), opcionalmente solo dentro de un barrio. ValueError si el tipo no existe."""
     model = TARGET_MODELS.get(target_type)
     if model is None:
         raise ValueError(f"target_type inválido: {target_type!r}")
@@ -79,6 +80,7 @@ _COUNTED_STATUSES = ("PENDIENTE", "ELIMINADO")
 
 
 def owner_of(target) -> uuid.UUID:
+    """Id del autor de la publicación reportada (favor o servicio)."""
     return getattr(target, _OWNER[type(target)])
 
 
@@ -140,6 +142,7 @@ async def admin_names(db: AsyncSession, tenant_id: uuid.UUID | None) -> list[str
 
 
 def suspended_message(names: list[str]) -> str:
+    """Mensaje para quien tiene la cuenta suspendida, con los nombres de los jefes del barrio que pueden reactivarla."""
     who = f": {', '.join(names)}" if names else ""
     return (
         "Tu cuenta está suspendida porque varios vecinos reportaron tus "
@@ -148,6 +151,7 @@ def suspended_message(names: list[str]) -> str:
 
 
 async def list_suspended(db: AsyncSession, tenant_id: uuid.UUID) -> list[dict]:
+    """Cuentas suspendidas del barrio (las más recientes primero) con cuántos vecinos las reportaron."""
     users = (await db.execute(
         select(User).where(
             User.tenant_id == tenant_id,

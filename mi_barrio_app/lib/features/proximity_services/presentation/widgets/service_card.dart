@@ -4,6 +4,7 @@ import '../../../../core/ui_kit/app_theme.dart';
 import '../../../../core/ui_kit/star_rating_display.dart';
 import 'visto_bueno_badge.dart';
 
+/// Tarjeta de un servicio en la lista: título, rubro, precio, calificación, vistos buenos y fotos.
 class ServiceCard extends StatelessWidget {
   const ServiceCard({
     super.key,

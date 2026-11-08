@@ -1,3 +1,4 @@
+"""Tablas de servicios del barrio y sus reseñas (vistos buenos)."""
 import uuid
 from datetime import datetime
 from sqlalchemy import (
@@ -10,6 +11,7 @@ from app.core.database import Base
 from app.shared.base_model import BarrioBaseMixin
 
 class LocalService(Base, BarrioBaseMixin):
+    """Un servicio u oficio publicado en el barrio (Necesito / Ofrezco), con fotos, precio y calificaciones."""
     __tablename__ = "local_services"
 
     provider_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -37,6 +39,7 @@ class LocalService(Base, BarrioBaseMixin):
     )
 
 class NeighborEndorsement(Base, BarrioBaseMixin):
+    """Visto bueno o reseña de un vecino a un servicio (estrellas, comentario, foto y respuesta del dueño)."""
     __tablename__ = "neighbor_endorsements"
 
     service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("local_services.id"), nullable=False)

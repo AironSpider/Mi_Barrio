@@ -1,3 +1,4 @@
+"""Normaliza DATABASE_URL (Render/Neon) al formato que usa asyncpg."""
 from sqlalchemy.engine import make_url
 
 

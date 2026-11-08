@@ -15,6 +15,8 @@ import '../widgets/auth_validators.dart';
 /// Busca el nombre del barrio de un código (null = no existe).
 typedef NeighborhoodLookup = Future<String?> Function(String joinCode);
 
+/// Crear cuenta: código del barrio, rol, Google o correo y contraseña, con el aviso
+/// de términos.
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key, this.lookupNeighborhood});
 

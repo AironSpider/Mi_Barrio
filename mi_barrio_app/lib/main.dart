@@ -54,6 +54,7 @@ Duration _syncInterval() => EmergencyModeProvider.instance.isActive.value
     ? const Duration(seconds: 15)
     : const Duration(seconds: 60);
 
+/// La app: tema (día o emergencia), sincronización y la pantalla según la sesión.
 class MiBarrioApp extends StatefulWidget {
   const MiBarrioApp({super.key, this.initialEmergencyMode = false});
 

@@ -1,3 +1,4 @@
+"""Tabla de mensajes del chat entre vecinos (por favor o por servicio)."""
 import uuid
 
 from sqlalchemy import CheckConstraint, String

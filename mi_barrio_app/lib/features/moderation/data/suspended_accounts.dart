@@ -27,6 +27,7 @@ class SuspendedAccount {
   final int reportCount;
 }
 
+/// Panel del jefe del barrio: lista las cuentas suspendidas por reportes y las reactiva.
 class SuspendedAccountsDatasource {
   SuspendedAccountsDatasource({required this.tenantId, ApiClient? client})
     : _api = client ?? ApiClient();

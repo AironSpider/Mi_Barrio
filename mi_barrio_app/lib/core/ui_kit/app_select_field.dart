@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
 
+/// Una opción de [AppSelectField]: valor, texto y un ícono opcional.
 class AppSelectOption<T> {
   const AppSelectOption({required this.value, required this.label, this.icon});
 
@@ -16,6 +17,8 @@ class _SelectResult<T> {
   final T? value;
 }
 
+/// Campo para elegir una opción: se toca y se abre una hoja inferior con la lista
+/// (más fácil de usar que un menú desplegable en pantallas chicas).
 class AppSelectField<T> extends StatelessWidget {
   const AppSelectField({
     super.key,

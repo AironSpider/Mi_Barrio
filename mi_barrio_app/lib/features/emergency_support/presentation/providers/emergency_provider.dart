@@ -36,6 +36,7 @@ class HelpLocation {
   final bool fromGps;
 }
 
+/// Cómo se obtiene la ubicación para pedir ayuda (reemplazable en pruebas).
 typedef HelpLocationResolver = Future<HelpLocation> Function();
 
 /// Obtiene la ubicación del GPS y, si falla (permiso, apagado, demora),

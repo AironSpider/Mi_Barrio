@@ -1,3 +1,4 @@
+"""Tablas de barrios, cuentas, superadministradores y códigos de correo."""
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import String, Float, Boolean, DateTime, Index, Integer, Text, func, text, true
@@ -7,6 +8,7 @@ from app.core.database import Base
 from app.shared.base_model import BarrioBaseMixin
 
 class Tenant(Base):
+    """Un barrio: nombre, código para unirse, centro en el mapa y si está en Modo Emergencia."""
     __tablename__ = "tenants"
     
     # Tenant no usa BarrioBaseMixin porque es la tabla padre
@@ -18,6 +20,7 @@ class Tenant(Base):
     is_emergency_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 class User(Base, BarrioBaseMixin):
+    """Una cuenta de vecino, comerciante o administrador del barrio, con su perfil y su forma de entrar (contraseña o Google)."""
     __tablename__ = "users"
     __table_args__ = (
         Index("ix_users_email_unique", "email", unique=True),

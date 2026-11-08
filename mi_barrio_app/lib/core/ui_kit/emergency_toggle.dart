@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
 
+/// Interruptor grande para activar o desactivar el Modo Emergencia del barrio.
 class EmergencyToggle extends StatelessWidget {
   const EmergencyToggle({
     super.key,

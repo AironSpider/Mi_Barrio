@@ -1,5 +1,6 @@
 import 'package:geolocator/geolocator.dart';
 
+/// Por qué no se pudo obtener la ubicación.
 enum GpsError {
   serviceDisabled,
   permissionDenied,
@@ -8,6 +9,7 @@ enum GpsError {
   invalidCoordinates,
 }
 
+/// Error del GPS con su motivo ([GpsError]) y un mensaje para mostrar.
 class GpsException implements Exception {
   const GpsException(this.reason);
 
@@ -26,6 +28,7 @@ class GpsException implements Exception {
   };
 }
 
+/// Un punto en el mapa (latitud y longitud) obtenido del GPS.
 class GpsCoordinates {
   const GpsCoordinates({
     required this.latitude,
@@ -38,8 +41,11 @@ class GpsCoordinates {
   final double accuracy;
 }
 
+/// ¿Está encendido el GPS? (funciones del GPS reemplazables en las pruebas)
 typedef LocationServiceCheck = Future<bool> Function();
+/// Pide o consulta el permiso de ubicación.
 typedef LocationPermissionCheck = Future<LocationPermission> Function();
+/// Pide la posición actual al GPS.
 typedef CurrentPositionRequest = Future<Position> Function({
   LocationSettings? locationSettings,
 });

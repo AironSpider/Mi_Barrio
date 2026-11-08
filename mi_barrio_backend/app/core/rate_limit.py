@@ -39,6 +39,7 @@ def retry_after(email: str, ip: str) -> int:
 
 
 def register_failure(email: str, ip: str) -> None:
+    """Anota un intento fallido (contraseña o código) para ese correo e IP."""
     now = time.monotonic()
     with _lock:
         _by_account[(email, ip)].append(now)
@@ -46,5 +47,6 @@ def register_failure(email: str, ip: str) -> None:
 
 
 def register_success(email: str, ip: str) -> None:
+    """Borra los intentos fallidos de ese correo e IP tras un acceso correcto."""
     with _lock:
         _by_account.pop((email, ip), None)
