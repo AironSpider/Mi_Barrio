@@ -473,12 +473,16 @@ class AuthBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(6),
+      // 48 px de área táctil (mínimo de accesibilidad) dentro de la barra de 56.
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: Tooltip(
         message: tooltip,
         child: Semantics(
           button: true,
           label: tooltip,
+          // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+          // quita también la acción del botón de adentro).
+          onTap: onPressed,
           excludeSemantics: true,
           child: Material(
             key: buttonKey,
@@ -490,8 +494,8 @@ class AuthBackButton extends StatelessWidget {
               customBorder: const CircleBorder(),
               onTap: onPressed,
               child: const SizedBox(
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 child: Center(
                   child: FaIcon(
                     FontAwesomeIcons.angleLeft,

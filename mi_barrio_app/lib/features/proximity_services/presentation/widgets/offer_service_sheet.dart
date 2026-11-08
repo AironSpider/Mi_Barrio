@@ -519,6 +519,9 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
                   Semantics(
                     button: true,
                     label: 'Agregar foto',
+                    // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+                    // quita también la acción del botón de adentro).
+                    onTap: _addPhoto,
                     excludeSemantics: true,
                     child: InkWell(
                       key: OfferServiceSheet.addPhotoKey,

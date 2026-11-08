@@ -69,16 +69,20 @@ class GpsService {
   final LocationPermissionCheck _requestPermission;
   final CurrentPositionRequest _getCurrentPosition;
 
+  /// [askPermission] = false: si todavía no hay permiso, NO muestra el
+  /// diálogo del sistema (falla con permissionDenied). Para pantallas que
+  /// solo usan la ubicación como ayuda (mapa, distancias).
   Future<GpsCoordinates> getCurrentCoordinates({
     LocationAccuracy accuracy = LocationAccuracy.high,
     Duration timeLimit = const Duration(seconds: 20),
+    bool askPermission = true,
   }) async {
     if (!await _isLocationServiceEnabled()) {
       throw const GpsException(GpsError.serviceDisabled);
     }
 
     var permission = await _checkPermission();
-    if (permission == LocationPermission.denied) {
+    if (permission == LocationPermission.denied && askPermission) {
       permission = await _requestPermission();
     }
     switch (permission) {

@@ -133,7 +133,14 @@ class FilterButton extends StatelessWidget {
     final active = activeCount > 0;
     return Semantics(
       button: true,
-      label: active ? 'Filtros, $activeCount activos' : 'Filtros',
+      label: !active
+          ? 'Filtros'
+          : activeCount == 1
+          ? 'Filtros, 1 activo'
+          : 'Filtros, $activeCount activos',
+      // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+      // quita también la acción del botón de adentro).
+      onTap: onPressed,
       excludeSemantics: true,
       child: Tooltip(
         message: 'Filtros',

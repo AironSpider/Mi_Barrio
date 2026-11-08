@@ -104,6 +104,7 @@ _HTTPS_URL = re.compile(r"^https://[^\s]+$")
 _EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 
 _BOOL_FIELDS = {"is_deleted", "is_emergency_context", "is_available_in_emergency", "tutorial_completed", "has_injured"}
+_NULLABLE_BOOL_FIELDS = {"has_injured"}
 
 
 def _number(field: str, value) -> float:
@@ -184,5 +185,9 @@ def validate_payload(table: str, payload: dict) -> None:
             if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 5:
                 raise ValueError("rating debe ser un entero de 1 a 5")
     for field in _BOOL_FIELDS & payload.keys():
+        # "¿Hay heridos?" es opcional en el pedido de ayuda: null = sin responder.
+        # Antes se rechazaba y el SOS quedaba trabado en el celular.
+        if payload[field] is None and field in _NULLABLE_BOOL_FIELDS:
+            continue
         if not isinstance(payload[field], bool):
             raise ValueError(f"{field} debe ser true o false")

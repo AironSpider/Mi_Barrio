@@ -212,6 +212,8 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
 
   /// Detalle en pantalla completa (foto, contacto, chat, comentarios, reseñas).
   Future<void> _openDetail(SolidarityPostModel post) async {
+    // Que al volver no se abra el teclado del buscador.
+    FocusManager.instance.primaryFocus?.unfocus();
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => FavorDetailScreen(

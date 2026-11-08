@@ -58,5 +58,15 @@ void main() {
     expect(type('qué put').text, 'qué put');
     expect(type('qué puta ').text, 'qué p*** ');
     expect(type('qué puta ').selection.baseOffset, 'qué puta '.length);
+
+    // Frase de odio escrita palabra por palabra (como en un celular real):
+    // "hay que" no se tapa antes de tiempo y al final se tapa completa.
+    var text = '';
+    for (final word in ['Gracias', 'hay', 'que', 'matar', 'a', 'los', 'venecos']) {
+      for (final char in '$word '.split('')) {
+        text = type(text + char).text;
+      }
+    }
+    expect(text, 'Gracias h** q** m**** a los v****** ');
   });
 }

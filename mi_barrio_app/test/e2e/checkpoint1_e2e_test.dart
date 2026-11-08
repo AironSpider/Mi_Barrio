@@ -58,6 +58,7 @@ void main() {
         'password': 'MiBarrio-e2e-123',
         'role': role,
         'join_code': joinCode,
+        'accept_terms': true,
       }),
     );
     if (response.statusCode != 201) {

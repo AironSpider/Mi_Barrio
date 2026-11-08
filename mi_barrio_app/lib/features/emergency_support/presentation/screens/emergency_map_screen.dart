@@ -45,7 +45,7 @@ class _EmergencyMapScreenState extends State<EmergencyMapScreen> {
   @override
   void initState() {
     super.initState();
-    HelpLocator.resolve().then((loc) {
+    HelpLocator.resolveQuietly().then((loc) {
       if (mounted) setState(() => _location = loc);
     });
   }

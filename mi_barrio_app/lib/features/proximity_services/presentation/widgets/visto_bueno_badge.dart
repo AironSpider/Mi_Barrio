@@ -73,12 +73,15 @@ class _VistoBuenoBadgeState extends State<VistoBuenoBadge>
     final borde = esquema.primary;
 
     final etiqueta = widget.isEndorsed
-        ? 'Visto bueno dado. ${widget.count} recomendaciones'
-        : 'Dar visto bueno. ${widget.count} recomendaciones';
+        ? 'Visto bueno dado. ${_recomendaciones(widget.count)}'
+        : 'Dar visto bueno. ${_recomendaciones(widget.count)}';
 
     return Semantics(
       button: true,
       label: etiqueta,
+      // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+      // quita también la acción del botón de adentro).
+      onTap: widget.onPressed == null ? null : _alTocar,
       excludeSemantics: true,
       child: ScaleTransition(
         scale: _scale,
@@ -158,3 +161,6 @@ class _VistoBuenoBadgeState extends State<VistoBuenoBadge>
     );
   }
 }
+
+String _recomendaciones(int n) =>
+    n == 1 ? '1 recomendación' : '$n recomendaciones';

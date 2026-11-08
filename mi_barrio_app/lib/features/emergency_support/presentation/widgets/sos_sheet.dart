@@ -443,6 +443,9 @@ class _TipoTile extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
+      // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+      // quita también la acción del botón de adentro).
+      onTap: onTap,
       excludeSemantics: true,
       child: Material(
         color: fondo,

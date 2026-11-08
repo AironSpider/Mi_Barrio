@@ -11,6 +11,8 @@ import '../../../../core/sync_manager/sync_coordinator.dart';
 import '../../../../core/ui_kit/app_theme.dart';
 import '../../../proximity_services/data/datasources/services_sqlite_ds.dart';
 import '../../../proximity_services/data/models/service_model.dart';
+import '../../../proximity_services/presentation/widgets/service_detail_sheet.dart';
+import '../../../solidarity_network/presentation/screens/favor_detail_screen.dart';
 import '../../../solidarity_network/data/datasources/solidarity_sqlite_ds.dart';
 import '../../../solidarity_network/data/models/solidarity_post_model.dart';
 import '../../domain/entities/vulnerable_report_entity.dart';
@@ -127,6 +129,7 @@ class _NeighborMapState extends State<NeighborMap> {
           lat: p.lat,
           lng: p.lng,
           updatedAt: p.updatedAt,
+          source: p,
         ));
       }
       for (final s in await _services.getServices(session.tenantId)) {
@@ -140,6 +143,7 @@ class _NeighborMapState extends State<NeighborMap> {
           lat: s.lat,
           lng: s.lng,
           updatedAt: s.updatedAt,
+          source: s,
         ));
       }
     } catch (_) {/* sin base local (tests): solo SOS */}
@@ -253,8 +257,46 @@ class _NeighborMapState extends State<NeighborMap> {
         showDragHandle: true,
         isScrollControlled: true,
         useSafeArea: true,
-        builder: (_) => _PinSheet(pin: pin, repository: widget.repository),
+        builder: (_) => _PinSheet(
+          pin: pin,
+          repository: widget.repository,
+          onOpen: _openItem,
+        ),
       );
+
+  /// "Ver detalle" desde la hoja del pin: el mismo detalle que en las listas.
+  Future<void> _openItem(PinItem item) async {
+    final session = TenantSession.instance;
+    final source = item.source;
+    if (source is SolidarityPostModel) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => FavorDetailScreen(
+            post: source,
+            onCoordinate: (p) => _wall.coordinatePost(
+              tenantId: session.tenantId,
+              postId: p.id,
+              coordinatorUserId: session.userId,
+            ),
+            onChangeStatus: (p, status) => _wall.changeMyPostStatus(
+              tenantId: session.tenantId,
+              postId: p.id,
+              authorUserId: session.userId,
+              newStatus: status,
+            ),
+          ),
+        ),
+      );
+    } else if (source is LocalServiceModel) {
+      await showServiceDetailSheet(
+        context,
+        service: source,
+        tenantId: session.tenantId,
+        userId: session.userId,
+      );
+    }
+    if (mounted) unawaited(_load());
+  }
 }
 
 Color _kindColor(BuildContext context, PinItemKind kind) {
@@ -294,6 +336,9 @@ class _PinMarker extends StatelessWidget {
       button: true,
       label: '${pin.label}: ${_kindLabel(pin.mainKind)}'
           '${n > 1 ? ', $n publicaciones' : ''}',
+      // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+      // quita también la acción del botón de adentro).
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
@@ -391,10 +436,11 @@ class _Legend extends StatelessWidget {
 
 /// Hoja con todo lo que publicó un vecino. En un SOS ajeno: "Voy en camino".
 class _PinSheet extends StatefulWidget {
-  const _PinSheet({required this.pin, required this.repository});
+  const _PinSheet({required this.pin, required this.repository, this.onOpen});
 
   final NeighborPin pin;
   final EmergencyRepository repository;
+  final Future<void> Function(PinItem item)? onOpen;
 
   @override
   State<_PinSheet> createState() => _PinSheetState();
@@ -466,6 +512,19 @@ class _PinSheetState extends State<_PinSheet> {
                     Text(item.title, style: texto.titleMedium),
                     if (item.subtitle != null && item.subtitle!.isNotEmpty)
                       Text(item.subtitle!, style: texto.bodyMedium),
+                    if (item.source != null && widget.onOpen != null) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        key: ValueKey('pin_open_${item.id}'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          unawaited(widget.onOpen!(item));
+                        },
+                        icon: const Icon(Icons.open_in_new_rounded),
+                        label: const Text('Ver detalle'),
+                      ),
+                    ],
                     if (item.canOfferHelp) ...[
                       const SizedBox(height: 10),
                       _helped.contains(item.id)

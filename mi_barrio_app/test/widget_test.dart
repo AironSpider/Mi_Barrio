@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mi_barrio_app/core/ui_kit/app_theme.dart';
@@ -403,7 +404,12 @@ void main() {
         meetsGuideline(textContrastGuideline),
         reason: 'pestaña $tab',
       );
+      expect(_buttonsWithoutTap(tester), isEmpty, reason: 'pestaña $tab');
     }
+    // También en emergencia: el botón "Ayuda" se tiene que poder activar.
+    await tester.tap(find.byKey(MainNavigationShell.emergencyPreviewSwitchKey));
+    await tester.pumpAndSettle();
+    expect(_buttonsWithoutTap(tester), isEmpty, reason: 'modo emergencia');
     handle.dispose();
   });
 
@@ -420,4 +426,36 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+}
+
+/// Botones que TalkBack anuncia pero no puede activar (doble toque sin efecto).
+List<String> _buttonsWithoutTap(WidgetTester tester) {
+  final problems = <String>[];
+  void visit(SemanticsNode node) {
+    final data = node.getSemanticsData();
+    // ignore: deprecated_member_use
+    final isButton = data.hasFlag(SemanticsFlag.isButton);
+    if (isButton &&
+        !node.isMergedIntoParent &&
+        !node.isInvisible &&
+        !data.hasAction(SemanticsAction.tap) &&
+        // Deshabilitado a propósito (p. ej. "Enviar" sin texto): no es un error.
+        // ignore: deprecated_member_use
+        !(data.hasFlag(SemanticsFlag.hasEnabledState) &&
+            // ignore: deprecated_member_use
+            !data.hasFlag(SemanticsFlag.isEnabled))) {
+      problems.add('"${data.label}"');
+    }
+    node.visitChildren((child) {
+      visit(child);
+      return true;
+    });
+  }
+
+  var root = tester.getSemantics(find.byType(Scaffold).first);
+  while (root.parent != null) {
+    root = root.parent!;
+  }
+  visit(root);
+  return problems;
 }

@@ -30,6 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Textos de Flutter en español ("Pestaña 1 de 4", "Cerrar", menú copiar/pegar).
+  flutter_localizations:
+    sdk: flutter
   sqflite: ^2.3.3+1
   path: ^1.9.0
   uuid: ^4.5.1

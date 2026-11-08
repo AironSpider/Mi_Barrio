@@ -179,7 +179,7 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
       );
       // Tu ubicación (GPS o centro del barrio) para "A 350 m de ti".
       unawaited(
-        HelpLocator.resolve().then((loc) {
+        HelpLocator.resolveQuietly().then((loc) {
           if (mounted) setState(() => _myLocation = loc);
         }),
       );
@@ -421,10 +421,21 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
                           avatar: Icon(Icons.campaign_rounded, size: 18),
                           label: Text('Pide este servicio'),
                         )
-                      else
+                      else if (service.ratingAvg != null)
                         StarRatingDisplay(
-                          rating: service.ratingAvg ?? 0,
+                          rating: service.ratingAvg!,
                           count: service.endorsementsCount,
+                        )
+                      // Solo vistos buenos (sin estrellas): antes salía
+                      // "0.0 (1)", como si fuera una mala calificación.
+                      else
+                        Text(
+                          service.endorsementsCount == 0
+                              ? 'Aún sin calificaciones'
+                              : service.endorsementsCount == 1
+                              ? '1 vecino lo recomienda · aún sin estrellas'
+                              : '${service.endorsementsCount} vecinos lo recomiendan · aún sin estrellas',
+                          style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       if (service.priceText != null)
                         Chip(
@@ -755,6 +766,8 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
               Semantics(
                 button: true,
                 label: 'Llamar a $who',
+                // TalkBack: el doble toque necesita la acción aquí.
+                onTap: () => open(ContactLauncher.call, callNumber, 'el teléfono'),
                 excludeSemantics: true,
                 child: FilledButton.icon(
                   key: ServiceDetailSheet.callButtonKey,
@@ -771,6 +784,8 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
               Semantics(
                 button: true,
                 label: 'Escribir por WhatsApp a $who',
+                // TalkBack: el doble toque necesita la acción aquí.
+                onTap: () => open(ContactLauncher.whatsapp, waNumber, 'WhatsApp'),
                 excludeSemantics: true,
                 child: OutlinedButton.icon(
                   key: ServiceDetailSheet.whatsappButtonKey,

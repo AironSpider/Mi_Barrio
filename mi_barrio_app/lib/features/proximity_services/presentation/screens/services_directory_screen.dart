@@ -454,15 +454,18 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
       onEndorse: isOwnService || service.isNeed || _updatingEndorsements.contains(service.id)
           ? null
           : () => unawaited(_toggleEndorsement(service)),
-      onTap: () => unawaited(
-        showServiceDetailSheet(
+      onTap: () {
+        // Si el buscador tenía el foco, al cerrar el detalle se volvía a
+        // abrir el teclado solo.
+        FocusManager.instance.primaryFocus?.unfocus();
+        unawaited(showServiceDetailSheet(
           context,
           service: service,
           tenantId: _tenantId,
           userId: _userId,
           endorsementsDatasource: _endorsementsDatasource,
-        ),
-      ),
+        ));
+      },
     );
   }
 

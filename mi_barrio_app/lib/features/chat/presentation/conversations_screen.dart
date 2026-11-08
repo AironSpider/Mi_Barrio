@@ -108,7 +108,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               const SizedBox(height: 12),
             ],
             if (_error != null)
-              _Message(icon: Icons.cloud_off_rounded, text: _error!)
+              _Message(
+                icon: Icons.cloud_off_rounded,
+                text: _error!,
+                // Al volver la señal se reintenta sin salir de la pantalla.
+                action: TextButton.icon(
+                  key: const ValueKey('conversations_retry'),
+                  onPressed: () {
+                    setState(() => _error = null);
+                    unawaited(_load());
+                  },
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Reintentar'),
+                ),
+              )
             else if (items == null)
               const Padding(
                 padding: EdgeInsets.all(32),
@@ -244,10 +257,11 @@ class ConversationTile extends StatelessWidget {
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.icon, required this.text});
+  const _Message({required this.icon, required this.text, this.action});
 
   final IconData icon;
   final String text;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +277,7 @@ class _Message extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge,
             ),
+            if (action != null) ...[const SizedBox(height: 8), action!],
           ],
         ),
       ),

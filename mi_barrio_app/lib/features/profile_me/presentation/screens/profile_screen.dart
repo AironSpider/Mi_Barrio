@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/history_dao.dart';
 import '../../../../core/sync_manager/pending_changes.dart';
+import '../../../../core/sync_manager/sync_coordinator.dart';
 import '../../../../core/ui_kit/app_theme.dart';
 import '../../../../core/ui_kit/photo_picker.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
@@ -59,6 +60,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_loadProfile());
     });
+    // Las pestañas se arman al abrir la app: sin esto "Tu actividad" se
+    // quedaba en 0 aunque el vecino publicara después. Cada vez que algo se
+    // guarda, la sincronización cambia de estado y se vuelve a contar.
+    SyncCoordinator.instance.phase.addListener(_onSyncPhase);
+  }
+
+  void _onSyncPhase() {
+    if (SyncCoordinator.instance.phase.value == SyncPhase.idle && mounted) {
+      unawaited(_loadProfile());
+    }
+  }
+
+  @override
+  void dispose() {
+    SyncCoordinator.instance.phase.removeListener(_onSyncPhase);
+    super.dispose();
   }
 
   Future<void> _loadProfile() async {
@@ -111,9 +128,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (mounted) unawaited(_loadProfile());
   }
 
-  void _openHistory() =>
-      Navigator.of(context)
-          .push(MaterialPageRoute<void>(builder: (_) => const HistoryScreen()));
+  Future<void> _openHistory() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const HistoryScreen()));
+    if (mounted) unawaited(_loadProfile());
+  }
 
   void _snack(String text) {
     if (!mounted) return;
@@ -231,21 +250,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 _Stat(
                   icon: Icons.handyman_rounded,
                   value: counts.services,
-                  label: 'Servicios',
+                  label: counts.services == 1 ? 'Servicio' : 'Servicios',
                   onTap: _openHistory,
                 ),
                 const SizedBox(width: 10),
                 _Stat(
                   icon: Icons.volunteer_activism_rounded,
                   value: counts.posts,
-                  label: 'Favores',
+                  label: counts.posts == 1 ? 'Favor' : 'Favores',
                   onTap: _openHistory,
                 ),
                 const SizedBox(width: 10),
                 _Stat(
                   icon: Icons.warning_amber_rounded,
                   value: counts.sos,
-                  label: 'Pedidos',
+                  // "Pedidos" se confundía con los favores "Pido ayuda".
+                  label: 'SOS',
                   onTap: _openHistory,
                 ),
               ],

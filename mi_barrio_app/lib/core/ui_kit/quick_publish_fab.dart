@@ -30,6 +30,9 @@ class QuickPublishFab extends StatelessWidget {
       button: true,
       label: label,
       hint: hint,
+      // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+      // quita también la acción del botón de adentro).
+      onTap: onPressed,
       excludeSemantics: true,
       child: FloatingActionButton.extended(
         key: fabKey,

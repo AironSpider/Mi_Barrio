@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/ui_kit/splash_screen.dart';
 import '../../../profile_me/data/tutorial_progress.dart';
 import 'tutorial_screen.dart';
 
@@ -63,7 +64,9 @@ class _TutorialGateState extends State<TutorialGate> {
   @override
   Widget build(BuildContext context) {
     return switch (_completed) {
-      null => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      // Mientras se lee la bandera: la misma bienvenida que al abrir la app
+      // (antes, unos segundos de pantalla gris con un indicador sin texto).
+      null => const SplashScreen(),
       false => TutorialScreen(onFinished: _finish),
       true => widget.child,
     };

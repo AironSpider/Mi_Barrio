@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -112,6 +113,11 @@ class _MiBarrioAppState extends State<MiBarrioApp> {
     return MaterialApp(
       title: 'Mi Barrio',
       debugShowCheckedModeBanner: false,
+      // Sin esto, TalkBack leía partes en inglés ("Tab 1 of 4", "Dismiss",
+      // "140 characters remaining") y el menú de copiar/pegar salía en inglés.
+      locale: const Locale('es', 'PE'),
+      supportedLocales: const [Locale('es', 'PE'), Locale('es')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: AppTheme.of(isEmergency: _isEmergencyMode),
       home: _AuthGate(
         isEmergencyMode: _isEmergencyMode,

@@ -88,6 +88,9 @@ class _Estrella extends StatelessWidget {
       button: true,
       selected: activa,
       label: posicion == 1 ? '1 estrella' : '$posicion estrellas',
+      // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+      // quita también la acción del botón de adentro).
+      onTap: onTap,
       excludeSemantics: true,
       child: IconButton(
         onPressed: onTap,

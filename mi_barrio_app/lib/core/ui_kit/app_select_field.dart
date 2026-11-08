@@ -70,6 +70,9 @@ class AppSelectField<T> extends StatelessWidget {
     return Semantics(
       button: true,
       label: '$label: ${seleccionada?.label ?? hint}',
+      // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+      // quita también la acción del botón de adentro).
+      onTap: habilitado ? () => _abrir(context) : null,
       excludeSemantics: true,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),

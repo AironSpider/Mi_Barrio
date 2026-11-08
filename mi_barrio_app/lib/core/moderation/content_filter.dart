@@ -63,12 +63,13 @@ class ContentFilter {
   static String _mask(String token) =>
       token[0] + '*' * (token.length - 1);
 
-  /// Índices (en [matches]) de las palabras ofensivas.
-  static Set<int> _flagged(List<String> normalized) {
-    final flagged = <int>{
+  /// Grupos de índices a tapar: cada palabra ofensiva sola, o todas las
+  /// palabras de una frase de odio juntas.
+  static List<List<int>> _flaggedGroups(List<String> normalized) {
+    final groups = <List<int>>[
       for (var i = 0; i < normalized.length; i++)
-        if (_words.contains(normalized[i])) i,
-    };
+        if (_words.contains(normalized[i])) [i],
+    ];
     for (final phrase in _phrases) {
       for (var start = 0; start + phrase.length <= normalized.length; start++) {
         var same = true;
@@ -76,13 +77,11 @@ class ContentFilter {
           same = normalized[start + k] == phrase[k];
         }
         if (same) {
-          for (var k = 0; k < phrase.length; k++) {
-            flagged.add(start + k);
-          }
+          groups.add([for (var k = 0; k < phrase.length; k++) start + k]);
         }
       }
     }
-    return flagged;
+    return groups;
   }
 
   /// [onlyFinishedWords]: mientras se escribe, la última palabra puede estar
@@ -90,14 +89,26 @@ class ContentFilter {
   static String censor(String text, {bool onlyFinishedWords = false}) {
     if (text.isEmpty || !isLoaded) return text;
     final matches = _token.allMatches(text).toList();
-    final flagged = _flagged([for (final m in matches) normalize(m[0]!)]);
+    final lastUnfinished = onlyFinishedWords &&
+            matches.isNotEmpty &&
+            matches.last.end == text.length
+        ? matches.length - 1
+        : -1;
+    // Mientras se escribe, una frase se tapa recién cuando su última palabra
+    // está completa. Si se tapaba antes ("h** q** matar…"), con las primeras
+    // palabras ya en asteriscos la frase no se reconocía y "matar" quedaba.
+    final flagged = <int>{
+      for (final group in _flaggedGroups([
+        for (final m in matches) normalize(m[0]!),
+      ]))
+        if (!group.contains(lastUnfinished)) ...group,
+    };
     if (flagged.isEmpty) return text;
     final out = StringBuffer();
     var last = 0;
     for (var i = 0; i < matches.length; i++) {
       final m = matches[i];
-      final unfinished = onlyFinishedWords && m.end == text.length;
-      if (!flagged.contains(i) || unfinished) continue;
+      if (!flagged.contains(i)) continue;
       out
         ..write(text.substring(last, m.start))
         ..write(_mask(m[0]!));

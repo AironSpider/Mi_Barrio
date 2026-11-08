@@ -34,7 +34,7 @@ class StarRatingDisplay extends StatelessWidget {
         ? 'Sin calificaciones todavía'
         : count == null
         ? 'Calificación ${valor.toStringAsFixed(1)} de 5'
-        : 'Calificación ${valor.toStringAsFixed(1)} de 5, $count opiniones';
+        : 'Calificación ${valor.toStringAsFixed(1)} de 5, ${count == 1 ? '1 opinión' : '$count opiniones'}';
 
     return Semantics(
       label: etiqueta,

@@ -46,10 +46,19 @@ class HelpLocator {
 
   static HelpLocationResolver resolve = _gpsWithFallback;
 
-  static Future<HelpLocation> _gpsWithFallback() async {
+  /// Igual que [resolve] pero sin mostrar el diálogo de permiso: el mapa y
+  /// las distancias no deben pedir la ubicación al abrir la app (se pide al
+  /// pedir ayuda o publicar, cuando se entiende para qué es).
+  static Future<HelpLocation> resolveQuietly() =>
+      identical(resolve, _defaultResolver) ? _gpsWithFallback(ask: false) : resolve();
+
+  static const HelpLocationResolver _defaultResolver = _gpsWithFallback;
+
+  static Future<HelpLocation> _gpsWithFallback({bool ask = true}) async {
     try {
       final c = await GpsService().getCurrentCoordinates(
         timeLimit: const Duration(seconds: 6),
+        askPermission: ask,
       );
       return HelpLocation(lat: c.latitude, lng: c.longitude, fromGps: true);
     } catch (_) {

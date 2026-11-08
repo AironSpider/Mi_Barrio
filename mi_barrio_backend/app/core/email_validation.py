@@ -27,7 +27,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from starlette.concurrency import run_in_threadpool
 
 DOH_URL = "https://dns.google/resolve"

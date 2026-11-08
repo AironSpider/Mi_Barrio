@@ -14,7 +14,12 @@ class PinItem {
     required this.updatedAt,
     this.subtitle,
     this.canOfferHelp = false,
+    this.source,
   });
+
+  /// La publicación o el servicio completo, para abrir su detalle desde el
+  /// mapa (null en los SOS: se atienden con "Voy en camino").
+  final Object? source;
 
   final String id;
   final PinItemKind kind;

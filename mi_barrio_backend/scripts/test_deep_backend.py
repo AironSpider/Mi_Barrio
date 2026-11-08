@@ -137,6 +137,21 @@ def main() -> int:
     s, _ = http(BASE, "GET", "/api/v1/services")
     check("ruta privada sin sesión -> 401 o 400", s in (400, 401), s)
 
+    # ── 6. SOS sin señal con "¿Hay heridos?" sin responder (null) ──
+    import uuid
+    from datetime import datetime, timezone
+    sos_id = str(uuid.uuid4())
+    s, r = call("POST", "/api/v1/sync/push", {
+        "client_sync_timestamp": datetime.now(timezone.utc).isoformat(),
+        "mutations": [{"target_table": "vulnerable_reports", "record_id": sos_id, "operation": "UPSERT",
+                       "payload": {"id": sos_id, "reporter_user_id": me["id"], "urgency_level": "CRITICA",
+                                   "vulnerability_type": "ATENCION_MEDICA", "status": "PENDIENTE_APOYO",
+                                   "description": "Necesito ayuda", "lat": lat, "lng": lng,
+                                   "has_injured": None, "is_deleted": False,
+                                   "updated_at": datetime.now(timezone.utc).isoformat()}}]})
+    check("SOS sin responder '¿hay heridos?' se guarda (no queda trabado)",
+          s == 200 and r["processed_record_ids"] == [sos_id], r)
+
     print(f"\n{total - failures}/{total} pruebas OK")
     return 1 if failures else 0
 

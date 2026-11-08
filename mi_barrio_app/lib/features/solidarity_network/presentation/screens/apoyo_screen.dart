@@ -373,6 +373,9 @@ class _ApoyoScreenState extends State<ApoyoScreen> {
                   Semantics(
                     button: true,
                     label: 'Agregar foto',
+                    // TalkBack: sin esto el doble toque no hace nada (excludeSemantics
+                    // quita también la acción del botón de adentro).
+                    onTap: _addPhoto,
                     excludeSemantics: true,
                     child: InkWell(
                       key: ApoyoScreen.addPhotoKey,

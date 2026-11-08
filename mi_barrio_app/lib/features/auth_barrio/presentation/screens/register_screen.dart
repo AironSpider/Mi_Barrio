@@ -168,7 +168,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
+  /// true después de tocar "Crear cuenta": recién ahí se muestra el error
+  /// del servidor (antes salía el de un login fallido anterior).
+  bool _triedRegister = false;
+
   Future<void> _register() async {
+    setState(() => _triedRegister = true);
     final valid = _formKey.currentState!.validate();
     if (!_checkTerms() || !valid) return;
     await RegisterDraft.save(
@@ -303,6 +308,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _name,
+                      textInputAction: TextInputAction.next,
                       enabled: !loading,
                       textCapitalization: TextCapitalization.words,
                       autofillHints: const [AutofillHints.name],
@@ -316,6 +322,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _email,
+                      textInputAction: TextInputAction.next,
                       enabled: !loading,
                       keyboardType: TextInputType.emailAddress,
                       autocorrect: false,
@@ -331,6 +338,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _password,
+                      textInputAction: TextInputAction.next,
                       enabled: !loading,
                       obscureText: _obscurePassword,
                       autofillHints: const [AutofillHints.newPassword],
@@ -360,6 +368,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     TextFormField(
                       key: RegisterScreen.confirmFieldKey,
                       controller: _confirm,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => loading ? null : _register(),
                       enabled: !loading,
                       obscureText: _obscurePassword,
                       decoration: const InputDecoration(
@@ -371,7 +381,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         () => _password.text,
                       ),
                     ),
-                    if (auth.message != null) ...[
+                    // Solo el error de ESTE registro (no el de un login
+                    // fallido antes de abrir esta pantalla).
+                    if (_triedRegister && auth.message != null) ...[
                       const SizedBox(height: 12),
                       Semantics(
                         // El lector de pantalla lo anuncia apenas aparece.

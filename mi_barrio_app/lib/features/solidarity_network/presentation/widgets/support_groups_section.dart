@@ -182,6 +182,11 @@ class _GroupCard extends StatelessWidget {
                   Semantics(
                     button: true,
                     label: 'Llamar a ${group.name}',
+                    // TalkBack: el doble toque necesita la acción aquí.
+                    onTap: () async {
+                      final ok = await ContactLauncher.call(group.contactPhone!);
+                      if (!ok) onCopy?.call();
+                    },
                     excludeSemantics: true,
                     child: FilledButton.icon(
                       key: ValueKey('support_group_call_${group.id}'),
