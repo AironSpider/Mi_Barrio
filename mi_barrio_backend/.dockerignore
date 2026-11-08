@@ -1,0 +1,11 @@
+# Nunca meter secretos ni el entorno local en la imagen.
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+scripts/
