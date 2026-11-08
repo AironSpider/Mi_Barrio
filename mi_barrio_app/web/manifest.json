@@ -1,11 +1,11 @@
 {
-    "name": "mi_barrio_app",
-    "short_name": "mi_barrio_app",
+    "name": "Mi Barrio",
+    "short_name": "Mi Barrio",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#2E7D32",
-    "description": "A new Flutter project.",
+    "description": "Red de apoyo vecinal: servicios, ayuda y emergencias en tu barrio.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
