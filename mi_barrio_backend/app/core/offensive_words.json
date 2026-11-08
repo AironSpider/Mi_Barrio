@@ -1,0 +1,34 @@
+{
+  "_info": "Lista de palabras ofensivas de Mi Barrio (la original está en mi_barrio_backend/app/core/offensive_words.json; la app tiene una copia idéntica). La usan la app (aviso al escribir) y el backend (censura antes de guardar). Escribe las palabras en minúsculas y sin tildes; se comparan normalizadas (sin tildes, 4→a, 3→e, 1→i, 0→o, 5→s, letras repetidas juntas). Las frases de 'hate_phrases' se buscan como palabras seguidas.",
+  "words": [
+    "puta", "puto", "putas", "putos", "putita", "putito", "puton", "putona", "putamadre", "putisima", "putisimo",
+    "mierda", "mierdas", "mierdoso", "mierdosa",
+    "carajo", "carajos",
+    "cojudo", "cojuda", "cojudos", "cojudas", "cojudez",
+    "huevon", "huevona", "huevones", "huevonas", "huevonada", "webon", "webona", "webones", "weon", "weona", "wevon", "guevon", "gueon",
+    "conchatumadre", "conchasumadre", "conchatumare", "conchasumare", "conchetumare", "ctm", "csm", "ptm", "hdp", "ptmr",
+    "chucha", "chuchatumadre", "chuchasumadre",
+    "cabron", "cabrona", "cabrones",
+    "pendejo", "pendeja", "pendejos", "pendejas", "pendejada",
+    "maricon", "maricona", "maricones", "marica", "maricas", "cabro", "cabros",
+    "mamahuevo", "mamaguevo",
+    "pinga", "pingas", "pingon", "pichula", "pichulas", "verga", "vergas",
+    "culero", "culera", "culeros", "culiao", "culiado",
+    "malparido", "malparida",
+    "imbecil", "imbeciles", "idiota", "idiotas", "estupido", "estupida", "estupidos", "estupidas",
+    "tarado", "tarada", "retrasado", "retrasada", "mongolico", "mongolica", "subnormal",
+    "joder", "jodido", "jodida",
+    "zorra", "zorras",
+    "chingar", "chingada", "chingado", "chingadera",
+    "hijueputa", "hijoeputa", "hijodeputa", "hijaputa",
+    "veneco", "veneca", "venecos", "venecas", "terruco", "terruca", "terrucos", "terrucas", "sidoso", "sidosa",
+    "exterminen", "linchemos", "linchenlo", "linchenla", "linchenlos", "matenlo", "matenla", "matenlos", "quemenlo", "quemenlos",
+    "fuck", "fucking", "fucker", "motherfucker", "shit", "bitch", "bitches", "asshole", "nigger", "nigga", "faggot", "cunt", "whore", "slut", "retard"
+  ],
+  "hate_phrases": [
+    "hay que matar", "hay que matarlos", "hay que matarlas", "matar a todos", "maten a", "mueran los", "mueran las",
+    "mueran todos", "que se mueran", "muerte a", "fuera venezolanos", "fuera los venezolanos", "fuera haitianos",
+    "exterminar a", "quemar a", "linchar a", "violar a", "violen a", "te voy a matar", "los voy a matar", "te mato",
+    "hijo de puta", "hija de puta", "hijos de puta", "concha de tu madre", "concha de su madre", "la concha de tu madre"
+  ]
+}

@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'core/barrio_context/emergency_mode_provider.dart';
 import 'core/barrio_context/tenant_session.dart';
+import 'core/moderation/content_filter.dart';
 import 'core/network/api_client.dart';
 import 'core/network/connectivity_monitor.dart';
 import 'core/sync_manager/sync_coordinator.dart';
@@ -33,6 +34,8 @@ Future<void> main() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+  // Lista de groserías y odio (la misma del servidor) para los formularios.
+  await ContentFilter.load();
   await ConnectivityMonitor.instance.start();
   ApiClient.wakeUp(); // Render gratis tarda ~50 s en despertar
   // Dev 2: estado de emergencia guardado + sincronización automática

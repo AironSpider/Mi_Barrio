@@ -3,6 +3,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/ui_kit/app_theme.dart';
 import '../data/content_reports.dart';
+import '../../../core/moderation/content_filter.dart';
 
 /// Lo que el vecino eligió o escribió (se conserva al tocar "Regresar").
 class _ReportDraft {
@@ -222,6 +223,7 @@ class _ReasonDialogState extends State<_ReasonDialog> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
                         child: TextField(
+                          inputFormatters: const [OffensiveWordsFormatter()],
                           key: const ValueKey('report_detail'),
                           controller: _detail,
                           autofocus: true,

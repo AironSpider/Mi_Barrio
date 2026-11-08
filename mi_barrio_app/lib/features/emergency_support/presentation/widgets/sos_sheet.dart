@@ -7,6 +7,7 @@ import '../../../../core/ui_kit/app_theme.dart';
 import '../../../../core/ui_kit/icon_scale.dart';
 import '../../domain/entities/vulnerable_report_entity.dart';
 import '../providers/emergency_provider.dart';
+import '../../../../core/moderation/content_filter.dart';
 
 /// Abre el flujo SOS (Clic 1 = botón "Ayuda").
 /// Devuelve true si se guardó el pedido.
@@ -221,6 +222,7 @@ class _SosSheetState extends State<SosSheet> {
                     Padding(
                       padding: const EdgeInsets.only(top: 4, bottom: 4),
                       child: TextField(
+                        inputFormatters: const [OffensiveWordsFormatter()],
                         key: SosSheet.otherFieldKey,
                         controller: _otro,
                         autofocus: true,
@@ -391,6 +393,7 @@ class _SosSheetState extends State<SosSheet> {
           ),
           const SizedBox(height: 12),
           TextField(
+            inputFormatters: const [OffensiveWordsFormatter()],
             controller: _detalle,
             maxLength: 200,
             minLines: 2,

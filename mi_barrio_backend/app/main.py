@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core import log_redaction
 from app.core.database import engine
 from app.core.exceptions import (
     custom_http_exception_handler,
@@ -30,6 +31,9 @@ from app.features.auth_barrio.auth_router import (
     platform_router,
     router as auth_router,
 )
+
+# Los tokens del chat viajan en la URL del WebSocket: no deben quedar en los logs.
+log_redaction.install()
 
 app = FastAPI(
     title="Mi Barrio API - Backend Resiliente",

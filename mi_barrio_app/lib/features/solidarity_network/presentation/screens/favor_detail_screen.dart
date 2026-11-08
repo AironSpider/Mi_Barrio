@@ -22,6 +22,7 @@ import '../../data/models/favor_interactions.dart';
 import '../../data/models/solidarity_post_model.dart';
 import '../widgets/post_meta_label.dart';
 import '../../../../core/ui_kit/safe_image.dart';
+import '../../../../core/moderation/content_filter.dart';
 
 /// Marca un favor ajeno como "en coordinación" (capa de datos: queda en el
 /// teléfono como PENDING y se encola).
@@ -627,6 +628,7 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
                       ),
                       const SizedBox(height: 8),
                       TextField(
+                        inputFormatters: const [OffensiveWordsFormatter()],
                         controller: _reviewComment,
                         maxLength: 300,
                         maxLines: 3,
@@ -751,6 +753,7 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
           children: [
             Expanded(
               child: TextField(
+                inputFormatters: const [OffensiveWordsFormatter()],
                 key: FavorDetailScreen.commentInputKey,
                 controller: _commentInput,
                 minLines: 1,

@@ -15,6 +15,7 @@ import '../../data/models/service_model.dart';
 import '../widgets/offer_service_sheet.dart';
 import '../widgets/service_category_ui.dart';
 import '../widgets/service_detail_sheet.dart';
+import '../../../../core/moderation/content_filter.dart';
 
 /// "Mi negocio": mis servicios (desde el teléfono, sin internet) con accesos a
 /// editar, ver mensajes de clientes y responder sus reseñas (con internet).
@@ -390,6 +391,7 @@ class _ReplyInputState extends State<_ReplyInput> {
     children: [
       Expanded(
         child: TextField(
+          inputFormatters: const [OffensiveWordsFormatter()],
           controller: _controller,
           maxLength: 1000,
           decoration: const InputDecoration(

@@ -47,7 +47,7 @@ async def get_tenant_or_404(db: AsyncSession, tenant_id: uuid.UUID) -> Tenant:
     if tenant is None:
         raise HTTPException(
             status_code=404,
-            detail="Barrio no registrado. Ejecuta `alembic upgrade head` (crea el barrio demo).",
+            detail="Ese barrio no existe o fue dado de baja.",
         )
     return tenant
 

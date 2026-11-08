@@ -33,6 +33,7 @@ import '../../../chat/presentation/conversations_screen.dart';
 import '../../../emergency_support/presentation/providers/emergency_provider.dart';
 import 'service_category_ui.dart';
 import '../../../../core/ui_kit/safe_image.dart';
+import '../../../../core/moderation/content_filter.dart';
 
 /// Abre el detalle de un servicio en una hoja inferior.
 Future<void> showServiceDetailSheet(
@@ -830,6 +831,7 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
         ),
         const SizedBox(height: 12),
         TextField(
+          inputFormatters: const [OffensiveWordsFormatter()],
           key: ServiceDetailSheet.commentKey,
           controller: _comment,
           maxLength: ServiceDetailSheet.maxComment,

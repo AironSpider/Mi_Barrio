@@ -12,6 +12,7 @@ import '../../../../core/ui_kit/safe_image.dart';
 import '../../../emergency_support/presentation/providers/emergency_provider.dart';
 import '../../data/datasources/solidarity_sqlite_ds.dart';
 import '../../data/models/solidarity_post_model.dart';
+import '../../../../core/moderation/content_filter.dart';
 
 /// Abre "Pedir / Brindar apoyo" en pantalla completa (botón Publicar de la
 /// pestaña Apoyo). Devuelve true si se publicó.
@@ -291,6 +292,7 @@ class _ApoyoScreenState extends State<ApoyoScreen> {
           ),
           section(_isNeed ? '¿Qué necesitas?' : '¿Qué brindas?'),
           TextField(
+            inputFormatters: const [OffensiveWordsFormatter()],
             key: ApoyoScreen.titleKey,
             controller: _title,
             maxLength: 80,
@@ -305,6 +307,7 @@ class _ApoyoScreenState extends State<ApoyoScreen> {
           ),
           const SizedBox(height: 8),
           TextField(
+            inputFormatters: const [OffensiveWordsFormatter()],
             key: ApoyoScreen.descriptionKey,
             controller: _description,
             maxLength: 600,

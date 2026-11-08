@@ -7,6 +7,7 @@ import '../../../core/realtime/chat_socket.dart';
 import '../../../core/ui_kit/app_theme.dart';
 import '../data/chat_models.dart';
 import '../data/chat_remote_ds.dart';
+import '../../../core/moderation/content_filter.dart';
 
 /// Chat en tiempo real sobre un favor o un servicio, entre su dueño (autor o
 /// comerciante) y un vecino.
@@ -239,6 +240,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Expanded(
                     child: TextField(
+                      inputFormatters: const [OffensiveWordsFormatter()],
                       key: ChatScreen.inputKey,
                       controller: _input,
                       minLines: 1,

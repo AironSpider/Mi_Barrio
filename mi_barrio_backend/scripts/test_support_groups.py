@@ -117,6 +117,13 @@ def main() -> int:
     # Se lee directo de la base: así esta prueba no crea cuentas en BARRIO-01.
     demo_groups = asyncio.run(_demo_active_groups())
     demo_names = [g["name"] for g in demo_groups]
+    if not demo_groups:
+        # Desde que la base arranca vacía, el barrio demo solo existe si se
+        # corrió scripts/seed_demo.py.
+        print("OMITIDO: barrio demo (no existe; corre scripts/seed_demo.py para crearlo)")
+        failed = [r for r in results if not r[0]]
+        print(f"\n{len(results) - len(failed)}/{len(results)} pruebas OK")
+        return 1 if failed else 0
     check("BARRIO-01 tiene activos los 3 grupos del seed y de la migración",
           set(demo_names) == DEMO_GROUP_NAMES, demo_names)
     check("BARRIO-01 no tiene grupos repetidos", len(demo_names) == len(set(demo_names)), demo_names)

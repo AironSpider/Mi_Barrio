@@ -14,6 +14,7 @@ import '../../data/datasources/services_sqlite_ds.dart';
 import '../../data/models/service_model.dart';
 import 'service_category_ui.dart';
 import '../../../../core/ui_kit/safe_image.dart';
+import '../../../../core/moderation/content_filter.dart';
 
 /// Lo que la app necesita saber del vecino para ofrecer un servicio.
 class MerchantProfile {
@@ -415,6 +416,7 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
           ),
           section(_isNeed ? '¿Qué servicio pides?' : '¿Qué servicio brindas?'),
           TextField(
+            inputFormatters: const [OffensiveWordsFormatter()],
             key: OfferServiceSheet.titleKey,
             controller: _title,
             maxLength: 80,
@@ -429,6 +431,7 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
           ),
           const SizedBox(height: 8),
           TextField(
+            inputFormatters: const [OffensiveWordsFormatter()],
             key: OfferServiceSheet.descriptionKey,
             controller: _description,
             maxLength: 600,
@@ -447,6 +450,7 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
             hint: 'Opcional. Ej: "S/ 30 la visita" o "A tratar".',
           ),
           TextField(
+            inputFormatters: const [OffensiveWordsFormatter()],
             key: OfferServiceSheet.priceKey,
             controller: _price,
             maxLength: 60,

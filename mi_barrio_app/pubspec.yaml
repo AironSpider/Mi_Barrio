@@ -78,6 +78,7 @@ flutter:
   assets:
     - assets/images/logo_mi_barrio.png
     - assets/images/logo_full.png
+    - assets/moderation/offensive_words.json
     # Copia de docs/legal y docs/manual_de_usuario.md (se ven dentro de la app).
     - assets/legal/
 

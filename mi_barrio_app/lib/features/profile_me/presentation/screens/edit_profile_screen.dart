@@ -7,6 +7,7 @@ import '../../../../core/ui_kit/app_select_field.dart';
 import '../../../proximity_services/data/models/service_model.dart';
 import '../../data/profile_local_storage.dart';
 import '../../data/user_profile_model.dart';
+import '../../../../core/moderation/content_filter.dart';
 
 /// "Mi Perfil y Cuenta": datos personales, redes de contacto y perfil de publicador.
 ///
@@ -262,6 +263,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: TextField(
           controller: controller,
           keyboardType: keyboard,
+          // Nombre, referencia, negocio: lo ven otros vecinos. Teléfono,
+          // correo y enlaces no se tocan.
+          inputFormatters: keyboard == null || keyboard == TextInputType.text
+              ? const [OffensiveWordsFormatter()]
+              : null,
           textCapitalization: capitalization,
           decoration: InputDecoration(
             labelText: label,

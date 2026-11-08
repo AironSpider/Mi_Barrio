@@ -9,7 +9,9 @@ Sprint 6 (Dev 1):
   (reloj de PostgreSQL) en cada INSERT/UPDATE. El pull filtra por este campo, así
   un post creado offline y subido horas después sí les llega a los demás.
   (`updated_at` sigue siendo el reloj del celular y se usa solo para Last-Write-Wins).
-- Fila del barrio demo en `tenants` (necesaria para el toggle de emergencia).
+- (Antes creaba el barrio demo BARRIO-01. Ya no: una base nueva arranca VACÍA
+  y los barrios los crea el superadministrador desde la app. Para una demo,
+  usa scripts/seed_demo.py. En bases ya migradas esto no cambia nada.)
 """
 from typing import Sequence, Union
 
@@ -30,8 +32,6 @@ SYNCED_TABLES = (
     "users",
 )
 
-DEMO_TENANT_ID = "a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d"
-
 
 def upgrade() -> None:
     for table in SYNCED_TABLES:
@@ -50,14 +50,6 @@ def upgrade() -> None:
             ["tenant_id", "server_updated_at"],
         )
 
-    # Barrio demo (idempotente: si ya existe o el código está tomado, no hace nada).
-    op.execute(
-        f"""
-        INSERT INTO tenants (id, name, join_code, center_lat, center_lng, is_emergency_active)
-        VALUES ('{DEMO_TENANT_ID}', 'Junta Vecinal Demo (Piura)', 'BARRIO-01', -5.1945, -80.6328, false)
-        ON CONFLICT DO NOTHING
-        """
-    )
 
 
 def downgrade() -> None:

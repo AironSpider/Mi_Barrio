@@ -1,3 +1,5 @@
+import '../../../../core/moderation/content_filter.dart';
+
 /// Validaciones de los formularios de cuenta, en lenguaje simple.
 class AuthValidators {
   AuthValidators._();
@@ -123,6 +125,9 @@ class AuthValidators {
     final name = value?.trim() ?? '';
     if (name.length < 2) return 'Escribe tu nombre';
     if (_hasNumber.hasMatch(name)) return 'El nombre no lleva números';
+    if (ContentFilter.isOffensive(name)) {
+      return 'Usa tu nombre real, sin palabras ofensivas';
+    }
     return name.length > 150 ? 'Usa un nombre más corto' : null;
   }
 
