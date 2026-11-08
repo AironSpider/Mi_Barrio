@@ -92,7 +92,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         photoB64: b64,
       );
       if (mounted) setState(() => _profile = updated);
-      _snack('Foto actualizada. Se sincronizará en segundo plano.');
+      _snack('Foto actualizada. Se enviará solo cuando haya señal.');
     } on StateError catch (e) {
       _snack(e.message);
     } catch (_) {

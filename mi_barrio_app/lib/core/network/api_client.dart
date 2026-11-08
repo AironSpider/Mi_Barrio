@@ -81,6 +81,15 @@ class ApiClient {
       body = null;
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      // La sesión venció (p. ej. se entró sin señal con una sesión vieja):
+      // se cierra para que la app pida ingresar de nuevo, sin perder lo
+      // pendiente. Antes solo la sincronización lo hacía y las pantallas de
+      // la junta vecinal quedaban mostrando errores sin salida.
+      if (response.statusCode == 401 &&
+          AuthSessionStore.instance.token != null) {
+        unawaited(AuthSessionStore.instance.invalidate());
+        throw Exception('Tu sesión venció. Vuelve a ingresar.');
+      }
       final message = body is Map ? body['detail'] ?? body['error'] : null;
       throw Exception(message?.toString() ?? 'No se pudo completar la acción');
     }

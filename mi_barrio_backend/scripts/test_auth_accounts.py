@@ -115,7 +115,32 @@ def main() -> int:
     check("tras 5 intentos fallidos el código deja de servir", s in (400, 429), r)
 
     # ── 4. Google (lógica del servidor con una identidad ya verificada) ──
-    asyncio.run(_google_checks(code, mail.lower()))
+    google_token, google_mail = asyncio.run(_google_checks(code, mail.lower()))
+
+    # ── 5. Quien entró con Google crea su contraseña ──
+    s, r = http(BASE, "GET", "/api/v1/auth/me", token=google_token)
+    check("Google: /me dice que aún no tiene contraseña", s == 200 and r["has_password"] is False, r)
+    s, r = http(BASE, "POST", "/api/v1/auth/password/set", {"password": "corta"}, token=google_token)
+    check("crear contraseña: menos de 8 caracteres se rechaza (422)", s == 422, r)
+    s, r = http(BASE, "POST", "/api/v1/auth/password/set", {"password": "Nueva-" + secrets.token_hex(4)})
+    check("crear contraseña sin sesión se rechaza (401)", s == 401, r)
+    google_password = "Nueva-" + secrets.token_hex(4)
+    s, r = http(BASE, "POST", "/api/v1/auth/password/set", {"password": google_password}, token=google_token)
+    check("crear contraseña con sesión la guarda", s == 200 and r["user"]["has_password"] is True, r)
+    s, r = http(BASE, "POST", "/api/v1/auth/password/set", {"password": "Otra-" + secrets.token_hex(4)}, token=google_token)
+    check("crear contraseña otra vez responde 409 (se cambia con el código)", s == 409, r)
+    s, r = http(BASE, "POST", "/api/v1/auth/login", {"email": google_mail, "password": google_password})
+    check("la cuenta de Google ya entra también con su contraseña", s == 200, r)
+
+    # ── 6. Correos falsos no se registran ──
+    for label, bad in [("temporal", f"x{secrets.token_hex(3)}@mailinator.com"),
+                       ("con error de tipeo", f"vecina{secrets.token_hex(3)}@gmial.com"),
+                       ("Gmail muy corto", "ab1@gmail.com"),
+                       ("Gmail con símbolos", f"ana_{secrets.token_hex(3)}@gmail.com")]:
+        s, r = http(BASE, "POST", "/api/v1/auth/register", {
+            "full_name": "Falsa", "email": bad, "password": password,
+            "role": "VECINO", "join_code": code})
+        check(f"registro con correo {label} se rechaza (422)", s == 422, r)
 
     s, r = http(BASE, "POST", "/api/v1/auth/google", {"id_token": "x" * 40})
     check("un token de Google falso no entra (401 o 503 si Google no está configurado)", s in (401, 503), r)
@@ -125,7 +150,7 @@ def main() -> int:
     return 0 if ok == len(results) else 1
 
 
-async def _google_checks(join_code: str, existing_email: str) -> None:
+async def _google_checks(join_code: str, existing_email: str) -> tuple[str, str]:
     from fastapi import HTTPException
     from app.core.database import async_session_factory as AsyncSessionLocal, engine
     from app.core.google_auth import GoogleIdentity, identity_from_claims
@@ -160,6 +185,8 @@ async def _google_checks(join_code: str, existing_email: str) -> None:
         r = await google_login(session, new_ident, GoogleLoginRequest(id_token="x" * 40, join_code=join_code, role="COMERCIANTE"))
         check("Google: con el código de barrio crea la cuenta verificada",
               r.user.email == new_mail and r.user.email_verified and r.user.role == "COMERCIANTE")
+        check("Google: la cuenta nueva todavía no tiene contraseña", r.user.has_password is False)
+        new_token = r.access_token
     async with AsyncSessionLocal() as session:
         r = await google_login(session, new_ident, GoogleLoginRequest(id_token="x" * 40))
         check("Google: la segunda vez entra directo a la misma cuenta", r.user.email == new_mail)
@@ -167,7 +194,9 @@ async def _google_checks(join_code: str, existing_email: str) -> None:
         linked = GoogleIdentity(sub="google-" + secrets.token_hex(4), email=existing_email, name="Vecina Real")
         r = await google_login(session, linked, GoogleLoginRequest(id_token="x" * 40))
         check("Google: si ya tenía cuenta con ese correo, la vincula y entra", r.user.email == existing_email)
+        check("Google: al vincular conserva su contraseña", r.user.has_password is True)
     await engine.dispose()
+    return new_token, new_mail
 
 
 if __name__ == "__main__":

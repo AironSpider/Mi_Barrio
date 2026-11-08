@@ -69,7 +69,11 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
       if (token != null) {
         try {
           await AuthRemoteDatasource().deleteUnverifiedAccount(token);
-        } catch (_) {}
+        } catch (error) {
+          // No bloquea: registrarse de nuevo reemplaza los datos de la cuenta
+          // sin confirmar. Se deja constancia para depurar.
+          debugPrint('No se pudo borrar la cuenta sin confirmar: $error');
+        }
       }
       RegisterDraft.reopenRequested = true;
     } else {

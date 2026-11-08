@@ -4,6 +4,7 @@ import 'dart:io' show SocketException;
 
 import 'package:http/http.dart' as http;
 
+import '../../../../core/auth/auth_session_store.dart';
 import '../../../../core/network/api_client.dart';
 import '../../domain/entities/user_entity.dart';
 
@@ -111,16 +112,41 @@ class AuthRemoteDatasource {
     return name is String && name.trim().isNotEmpty ? name.trim() : null;
   }
 
-  Future<Map<String, dynamic>> getCurrentUser(String token) async {
+  /// [timeout]: al abrir la app se usa uno corto para no dejar al vecino
+  /// esperando si el servidor está despertando (entra con lo guardado).
+  Future<Map<String, dynamic>> getCurrentUser(
+    String token, {
+    Duration timeout = ApiConfig.coldStartTimeout,
+  }) async {
     final response = await _request(
       () => _client
           .get(
             Uri.parse('$_baseUrl/api/v1/auth/me'),
             headers: {'Authorization': 'Bearer $token'},
           )
-          .timeout(ApiConfig.coldStartTimeout),
+          .timeout(timeout),
     );
     return _decodeResponse(response);
+  }
+
+  /// Quien entró con Google crea su contraseña. Devuelve la sesión actualizada.
+  Future<Map<String, dynamic>> setPassword({
+    required String token,
+    required String password,
+  }) async {
+    final response = await _request(
+      () => _client
+          .post(
+            Uri.parse('$_baseUrl/api/v1/auth/password/set'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'password': password}),
+          )
+          .timeout(ApiConfig.coldStartTimeout),
+    );
+    return _decodeWithSession(response);
   }
 
   /// "Volver para cambiar datos": borra la cuenta que nunca confirmó su
@@ -135,7 +161,10 @@ class AuthRemoteDatasource {
           .timeout(ApiConfig.timeout),
     );
     if (response.statusCode >= 400 && response.statusCode != 404) {
-      throw AuthException('No se pudo borrar la cuenta', statusCode: response.statusCode);
+      throw AuthException(
+        'No se pudo borrar la cuenta',
+        statusCode: response.statusCode,
+      );
     }
   }
 
@@ -169,7 +198,7 @@ class AuthRemoteDatasource {
           .timeout(ApiConfig.coldStartTimeout),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      _decodeResponse(response); // lanza AuthException con el detalle
+      _decodeWithSession(response); // lanza AuthException con el detalle
     }
     final body = jsonDecode(response.body);
     if (body is! List) {
@@ -214,7 +243,7 @@ class AuthRemoteDatasource {
           )
           .timeout(ApiConfig.coldStartTimeout),
     );
-    final data = _decodeResponse(response);
+    final data = _decodeWithSession(response);
     final neighborhood = data['neighborhood'];
     final administrator = data['administrator'];
     if (neighborhood is! Map<String, dynamic> ||
@@ -270,6 +299,19 @@ class AuthRemoteDatasource {
     } catch (error) {
       throw AuthException('No se pudo conectar con el servidor: $error');
     }
+  }
+
+  /// Para rutas que usan la sesión guardada: un 401 significa que venció, y
+  /// se cierra para que la app vuelva a pedir el ingreso.
+  Map<String, dynamic> _decodeWithSession(http.Response response) {
+    if (response.statusCode == 401 && AuthSessionStore.instance.token != null) {
+      unawaited(AuthSessionStore.instance.invalidate());
+      throw const AuthException(
+        'Tu sesión venció. Vuelve a ingresar.',
+        statusCode: 401,
+      );
+    }
+    return _decodeResponse(response);
   }
 
   Map<String, dynamic> _decodeResponse(http.Response response) {

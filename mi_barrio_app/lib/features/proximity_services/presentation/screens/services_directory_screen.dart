@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/barrio_context/emergency_mode_provider.dart';
+import '../../../../core/ui_kit/publish_action.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
@@ -128,25 +129,22 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
         category: _selectedCategory,
         emergencyOnly: widget.emergencyOnly,
       );
-      final endorsements = await Future.wait(
-        services.map(
-          (service) => _endorsementsDatasource.myRating(service.id, _userId),
-        ),
+      final endorsements = await _endorsementsDatasource.myRatings(
+        [for (final service in services) service.id],
+        _userId,
       );
       if (!mounted || version != _loadVersion) return;
       setState(() {
         _services = services;
         _myEndorsements
           ..clear()
-          ..addEntries([
-            for (var i = 0; i < services.length; i++)
-              if (endorsements[i] != null)
-                MapEntry(services[i].id, endorsements[i]!),
-          ]);
+          ..addAll(endorsements);
         _isLoading = false;
       });
     } catch (error) {
       if (!mounted || version != _loadVersion) return;
+      // El detalle técnico va al log; al vecino, un mensaje claro.
+      debugPrint('No se pudieron cargar los servicios: $error');
       setState(() {
         _loadError = error.toString();
         _isLoading = false;
@@ -183,17 +181,22 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
           SnackBar(
             content: Text(
               current == null
-                  ? 'Visto bueno guardado; se sincronizará en segundo plano.'
-                  : 'Visto bueno retirado; se sincronizará en segundo plano.',
+                  ? 'Visto bueno guardado. Se enviará solo cuando haya señal.'
+                  : 'Visto bueno retirado. Se enviará solo cuando haya señal.',
             ),
           ),
         );
     } catch (error) {
+      debugPrint('No se pudo guardar el visto bueno: $error');
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(content: Text('No se pudo guardar el visto bueno: $error')),
+          const SnackBar(
+            content: Text(
+              'No pudimos guardar tu visto bueno. Intenta de nuevo.',
+            ),
+          ),
         );
     } finally {
       if (mounted) setState(() => _updatingEndorsements.remove(service.id));
@@ -333,11 +336,14 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
             ),
           ],
           const SizedBox(height: 12),
-          if (_loadError != null)
+          // Si falla la lectura pero ya había servicios, se siguen mostrando.
+          if (_loadError != null && _services.isEmpty)
             _buildMessage(
               context,
               icon: Icons.error_outline_rounded,
-              message: 'No se pudieron cargar los servicios: $_loadError',
+              message:
+                  'No pudimos mostrar los servicios. Toca "Reintentar"; si '
+                  'sigue igual, cierra y abre la app.',
               action: TextButton(
                 onPressed: () => unawaited(_loadServices()),
                 child: const Text('Reintentar'),
@@ -360,6 +366,7 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
                   : _selectedCategory == null
                   ? 'Todavía no hay servicios publicados en este barrio.'
                   : 'No hay servicios de ${ServiceCategory.labels[_selectedCategory]}.',
+              action: _emptyAction(context),
             )
           else
             AnimatedSwitcher(
@@ -455,6 +462,22 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
           endorsementsDatasource: _endorsementsDatasource,
         ),
       ),
+    );
+  }
+
+  /// Lista vacía sin filtros: invita a publicar el primer servicio.
+  Widget? _emptyAction(BuildContext context) {
+    final publish = PublishAction.maybeOf(context);
+    if (publish == null ||
+        _searchQuery.isNotEmpty ||
+        activeFilterCount(_filters) > 0 ||
+        _emergency) {
+      return null;
+    }
+    return FilledButton.tonalIcon(
+      onPressed: publish,
+      icon: const Icon(Icons.add_rounded),
+      label: const Text('Publicar un servicio'),
     );
   }
 

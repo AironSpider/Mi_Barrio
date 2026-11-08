@@ -48,6 +48,8 @@ class AuthUserResponse(BaseModel):
     role: Literal["VECINO", "COMERCIANTE", "ADMIN_BARRIO", "SUPER_ADMIN"]
     is_approved: bool = True
     email_verified: bool = True
+    # False = entró con Google y todavía no creó una contraseña.
+    has_password: bool = True
     tenant: TenantResponse | None
 
 
@@ -86,6 +88,10 @@ class GoogleLoginRequest(BaseModel):
     # Solo para crear la cuenta la primera vez: a qué barrio entra y con qué rol.
     join_code: str | None = Field(default=None, min_length=3, max_length=20)
     role: Literal["VECINO", "COMERCIANTE"] = "VECINO"
+
+
+class SetPasswordRequest(BaseModel):
+    password: Password
 
 
 class CodeSentResponse(BaseModel):

@@ -31,6 +31,7 @@ class UserEntity {
     this.centerLng,
     this.email,
     this.emailVerified = true,
+    this.hasPassword = true,
   });
 
   final String id;
@@ -49,6 +50,10 @@ class UserEntity {
   /// false = cuenta nueva que aún no escribió el código del correo.
   /// Las sesiones viejas y las cuentas que ya existían cuentan como verificadas.
   final bool emailVerified;
+
+  /// false = entró con Google y todavía no creó una contraseña: la app se la
+  /// pide antes de seguir. Las sesiones viejas cuentan como "con contraseña".
+  final bool hasPassword;
 }
 
 class NeighborhoodProvisionEntity {

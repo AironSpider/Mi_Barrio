@@ -294,7 +294,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         prefixIcon: Icon(Icons.mail_outline_rounded),
                         border: OutlineInputBorder(),
                       ),
-                      validator: AuthValidators.email,
+                      validator: AuthValidators.newEmail,
                     ),
                     const SizedBox(height: 14),
                     TextFormField(

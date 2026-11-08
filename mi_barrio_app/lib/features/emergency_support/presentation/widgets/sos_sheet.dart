@@ -12,23 +12,34 @@ import '../providers/emergency_provider.dart';
 /// Devuelve true si se guardó el pedido.
 Future<bool> showSosSheet(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
-  final saved = await showModalBottomSheet<bool>(
+  final result = await showModalBottomSheet<Object>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
     builder: (_) => const SosSheet(),
   );
-  if (saved == true) {
+  final saved = result == true || result == SosSheet.savedWithoutGps;
+  if (saved) {
+    // Sin GPS el pedido queda en el centro del barrio: hay que decirlo, si no
+    // quien ayuda iría al lugar equivocado y el vecino no sabría por qué.
+    final withoutGps = result == SosSheet.savedWithoutGps;
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
-          content: Text('Pedido de ayuda guardado. Se enviará apenas haya señal.'),
+        SnackBar(
+          duration: Duration(seconds: withoutGps ? 10 : 4),
+          content: Text(
+            withoutGps
+                ? 'Pedido de ayuda guardado, pero no pudimos usar tu ubicación: '
+                      'se marcó en el centro del barrio. Si puedes, avisa a tus '
+                      'vecinos dónde estás o activa la ubicación del teléfono.'
+                : 'Pedido de ayuda guardado. Se enviará apenas haya señal.',
+          ),
         ),
       );
   }
-  return saved == true;
+  return saved;
 }
 
 /// Hoja "Pedir ayuda":
@@ -44,6 +55,9 @@ class SosSheet extends StatefulWidget {
   static const peopleMinusKey = ValueKey('sos_people_minus');
   static const peoplePlusKey = ValueKey('sos_people_plus');
   static const phoneFieldKey = ValueKey('sos_phone');
+
+  /// Valor con el que se cierra la hoja si se guardó sin la ubicación del GPS.
+  static const savedWithoutGps = 'saved_without_gps';
 
   @override
   State<SosSheet> createState() => _SosSheetState();
@@ -150,7 +164,11 @@ class _SosSheetState extends State<SosSheet> {
         ],
         contactPhone: _telefono.text,
       );
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) {
+        Navigator.of(context).pop(
+          ubicacion.fromGps ? true : SosSheet.savedWithoutGps,
+        );
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -247,7 +265,11 @@ class _SosSheetState extends State<SosSheet> {
                     foregroundColor: AppPalette.emergencyOnPrimary,
                   ),
                   onPressed: _puedeEnviar ? _enviar : null,
-                  child: Text(_enviando ? 'Guardando…' : 'Enviar pedido de ayuda'),
+                  child: Text(
+                    _enviando
+                        ? 'Buscando tu ubicación y guardando…'
+                        : 'Enviar pedido de ayuda',
+                  ),
                 ),
               ],
             ),

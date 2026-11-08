@@ -13,8 +13,10 @@ import 'core/sync_manager/sync_coordinator.dart';
 import 'core/ui_kit/app_theme.dart';
 import 'core/ui_kit/dev_tools.dart';
 import 'core/ui_kit/main_navigation_shell.dart';
+import 'core/ui_kit/splash_screen.dart';
 import 'features/auth_barrio/presentation/providers/auth_provider.dart';
 import 'features/auth_barrio/domain/entities/user_entity.dart';
+import 'features/auth_barrio/presentation/screens/create_password_screen.dart';
 import 'features/auth_barrio/presentation/screens/login_screen.dart';
 import 'features/auth_barrio/presentation/screens/neighborhood_admin_screen.dart';
 import 'features/auth_barrio/presentation/screens/platform_admin_screen.dart';
@@ -162,9 +164,21 @@ class _AuthGate extends ConsumerWidget {
     });
 
     final auth = ref.watch(authProvider);
-    if (auth.status == AuthStatus.loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    // "Hacerlo después" en Crear contraseña vuelve a armar esta pantalla.
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: _skippedPassword,
+      builder: (context, _, _) => _screenFor(context, auth),
+    );
+  }
+
+  /// Cuentas que dejaron "Crear contraseña" para después (solo en memoria).
+  static final _skippedPassword = ValueNotifier<Set<String>>(const {});
+
+  Widget _screenFor(BuildContext context, AuthState auth) {
+    // Solo al abrir la app se muestra la bienvenida. Al ingresar o registrarse
+    // el estado también es "cargando", pero la pantalla de ingreso sigue
+    // montada: conserva lo escrito y muestra su aviso de servidor lento.
+    if (auth.restoring) return const SplashScreen();
     final user = auth.user;
     if (user == null) return const LoginScreen();
 
@@ -174,6 +188,15 @@ class _AuthGate extends ConsumerWidget {
       // Cuenta nueva con contraseña: primero confirma el correo con el código.
       UserRole.comerciante ||
       UserRole.vecino when !user.emailVerified => VerifyEmailScreen(user: user),
+      // Entró con Google: crea una contraseña antes de seguir. Sin señal puede
+      // dejarlo para después (solo por esta vez; se vuelve a pedir al abrir).
+      UserRole.comerciante || UserRole.vecino
+          when !user.hasPassword && !_skippedPassword.value.contains(user.id) =>
+        CreatePasswordScreen(
+          user: user,
+          onSkip: () =>
+              _skippedPassword.value = {..._skippedPassword.value, user.id},
+        ),
       // La primera vez que una cuenta entra, ve el tutorial de 3 pasos.
       UserRole.comerciante || UserRole.vecino => TutorialGate(
         tenantId: user.tenantId ?? TenantSession.instance.tenantId,

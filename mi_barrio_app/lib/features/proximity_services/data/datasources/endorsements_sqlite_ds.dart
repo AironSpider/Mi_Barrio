@@ -175,6 +175,39 @@ class EndorsementsSqliteDatasource {
     return rows.isEmpty ? null : EndorsementModel.fromSqlite(rows.first);
   }
 
+  /// Mis calificaciones de varios servicios en UNA consulta (antes era una
+  /// por servicio y la lista tardaba más cuantos más servicios había).
+  Future<Map<String, EndorsementModel>> myRatings(
+    List<String> serviceIds,
+    String endorserUserId,
+  ) async {
+    if (serviceIds.isEmpty) return const {};
+    final db = await _db.database;
+    final byId = {
+      for (final id in serviceIds)
+        EndorsementModel.idFor(id, endorserUserId): id,
+    };
+    final result = <String, EndorsementModel>{};
+    final ids = byId.keys.toList();
+    // SQLite admite un número limitado de parámetros por consulta.
+    for (var start = 0; start < ids.length; start += 500) {
+      final chunk = ids.sublist(start, (start + 500).clamp(0, ids.length));
+      final rows = await db.query(
+        EndorsementModel.table,
+        where:
+            'id IN (${List.filled(chunk.length, '?').join(',')}) AND is_deleted = 0',
+        whereArgs: chunk,
+      );
+      for (final row in rows) {
+        final serviceId = byId[row['id']];
+        if (serviceId != null) {
+          result[serviceId] = EndorsementModel.fromSqlite(row);
+        }
+      }
+    }
+    return result;
+  }
+
   /// Calificaciones del servicio guardadas en el teléfono, las más recientes primero.
   Future<List<EndorsementModel>> listForService(
     String tenantId,

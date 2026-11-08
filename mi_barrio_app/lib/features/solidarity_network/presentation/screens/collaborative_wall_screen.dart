@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/barrio_context/emergency_mode_provider.dart';
+import '../../../../core/ui_kit/publish_action.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
@@ -113,6 +114,7 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
       if (!mounted || version != _loadVersion) return;
       setState(() {
         _loadError = error.toString();
+        debugPrint('No se pudieron cargar las publicaciones: $error');
         _isLoading = false;
       });
     }
@@ -266,11 +268,14 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
             onFiltersChanged: (value) => setState(() => _filters = value),
           ),
           const SizedBox(height: 12),
-          if (_loadError != null)
+          // Si falla la lectura pero ya había publicaciones, se siguen mostrando.
+          if (_loadError != null && _posts.isEmpty)
             _buildMessage(
               context,
               icon: Icons.error_outline_rounded,
-              message: 'No se pudieron cargar las publicaciones: $_loadError',
+              message:
+                  'No pudimos mostrar las publicaciones. Toca "Reintentar"; si '
+                  'sigue igual, cierra y abre la app.',
               action: TextButton(
                 onPressed: _loadPosts,
                 child: const Text('Reintentar'),
@@ -290,6 +295,15 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
               message: _hasFilters
                   ? 'No hay publicaciones con esa búsqueda o esos filtros.'
                   : 'Todavía no hay publicaciones. Sé el primero en compartir algo con tu barrio.',
+              action: _hasFilters ||
+                      EmergencyModeProvider.instance.isActive.value ||
+                      PublishAction.maybeOf(context) == null
+                  ? null
+                  : FilledButton.tonalIcon(
+                      onPressed: PublishAction.maybeOf(context),
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Publicar algo'),
+                    ),
             )
           else
             AnimatedSwitcher(

@@ -29,6 +29,7 @@ from app.features.auth_barrio.schemas import (
     EmailRequest,
     GoogleLoginRequest,
     ResetPasswordRequest,
+    SetPasswordRequest,
     VerifyEmailRequest,
 )
 
@@ -155,6 +156,40 @@ async def reset_password(
     return _auth_response(user, await _tenant_or_403(db, user))
 
 
+@router.post("/password/set", response_model=AuthResponse)
+async def set_password(
+    payload: SetPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Quien entró con Google crea su contraseña (pide sesión iniciada).
+
+    Solo sirve si la cuenta todavía no tiene contraseña: para cambiar una que
+    ya existe se usa "Olvidé mi contraseña" (con el código del correo).
+    """
+    claims = getattr(request.state, "auth_claims", None)
+    if claims is None or claims.get("role") == "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Se requiere una sesión Bearer",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = await db.scalar(
+        select(User).where(User.id == uuid.UUID(claims["sub"]), User.is_deleted.is_(False))
+    )
+    if user is None:
+        raise HTTPException(status_code=401, detail="La sesión ya no es válida")
+    if user.password_hash is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Tu cuenta ya tiene contraseña. Para cambiarla usa \"¿Olvidaste tu contraseña?\".",
+        )
+    user.password_hash = await _hash(payload.password)
+    await db.commit()
+    await db.refresh(user)
+    return _auth_response(user, await _tenant_or_403(db, user))
+
+
 # ─────────────────────────── Entrar con Google ───────────────────────────
 async def google_login(
     db: AsyncSession, identity: google_auth.GoogleIdentity, payload: GoogleLoginRequest
@@ -200,7 +235,7 @@ async def google_login(
         tenant_id=tenant.id,
         full_name=identity.name or identity.email.split("@")[0],
         email=identity.email,
-        password_hash=None,  # entra con Google; puede crear una contraseña con "Olvidé mi contraseña"
+        password_hash=None,  # la app le pide crear una contraseña enseguida (/password/set)
         google_sub=identity.sub,
         email_verified=True,
         role=payload.role,

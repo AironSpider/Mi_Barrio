@@ -25,6 +25,9 @@ abstract interface class AuthRepository {
   /// Confirma el correo con el código y devuelve la sesión actualizada.
   Future<UserEntity> verifyEmail({required String email, required String code});
 
+  /// Quien entró con Google crea su contraseña (pide sesión iniciada).
+  Future<UserEntity> setPassword(String password);
+
   /// "Olvidé mi contraseña": envía un código al correo.
   Future<String> requestPasswordReset(String email);
 

@@ -14,6 +14,7 @@ import 'package:mi_barrio_app/features/auth_barrio/data/models/user_model.dart';
 import 'package:mi_barrio_app/features/auth_barrio/domain/entities/user_entity.dart';
 import 'package:mi_barrio_app/features/auth_barrio/domain/repositories/auth_repository.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/providers/auth_provider.dart';
+import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/create_password_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/forgot_password_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/login_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/register_screen.dart';
@@ -24,7 +25,11 @@ import 'package:mi_barrio_app/features/auth_barrio/presentation/widgets/auth_val
 
 /// Cuentas reales: validaciones, Google, confirmar correo y recuperar contraseña.
 
-UserModel _user({bool verified = true, String email = 'rosa@correo.com'}) =>
+UserModel _user({
+  bool verified = true,
+  String email = 'rosa@correo.com',
+  bool hasPassword = true,
+}) =>
     UserModel(
       id: 'user-1',
       tenantId: 'tenant-1',
@@ -37,6 +42,7 @@ UserModel _user({bool verified = true, String email = 'rosa@correo.com'}) =>
       centerLng: 0,
       email: email,
       emailVerified: verified,
+      hasPassword: hasPassword,
     );
 
 class _FakeGoogle implements GoogleIdTokenSource {
@@ -62,6 +68,8 @@ class _FakeRepo implements AuthRepository {
   final deletedTenants = <String>[];
   Object? deleteError;
   int resends = 0;
+  final passwordsSet = <String>[];
+  Object? setPasswordError;
   bool googleNeedsNeighborhood = true;
 
   @override
@@ -95,6 +103,13 @@ class _FakeRepo implements AuthRepository {
         statusCode: 400,
       );
     }
+    return _user();
+  }
+
+  @override
+  Future<UserEntity> setPassword(String password) async {
+    if (setPasswordError != null) throw setPasswordError!;
+    passwordsSet.add(password);
     return _user();
   }
 
@@ -215,6 +230,19 @@ void main() {
         expect(AuthValidators.joinCode('B1'), isNotNull);
       },
     );
+
+    test('correo nuevo: sin temporales, errores de tipeo ni Gmail imposibles', () {
+      expect(AuthValidators.newEmail('rosa.vecina@gmail.com'), isNull);
+      expect(AuthValidators.newEmail('rosa@utp.edu.pe'), isNull);
+      expect(AuthValidators.newEmail('rosa@gmial.com'), '¿Quisiste decir rosa@gmail.com?');
+      expect(AuthValidators.newEmail('x@mailinator.com'), contains('temporal'));
+      expect(AuthValidators.newEmail('ab1@gmail.com'), contains('entre 6 y 30'));
+      expect(AuthValidators.newEmail('rosa_v@gmail.com'), contains('letras, números y puntos'));
+      expect(AuthValidators.newEmail('.rosavecina@gmail.com'), isNotNull);
+      expect(AuthValidators.newEmail('rosa.vecina+barrio@gmail.com'), isNull);
+      // El correo de ingreso no aplica estas reglas (cuentas ya creadas).
+      expect(AuthValidators.email('ab1@gmail.com'), isNull);
+    });
 
     test('fuerza de la contraseña', () {
       expect(AuthValidators.strength(''), 0);
@@ -538,6 +566,60 @@ void main() {
       expect(container.read(authProvider).user?.emailVerified, isTrue);
     },
   );
+
+  testWidgets('crear contraseña tras Google: valida, guarda y la cuenta queda con contraseña', (
+    tester,
+  ) async {
+    final container = await pump(
+      tester,
+      (_) => CreatePasswordScreen(user: _user(hasPassword: false)),
+      initial: AuthState.authenticated(_user(hasPassword: false)),
+    );
+    await tester.enterText(find.byKey(CreatePasswordScreen.passwordFieldKey), 'barrio2026');
+    await tester.enterText(find.byKey(CreatePasswordScreen.confirmFieldKey), 'barrio2025');
+    await tester.tap(find.byKey(CreatePasswordScreen.saveKey));
+    await tester.pump();
+    expect(find.text('Las contraseñas no coinciden'), findsOneWidget);
+    expect(repo.passwordsSet, isEmpty);
+
+    await tester.enterText(find.byKey(CreatePasswordScreen.confirmFieldKey), 'barrio2026');
+    await tester.tap(find.byKey(CreatePasswordScreen.saveKey));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(repo.passwordsSet, ['barrio2026']);
+    expect(container.read(authProvider).user?.hasPassword, isTrue);
+  });
+
+  testWidgets('crear contraseña sin señal: ofrece hacerlo después', (tester) async {
+    repo.setPasswordError = const AuthException(
+      'No pudimos conectar. Revisa tu internet.',
+    );
+    var skipped = false;
+    await pump(
+      tester,
+      (_) => CreatePasswordScreen(
+        user: _user(hasPassword: false),
+        onSkip: () => skipped = true,
+      ),
+      initial: AuthState.authenticated(_user(hasPassword: false)),
+    );
+    expect(find.byKey(CreatePasswordScreen.skipKey), findsNothing);
+    await tester.enterText(find.byKey(CreatePasswordScreen.passwordFieldKey), 'barrio2026');
+    await tester.enterText(find.byKey(CreatePasswordScreen.confirmFieldKey), 'barrio2026');
+    await tester.tap(find.byKey(CreatePasswordScreen.saveKey));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(CreatePasswordScreen.messageKey), findsOneWidget);
+    await tester.tap(find.byKey(CreatePasswordScreen.skipKey));
+    expect(skipped, isTrue);
+  });
+
+  test('has_password viaja en la sesión guardada', () {
+    final json = _user(hasPassword: false).toJson();
+    expect(UserModel.fromStoredJson(json).hasPassword, isFalse);
+    // Sesiones viejas sin el campo: no se bloquea a nadie.
+    expect(UserModel.fromStoredJson(json..remove('has_password')).hasPassword, isTrue);
+  });
 
   testWidgets('confirmar correo: sin borrador ofrece "Volver a inicio de sesión"', (
     tester,

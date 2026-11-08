@@ -78,4 +78,28 @@ void main() {
     expect(saved.vulnerableGroups, [VulnerableGroup.ninos]);
     expect(saved.contactPhone, '999 888 777');
   });
+
+  testWidgets('sin GPS se guarda igual y se avisa que quedó en el centro del barrio', (tester) async {
+    HelpLocator.resolve = () async =>
+        const HelpLocation(lat: -5.19, lng: -80.63, fromGps: false);
+    await open(tester);
+    await tester.tap(find.byKey(const ValueKey('sos_type_ATENCION_MEDICA')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(SosSheet.sendButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(await repo.activeReports(TenantSession.instance.tenantId), hasLength(1));
+    expect(find.textContaining('no pudimos usar tu ubicación'), findsOneWidget);
+  });
+
+  testWidgets('con GPS se confirma sin el aviso de ubicación', (tester) async {
+    await open(tester);
+    await tester.tap(find.byKey(const ValueKey('sos_type_ATENCION_MEDICA')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(SosSheet.sendButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pedido de ayuda guardado. Se enviará apenas haya señal.'), findsOneWidget);
+    expect(find.textContaining('no pudimos usar tu ubicación'), findsNothing);
+  });
 }

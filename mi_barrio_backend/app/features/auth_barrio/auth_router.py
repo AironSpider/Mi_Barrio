@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
-from app.core import email_sender, rate_limit
+from app.core import email_sender, email_validation, rate_limit
 from app.core.auth_security import create_access_token, hash_password, verify_password
 from app.core.database import get_db_session
 from app.core.tenant_middleware import require_role
@@ -67,6 +67,7 @@ def _user_response(user: User, tenant: Tenant) -> AuthUserResponse:
         role=user.role,
         is_approved=user.is_approved,
         email_verified=user.email_verified,
+        has_password=user.password_hash is not None,
         tenant=TenantResponse.model_validate(tenant),
     )
 
@@ -97,6 +98,9 @@ def _auth_response(user: User, tenant: Tenant) -> AuthResponse:
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_session)):
     email = payload.email.strip().lower()
+    # Correos desechables, con errores de tipeo o de dominios que no existen
+    # nunca recibirían el código: se rechazan antes de crear la cuenta.
+    await email_validation.ensure_real_email(email)
     join_code = payload.join_code.strip().upper()
     tenant = await db.scalar(select(Tenant).where(Tenant.join_code == join_code))
     if tenant is None:
@@ -318,6 +322,7 @@ async def create_neighborhood(
         raise HTTPException(status_code=401, detail="La sesión ya no es válida")
 
     email = payload.admin_email.strip().lower()
+    await email_validation.ensure_real_email(email)
     user_with_email = await db.scalar(select(User.id).where(User.email == email))
     admin_with_email = await db.scalar(
         select(PlatformAdmin.id).where(PlatformAdmin.email == email)

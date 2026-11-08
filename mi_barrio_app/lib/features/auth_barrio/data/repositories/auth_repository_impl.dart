@@ -105,6 +105,21 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<UserEntity> setPassword(String password) async {
+    final token = _sessionStore.token;
+    if (token == null || token.isEmpty) {
+      throw const AuthException(
+        'Tu sesión venció. Vuelve a entrar con Google.',
+      );
+    }
+    final response = await _remote.setPassword(
+      token: token,
+      password: password,
+    );
+    return _afterAuth(await _persistResponse(response), online: true);
+  }
+
+  @override
   Future<String> requestPasswordReset(String email) =>
       _remote.requestPasswordReset(email);
 
@@ -137,13 +152,23 @@ class AuthRepositoryImpl implements AuthRepository {
     return user;
   }
 
+  /// Cuánto se espera al servidor al abrir la app antes de entrar sin red.
+  static const restoreTimeout = Duration(seconds: 8);
+
   @override
   Future<UserEntity?> restoreSession() async {
     final storedJson = await _sessionStore.read();
     if (storedJson == null) return null;
     final cachedUser = UserModel.fromStoredJson(storedJson);
     try {
-      final remoteUser = await _remote.getCurrentUser(cachedUser.token);
+      // Offline-first: si el servidor no contesta rápido (Render despertando,
+      // señal débil en una emergencia), se entra con la sesión guardada en
+      // vez de dejar al vecino hasta 90 s mirando un indicador. Si el token
+      // venció, la próxima sincronización recibe 401 y cierra la sesión.
+      final remoteUser = await _remote.getCurrentUser(
+        cachedUser.token,
+        timeout: restoreTimeout,
+      );
       final verified = UserModel.fromJson({
         ...remoteUser,
         'access_token': cachedUser.token,

@@ -316,7 +316,7 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
             coordinatorUserId: _me,
             syncStatus: 'PENDING',
           );
-          _notice = 'Listo: estás coordinando este favor. Se sincronizará en segundo plano.';
+          _notice = 'Listo: estás coordinando este favor. Se enviará solo cuando haya señal.';
         });
       } on StateError catch (e) {
         if (mounted) setState(() => _error = e.message);

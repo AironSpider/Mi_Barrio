@@ -14,6 +14,7 @@ import '../../features/proximity_services/presentation/screens/merchant_business
 import '../../features/solidarity_network/presentation/screens/collaborative_wall_screen.dart';
 import 'app_theme.dart';
 import 'done_confirmation.dart';
+import 'publish_action.dart';
 import 'global_sync_status_bar.dart';
 import 'quick_publish_fab.dart';
 import '../barrio_context/emergency_mode_provider.dart';
@@ -122,6 +123,7 @@ class MainNavigationShell extends StatefulWidget {
   /// Índices de pestañas (orden de [ShellTabs.all]).
   static const apoyoTabIndex = 1;
   static const mapaTabIndex = 2;
+
   /// Interruptor ⚠ de la barra (modo emergencia del vecino).
   static const emergencyPreviewSwitchKey = ValueKey('emergency_preview_switch');
   static const helpButtonKey = ValueKey('help_button');
@@ -137,7 +139,8 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (ctx) => TutorialScreen(onFinished: () => Navigator.of(ctx).pop()),
+        builder: (ctx) =>
+            TutorialScreen(onFinished: () => Navigator.of(ctx).pop()),
       ),
     );
   }
@@ -160,7 +163,10 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     final tabId = _index < tabs.length ? tabs[_index].id : '';
     final session = TenantSession.instance;
     if (tabId == 'servicios') {
-      final profile = await loadMerchantProfile(session.userId, tenantId: session.tenantId);
+      final profile = await loadMerchantProfile(
+        session.userId,
+        tenantId: session.tenantId,
+      );
       if (!mounted) return;
       final saved = await showOfferServiceSheet(
         context,
@@ -251,15 +257,18 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
             ),
           GlobalSyncStatusBar(phase: widget.syncPhase),
           Expanded(
-            child: IndexedStack(
-              index: _index,
-              children: [
-                for (final tab in tabs)
-                  KeyedSubtree(
-                    key: ValueKey('tab_${tab.id}'),
-                    child: Builder(builder: tab.builder),
-                  ),
-              ],
+            child: PublishAction(
+              onPublish: () => unawaited(_handlePublish()),
+              child: IndexedStack(
+                index: _index,
+                children: [
+                  for (final tab in tabs)
+                    KeyedSubtree(
+                      key: ValueKey('tab_${tab.id}'),
+                      child: Builder(builder: tab.builder),
+                    ),
+                ],
+              ),
             ),
           ),
         ],
@@ -346,7 +355,10 @@ class _EmergencyBanner extends StatelessWidget {
 /// (naranja, solo lo de emergencia y botón "Ayuda"). Si la junta vecinal ya
 /// activó la emergencia, queda encendido y bloqueado.
 class _EmergencyToggle extends StatelessWidget {
-  const _EmergencyToggle({required this.isEmergencyMode, required this.onChanged});
+  const _EmergencyToggle({
+    required this.isEmergencyMode,
+    required this.onChanged,
+  });
 
   final bool isEmergencyMode;
   final ValueChanged<bool> onChanged;
@@ -368,34 +380,36 @@ class _EmergencyToggle extends StatelessWidget {
             child: Semantics(
               label: 'Modo emergencia',
               child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const ExcludeSemantics(
-                  child: FaIcon(
-                    FontAwesomeIcons.triangleExclamation,
-                    size: 18,
-                    color: Colors.white,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const ExcludeSemantics(
+                    child: FaIcon(
+                      FontAwesomeIcons.triangleExclamation,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                Switch(
-                  key: MainNavigationShell.emergencyPreviewSwitchKey,
-                  value: on,
-                  onChanged: locked ? null : onChanged,
-                  // Apagado: blanco. Encendido: blanco con el punto naranja.
-                  thumbColor: WidgetStateProperty.resolveWith(
-                    (states) => states.contains(WidgetState.selected)
-                        ? AppPalette.emergencyPrimary
-                        : Colors.white,
+                  const SizedBox(width: 4),
+                  Switch(
+                    key: MainNavigationShell.emergencyPreviewSwitchKey,
+                    value: on,
+                    onChanged: locked ? null : onChanged,
+                    // Apagado: blanco. Encendido: blanco con el punto naranja.
+                    thumbColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.selected)
+                          ? AppPalette.emergencyPrimary
+                          : Colors.white,
+                    ),
+                    trackColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.selected)
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.35),
+                    ),
+                    trackOutlineColor: const WidgetStatePropertyAll(
+                      Colors.white,
+                    ),
                   ),
-                  trackColor: WidgetStateProperty.resolveWith(
-                    (states) => states.contains(WidgetState.selected)
-                        ? Colors.white
-                        : Colors.white.withValues(alpha: 0.35),
-                  ),
-                  trackOutlineColor: const WidgetStatePropertyAll(Colors.white),
-                ),
-              ],
+                ],
               ),
             ),
           ),

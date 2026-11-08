@@ -20,14 +20,26 @@ enum AuthStatus {
 }
 
 class AuthState {
-  const AuthState({required this.status, this.user, this.message});
+  const AuthState({
+    required this.status,
+    this.user,
+    this.message,
+    this.restoring = false,
+  });
 
   const AuthState.loading() : this(status: AuthStatus.loading);
+
+  /// Abriendo la app: se lee la sesión guardada. Es el único "cargando" que
+  /// muestra la pantalla de bienvenida; al ingresar o registrarse, la
+  /// pantalla sigue visible con lo escrito y su propio indicador.
+  const AuthState.restoring()
+    : this(status: AuthStatus.loading, restoring: true);
   const AuthState.unauthenticated() : this(status: AuthStatus.unauthenticated);
 
   final AuthStatus status;
   final UserEntity? user;
   final String? message;
+  final bool restoring;
 
   factory AuthState.authenticated(UserEntity user) => AuthState(
     status: switch (user.role) {
@@ -50,7 +62,7 @@ final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
 
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._repository, {AuthState? initialState})
-    : super(initialState ?? const AuthState.loading()) {
+    : super(initialState ?? const AuthState.restoring()) {
     _sessionExpiredSubscription = AuthSessionStore.instance.onSessionExpired
         .listen((_) => unawaited(expireSession()));
   }
@@ -203,6 +215,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (email == null) return 'No encontramos el correo de tu cuenta.';
     try {
       final user = await _repository.verifyEmail(email: email, code: code);
+      state = AuthState.authenticated(user);
+      return null;
+    } catch (error) {
+      return _message(error);
+    }
+  }
+
+  /// Crea la contraseña de quien entró con Google. null = lista.
+  Future<String?> createPassword(String password) async {
+    try {
+      final user = await _repository.setPassword(password);
       state = AuthState.authenticated(user);
       return null;
     } catch (error) {

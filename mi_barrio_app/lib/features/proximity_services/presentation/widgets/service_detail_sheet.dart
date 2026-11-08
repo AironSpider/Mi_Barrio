@@ -334,7 +334,7 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
       if (!mounted) return;
       setState(() {
         _notice = hadSaved
-            ? 'Quitaste tu calificación. Se sincronizará en segundo plano.'
+            ? 'Quitaste tu calificación. Se enviará solo cuando haya señal.'
             : null;
       });
     } on ArgumentError catch (error) {
@@ -369,7 +369,7 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
       await _load();
       if (!mounted) return;
       setState(() {
-        _notice = 'Calificación guardada en tu teléfono. Se sincronizará en segundo plano.';
+        _notice = 'Calificación guardada en tu teléfono. Se enviará solo cuando haya señal.';
       });
     } on ArgumentError catch (error) {
       if (!mounted) return;

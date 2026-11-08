@@ -13,6 +13,7 @@ class UserModel extends UserEntity {
     required super.centerLng,
     super.email,
     super.emailVerified,
+    super.hasPassword,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -43,6 +44,9 @@ class UserModel extends UserEntity {
       emailVerified: json['email_verified'] is bool
           ? json['email_verified'] as bool
           : true,
+      hasPassword: json['has_password'] is bool
+          ? json['has_password'] as bool
+          : true,
     );
   }
 
@@ -57,6 +61,7 @@ class UserModel extends UserEntity {
     'token': token,
     'email': email,
     'email_verified': emailVerified,
+    'has_password': hasPassword,
     'tenant': tenantId == null
         ? null
         : {

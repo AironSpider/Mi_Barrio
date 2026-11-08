@@ -35,6 +35,90 @@ class AuthValidators {
         : 'Revisa tu correo (ejemplo: nombre@correo.com)';
   }
 
+  /// Correo para CREAR una cuenta: además del formato, corta los correos que
+  /// nunca recibirían el código (temporales, errores de tipeo, Gmail
+  /// imposibles). El servidor repite estas reglas y además revisa el dominio.
+  static String? newEmail(String? value) {
+    final basic = email(value);
+    if (basic != null) return basic;
+    final address = value!.trim().toLowerCase();
+    final at = address.lastIndexOf('@');
+    final user = address.substring(0, at);
+    final domain = address.substring(at + 1);
+    final fix = _typos[domain];
+    if (fix != null) return '¿Quisiste decir $user@$fix?';
+    if (_disposable.contains(domain)) {
+      return 'Usa tu correo de siempre, no uno temporal';
+    }
+    if (domain == 'gmail.com' || domain == 'googlemail.com') {
+      final name = user.split('+').first;
+      if (!_gmailUser.hasMatch(name) ||
+          name.startsWith('.') ||
+          name.endsWith('.') ||
+          name.contains('..')) {
+        return 'Un Gmail solo lleva letras, números y puntos';
+      }
+      final length = name.replaceAll('.', '').length;
+      if (length < 6 || length > 30) {
+        return 'Un Gmail tiene entre 6 y 30 letras o números antes de @';
+      }
+    }
+    return null;
+  }
+
+  static final _gmailUser = RegExp(r'^[a-z0-9.]+$');
+
+  static const _typos = {
+    'gmial.com': 'gmail.com',
+    'gmal.com': 'gmail.com',
+    'gmai.com': 'gmail.com',
+    'gamil.com': 'gmail.com',
+    'gnail.com': 'gmail.com',
+    'gmail.co': 'gmail.com',
+    'gmail.con': 'gmail.com',
+    'gmail.cm': 'gmail.com',
+    'gmail.om': 'gmail.com',
+    'gmail.es': 'gmail.com',
+    'gmail.com.pe': 'gmail.com',
+    'gmaill.com': 'gmail.com',
+    'hotmal.com': 'hotmail.com',
+    'hotmial.com': 'hotmail.com',
+    'hotmail.con': 'hotmail.com',
+    'hotmail.co': 'hotmail.com',
+    'hotmai.com': 'hotmail.com',
+    'outlok.com': 'outlook.com',
+    'outlook.con': 'outlook.com',
+    'yahoo.con': 'yahoo.com',
+    'yaho.com': 'yahoo.com',
+    'icloud.con': 'icloud.com',
+  };
+
+  static const _disposable = {
+    'mailinator.com',
+    'yopmail.com',
+    'yopmail.net',
+    '10minutemail.com',
+    '10minutemail.net',
+    'guerrillamail.com',
+    'sharklasers.com',
+    'tempmail.com',
+    'temp-mail.org',
+    'temp-mail.io',
+    'throwawaymail.com',
+    'trashmail.com',
+    'getnada.com',
+    'maildrop.cc',
+    'dispostable.com',
+    'fakeinbox.com',
+    'mailnesia.com',
+    'emailondeck.com',
+    'moakt.com',
+    'mohmal.com',
+    'mail.tm',
+    'minuteinbox.com',
+    'dropmail.me',
+  };
+
   static String? fullName(String? value) {
     final name = value?.trim() ?? '';
     if (name.length < 2) return 'Escribe tu nombre';

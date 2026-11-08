@@ -59,6 +59,10 @@ class _FakeAuthRepository implements AuthRepository {
   }) => throw UnimplementedError();
 
   @override
+  Future<UserEntity> setPassword(String password) async =>
+      throw UnimplementedError();
+
+  @override
   Future<String> requestPasswordReset(String email) async => 'ok';
 
   @override
