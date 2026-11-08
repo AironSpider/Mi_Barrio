@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mi_barrio_app/core/ui_kit/app_theme.dart';
 import 'package:mi_barrio_app/core/ui_kit/main_navigation_shell.dart';
 import 'package:mi_barrio_app/core/ui_kit/quick_publish_fab.dart';
+import 'package:mi_barrio_app/core/ui_kit/search_filter_bar.dart';
 import 'package:mi_barrio_app/core/barrio_context/emergency_mode_provider.dart';
 import 'package:mi_barrio_app/features/proximity_services/presentation/screens/services_directory_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/data/models/user_model.dart';
@@ -60,6 +61,9 @@ void main() {
     }
     expect(find.text('Publicar'), findsOneWidget);
     expect(find.byType(ServicesDirectoryScreen), findsOneWidget);
+    // Los oficios están en el modal de filtros (botón junto al buscador).
+    await tester.tap(find.byKey(const ValueKey('services_filters_button')));
+    await tester.pumpAndSettle();
     for (final oficio in [
       'Gasfitería',
       'Carpintería',
@@ -69,6 +73,8 @@ void main() {
     ]) {
       expect(find.text(oficio), findsOneWidget);
     }
+    await tester.tap(find.byTooltip('Cerrar'));
+    await tester.pumpAndSettle();
     expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsNothing);
   });
 
@@ -181,12 +187,19 @@ void main() {
   ) async {
     await _pumpAuthenticatedApp(tester);
 
-    final chip = find.byKey(const ValueKey('service_category_GASFITERIA'));
-    await tester.ensureVisible(chip);
-    await tester.tap(chip);
-    await tester.pump();
+    final button = find.byKey(const ValueKey('services_filters_button'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
 
-    expect(tester.widget<ChoiceChip>(chip).selected, isTrue);
+    final pill = find.byKey(const ValueKey('filter_option_oficio_GASFITERIA'));
+    await tester.tap(pill);
+    await tester.pump();
+    expect(tester.widget<FilterPill>(pill).selected, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('filters_apply')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterButton>(find.byType(FilterButton).first).activeCount, 1);
   });
 
   testWidgets('las pestañas cambian el contenido', (tester) async {

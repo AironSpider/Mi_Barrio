@@ -8,7 +8,9 @@ import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
 import '../../../../core/ui_kit/done_confirmation.dart';
 import '../../../../core/ui_kit/podium_frame.dart';
+import '../../../../core/ui_kit/search_filter_bar.dart';
 import '../../../../shared/emergency_ranking.dart';
+import '../../../../shared/local_distance.dart';
 import '../../data/datasources/endorsements_sqlite_ds.dart';
 import '../../data/datasources/services_sqlite_ds.dart';
 import '../../data/models/endorsement_model.dart';
@@ -62,6 +64,7 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
 
   String? _selectedCategory;
   String _searchQuery = '';
+  FilterSelection _filters = const {};
   List<LocalServiceModel> _services = const [];
   final Map<String, EndorsementModel> _myEndorsements = {};
   final Set<String> _updatingEndorsements = {};
@@ -229,17 +232,56 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
     );
   }
 
+  static const _categoryGroup = 'oficio';
+
+  /// Grupos del modal de filtros: Oficio (uno) y Distancia.
+  List<FilterGroup> get _filterGroups => [
+        FilterGroup(
+          id: _categoryGroup,
+          title: 'Oficio',
+          allLabel: 'Todos',
+          options: [
+            for (final category in _categories)
+              if (category != null)
+                FilterOption(category, ServiceCategoryUi.shortLabel(category)),
+          ],
+        ),
+        DistanceFilter.group,
+      ];
+
+  /// El oficio se filtra en la base local (como antes); la distancia y la
+  /// búsqueda, en memoria.
+  void _applyFilters(FilterSelection value) {
+    final category = value[_categoryGroup];
+    final newCategory =
+        category == null || category.isEmpty ? null : category.first;
+    final categoryChanged = newCategory != _selectedCategory;
+    setState(() {
+      _filters = value;
+      _selectedCategory = newCategory;
+    });
+    if (categoryChanged) unawaited(_loadServices());
+  }
+
   List<LocalServiceModel> get _visibleServices {
     final query = _searchQuery.trim().toLowerCase();
-    if (query.isEmpty) return _services;
-    return _services
-        .where(
-          (service) =>
-              service.title.toLowerCase().contains(query) ||
-              service.description.toLowerCase().contains(query) ||
-              (service.publisherName?.toLowerCase().contains(query) ?? false),
-        )
-        .toList(growable: false);
+    final distance = _filters[DistanceFilter.groupId];
+    final session = TenantSession.instance;
+    return _services.where((service) {
+      if (distance != null && distance.isNotEmpty) {
+        final km = LocalDistance.km(
+          session.centerLat,
+          session.centerLng,
+          service.lat,
+          service.lng,
+        );
+        if (!DistanceFilter.matches(distance, km)) return false;
+      }
+      if (query.isEmpty) return true;
+      return service.title.toLowerCase().contains(query) ||
+          service.description.toLowerCase().contains(query) ||
+          (service.publisherName?.toLowerCase().contains(query) ?? false);
+    }).toList(growable: false);
   }
 
   @override
@@ -291,49 +333,14 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
             ],
             const SizedBox(height: 16),
           ],
-          TextField(
-            key: const ValueKey('services_search'),
-            onChanged: (value) => setState(() => _searchQuery = value),
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search_rounded),
-              hintText: 'Buscar oficio o vecino',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text('Oficios', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            key: const ValueKey('service_categories_row'),
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-              for (final category in _categories)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                  key: ValueKey('service_category_${category ?? 'all'}'),
-                  label: Text(
-                    category == null ? 'Todos' : ServiceCategoryUi.shortLabel(category),
-                  ),
-                  selected: _selectedCategory == category,
-                  selectedColor: theme.colorScheme.primary,
-                  labelStyle: TextStyle(
-                    color: _selectedCategory == category
-                        ? theme.colorScheme.onPrimary
-                        : theme.colorScheme.onSurface,
-                  ),
-                  onSelected: (_) {
-                    setState(() => _selectedCategory = category);
-                    unawaited(_loadServices());
-                  },
-                  ),
-                ),
-              ],
-            ),
+          SearchFilterBar(
+            searchFieldKey: const ValueKey('services_search'),
+            filterButtonKey: const ValueKey('services_filters_button'),
+            hintText: 'Buscar oficio o vecino',
+            onSearchChanged: (value) => setState(() => _searchQuery = value),
+            groups: _filterGroups,
+            selection: _filters,
+            onFiltersChanged: _applyFilters,
           ),
           if (widget.emergencyOnly) ...[
             const SizedBox(height: 8),
@@ -364,8 +371,9 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
             _buildMessage(
               context,
               icon: Icons.handyman_outlined,
-              message: _searchQuery.isNotEmpty
-                  ? 'No encontramos servicios para esa búsqueda.'
+              message: _searchQuery.isNotEmpty ||
+                      (_filters[DistanceFilter.groupId]?.isNotEmpty ?? false)
+                  ? 'No encontramos servicios con esa búsqueda o esos filtros.'
                   : _selectedCategory == null
                   ? 'Todavía no hay servicios publicados en este barrio.'
                   : 'No hay servicios de ${ServiceCategory.labels[_selectedCategory]}.',

@@ -7,6 +7,7 @@ import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
 import '../../../../core/ui_kit/podium_frame.dart';
+import '../../../../core/ui_kit/search_filter_bar.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
 import '../../../../shared/emergency_ranking.dart';
 import '../../../../shared/local_distance.dart';
@@ -49,7 +50,8 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
   bool _isLoading = true;
   String? _loadError;
   int _loadVersion = 0;
-  String? _flowFilter;
+  String _searchQuery = '';
+  FilterSelection _filters = const {};
 
   @override
   void initState() {
@@ -115,9 +117,68 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
     }
   }
 
-  List<SolidarityPostModel> get _visiblePosts => _posts
-      .where((post) => _flowFilter == null || post.flowType == _flowFilter)
-      .toList(growable: false);
+  /// Grupos del modal de filtros (los valores son los mismos del servidor).
+  List<FilterGroup> get _filterGroups => [
+        const FilterGroup(
+          id: _flowGroup,
+          title: 'Modalidad',
+          allLabel: 'Todas',
+          options: [
+            FilterOption(SolidarityFlowType.solicitoAyuda, 'Necesito'),
+            FilterOption(SolidarityFlowType.ofrezcoAyuda, 'Ofrezco'),
+          ],
+        ),
+        FilterGroup(
+          id: _typeGroup,
+          title: 'Tipo',
+          multiple: true,
+          options: [
+            for (final entry in SolidarityModality.labels.entries)
+              // "Recurso crítico" solo existe en emergencia.
+              if (entry.key != SolidarityModality.recursoCritico ||
+                  EmergencyModeProvider.instance.isActive.value)
+                FilterOption(entry.key, entry.value),
+          ],
+        ),
+        DistanceFilter.group,
+      ];
+
+  static const _flowGroup = 'modalidad';
+  static const _typeGroup = 'tipo';
+
+  bool get _hasFilters =>
+      _searchQuery.trim().isNotEmpty || activeFilterCount(_filters) > 0;
+
+  List<SolidarityPostModel> get _visiblePosts {
+    final query = _searchQuery.trim().toLowerCase();
+    final flows = _filters[_flowGroup];
+    final types = _filters[_typeGroup];
+    final distance = _filters[DistanceFilter.groupId];
+    final session = TenantSession.instance;
+    return _posts.where((post) {
+      if (flows != null && flows.isNotEmpty && !flows.contains(post.flowType)) {
+        return false;
+      }
+      if (types != null && types.isNotEmpty && !types.contains(post.modality)) {
+        return false;
+      }
+      if (distance != null && distance.isNotEmpty) {
+        final km = LocalDistance.km(
+          session.centerLat,
+          session.centerLng,
+          post.lat,
+          post.lng,
+        );
+        if (!DistanceFilter.matches(distance, km)) return false;
+      }
+      if (query.isNotEmpty &&
+          !post.title.toLowerCase().contains(query) &&
+          !(post.description?.toLowerCase().contains(query) ?? false)) {
+        return false;
+      }
+      return true;
+    }).toList(growable: false);
+  }
 
   void _openDetail(SolidarityPostModel post) {
     unawaited(
@@ -166,13 +227,14 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
             const SupportGroupsSection(),
             const SizedBox(height: 16),
           ],
-          Wrap(
-            spacing: 8,
-            children: [
-              _flowChip('Todas', null),
-              _flowChip('Necesito', SolidarityFlowType.solicitoAyuda),
-              _flowChip('Ofrezco', SolidarityFlowType.ofrezcoAyuda),
-            ],
+          SearchFilterBar(
+            searchFieldKey: const ValueKey('wall_search'),
+            filterButtonKey: const ValueKey('wall_filters_button'),
+            hintText: 'Buscar en el muro',
+            onSearchChanged: (value) => setState(() => _searchQuery = value),
+            groups: _filterGroups,
+            selection: _filters,
+            onFiltersChanged: (value) => setState(() => _filters = value),
           ),
           const SizedBox(height: 12),
           if (_loadError != null)
@@ -196,9 +258,9 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
             _buildMessage(
               context,
               icon: Icons.forum_outlined,
-              message: _flowFilter == null
-                  ? 'Todavía no hay publicaciones. Sé el primero en compartir algo con tu barrio.'
-                  : 'No hay publicaciones en esta categoría.',
+              message: _hasFilters
+                  ? 'No hay publicaciones con esa búsqueda o esos filtros.'
+                  : 'Todavía no hay publicaciones. Sé el primero en compartir algo con tu barrio.',
             )
           else
             AnimatedSwitcher(
@@ -272,14 +334,6 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
               : const Icon(Icons.refresh_rounded),
         ),
       ],
-    );
-  }
-
-  Widget _flowChip(String label, String? flowType) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: _flowFilter == flowType,
-      onSelected: (_) => setState(() => _flowFilter = flowType),
     );
   }
 
