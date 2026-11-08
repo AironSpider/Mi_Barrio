@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:mi_barrio_app/core/ui_kit/app_theme.dart';
@@ -16,6 +17,7 @@ import 'package:mi_barrio_app/features/auth_barrio/presentation/providers/auth_p
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/forgot_password_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/login_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/register_screen.dart';
+import 'package:mi_barrio_app/features/auth_barrio/presentation/register_draft.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/screens/verify_email_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/widgets/account_widgets.dart';
 import 'package:mi_barrio_app/features/auth_barrio/presentation/widgets/auth_validators.dart';
@@ -314,6 +316,9 @@ void main() {
   late _FakeGoogle google;
 
   setUp(() {
+    // Sin borrador de registro de un test anterior (ni prefs sin simular).
+    SharedPreferences.setMockInitialValues({});
+    RegisterDraft.reopenRequested = false;
     repo = _FakeRepo();
     google = _FakeGoogle();
   });
@@ -525,6 +530,52 @@ void main() {
       expect(container.read(authProvider).user?.emailVerified, isTrue);
     },
   );
+
+  testWidgets('confirmar correo: sin borrador ofrece "Volver a inicio de sesión"', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final container = await pump(
+      tester,
+      (_) => VerifyEmailScreen(user: _user(verified: false)),
+      initial: AuthState.authenticated(_user(verified: false)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(AuthBackButton.buttonKey), findsOneWidget);
+    expect(find.text('Volver a inicio de sesión'), findsOneWidget);
+    await tester.tap(find.byKey(VerifyEmailScreen.backLinkKey));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(container.read(authProvider).user, isNull);
+    expect(RegisterDraft.reopenRequested, isFalse);
+  });
+
+  testWidgets('confirmar correo: al crear la cuenta ofrece "Volver para cambiar datos"', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'register_draft':
+          '{"join_code":"BARRIO-01","full_name":"Rosa","email":"rosa@correo.com","role":"VECINO"}',
+    });
+    final container = await pump(
+      tester,
+      (_) => VerifyEmailScreen(user: _user(verified: false)),
+      initial: AuthState.authenticated(_user(verified: false)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Volver para cambiar datos'), findsOneWidget);
+    await tester.tap(find.byKey(VerifyEmailScreen.backLinkKey));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(container.read(authProvider).user, isNull);
+    expect(RegisterDraft.reopenRequested, isTrue);
+    // El borrador se conserva (sin contraseña) para volver a editarlo.
+    final draft = await RegisterDraft.load();
+    expect(draft?.fullName, 'Rosa');
+    RegisterDraft.reopenRequested = false;
+  });
 
   testWidgets('confirmar correo: "Reenviar código" se activa a los 60 s', (
     tester,

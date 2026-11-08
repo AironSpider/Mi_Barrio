@@ -40,7 +40,7 @@ class HelpReportCard extends StatelessWidget {
       UrgencyLevel.alta => (colores.urgencyHigh, Icons.warning_rounded),
       _ => (colores.urgencyMedium, Icons.info_rounded),
     };
-    final tipo = VulnerabilityType.labels[report.vulnerabilityType] ?? report.vulnerabilityType;
+    final tipo = report.typeLabel;
     final estado = ReportStatus.labels[report.status] ?? report.status;
 
     return Card(

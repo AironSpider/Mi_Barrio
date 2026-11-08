@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 /// Botón flotante (+) de publicación rápida — Clic 1 del flujo de 3 clics.
 ///
 /// - Modo Día a Día: "Publicar" (verde).
-/// - Modo Emergencia: "Ayuda" (naranja, ícono SOS).
+/// - Modo Emergencia: "Ayuda" (naranja, solo texto).
 ///
 /// Extendido con texto (no solo ícono) para que cualquier vecino,
 /// incluidos adultos mayores, entienda qué hace sin adivinar.
@@ -36,7 +36,8 @@ class QuickPublishFab extends StatelessWidget {
         heroTag: 'quick_publish_fab',
         tooltip: hint,
         onPressed: onPressed,
-        icon: Icon(isEmergencyMode ? Icons.sos_rounded : Icons.add_rounded),
+        // "Ayuda" va solo con texto (sin ícono SOS); "Publicar" lleva el +.
+        icon: isEmergencyMode ? null : const Icon(Icons.add_rounded),
         label: Text(label),
       ),
     );

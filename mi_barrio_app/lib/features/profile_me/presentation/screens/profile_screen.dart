@@ -201,7 +201,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(width: 10),
                 _Stat(
-                  icon: Icons.sos_rounded,
+                  icon: Icons.warning_amber_rounded,
                   value: counts.sos,
                   label: 'Pedidos',
                   onTap: _openHistory,

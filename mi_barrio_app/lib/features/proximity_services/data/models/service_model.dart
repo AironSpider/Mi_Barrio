@@ -50,7 +50,7 @@ class ServiceCategory {
     salud: 'Salud',
     paseadorMascotas: 'Paseador de mascotas',
     soporteEmergencia: 'Soporte en emergencia',
-    otros: 'Otros',
+    otros: 'Otro',
   };
 
   static Set<String> get values => labels.keys.toSet();

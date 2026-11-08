@@ -79,7 +79,7 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
       widget.local ?? SolidaritySqliteDatasource();
   late SolidarityPostModel _post = widget.post;
 
-  Uint8List? _photo;
+  List<Uint8List> _photos = const [];
   bool _photoLoading = false;
 
   List<PostComment>? _comments;
@@ -132,12 +132,18 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
     if (!_post.hasPhoto) return;
     setState(() => _photoLoading = true);
     try {
-      var b64 = await _local.localPhoto(_post.id);
-      if (b64 == null) {
-        b64 = await _remote.fetchPhoto(_tenant, _post.id);
-        if (b64 != null) await _local.cachePhoto(_tenant, _post.id, b64);
+      var list = await _local.localPhotos(_post.id);
+      // Faltan fotos (o no hay ninguna guardada): se piden al servidor.
+      if (list.isEmpty || list.length < _post.photoCount) {
+        final remote = await _remote.fetchPhotos(_tenant, _post.id);
+        if (remote.isNotEmpty) {
+          list = remote;
+          await _local.cachePhotos(_tenant, _post.id, remote);
+        }
       }
-      if (mounted && b64 != null) setState(() => _photo = base64Decode(b64!));
+      if (mounted && list.isNotEmpty) {
+        setState(() => _photos = [for (final b64 in list) base64Decode(b64)]);
+      }
     } catch (_) {
       // Sin foto guardada ni conexión: se muestra el aviso.
     } finally {
@@ -371,7 +377,7 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
     final meta = PostMetaLabel.timeAgo(_post.updatedAt);
 
     return Scaffold(
-      appBar: AppBar(title: Text(isOffer ? 'Ofrece ayuda' : 'Pide ayuda')),
+      appBar: AppBar(title: Text(isOffer ? 'Brinda ayuda' : 'Pide ayuda')),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
@@ -379,7 +385,7 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
           children: [
             if (_post.hasPhoto) ...[
               _PhotoView(
-                photo: _photo,
+                photos: _photos,
                 loading: _photoLoading,
                 title: _post.title,
               ),
@@ -395,7 +401,7 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
                     size: 18,
                     color: esquema.primary,
                   ),
-                  label: Text(isOffer ? 'Ofrezco ayuda' : 'Necesito ayuda'),
+                  label: Text(isOffer ? 'Brindo ayuda' : 'Pido ayuda'),
                 ),
                 Chip(
                   label: Text(
@@ -426,7 +432,10 @@ class _FavorDetailScreenState extends State<FavorDetailScreen> {
                   child: _PersonRow(
                     name: _authorName,
                     caption: [
-                      if (_isOwn) 'Publicaste este favor' else 'Publicó este favor',
+                      if (_isOwn)
+                        'Publicaste este favor'
+                      else
+                        'Publicó este favor',
                       ?meta,
                     ].join(' · '),
                   ),
@@ -1024,68 +1033,127 @@ class _SectionTitle extends StatelessWidget {
 }
 
 /// Foto del favor (16:10). Al tocarla se abre a pantalla completa con zoom.
-class _PhotoView extends StatelessWidget {
+/// Fotos del favor (hasta 4): se deslizan de lado y se amplían al tocar.
+class _PhotoView extends StatefulWidget {
   const _PhotoView({
-    required this.photo,
+    required this.photos,
     required this.loading,
     required this.title,
   });
 
-  final Uint8List? photo;
+  final List<Uint8List> photos;
   final bool loading;
   final String title;
 
   @override
+  State<_PhotoView> createState() => _PhotoViewState();
+}
+
+class _PhotoViewState extends State<_PhotoView> {
+  int _page = 0;
+
+  @override
   Widget build(BuildContext context) {
     final esquema = Theme.of(context).colorScheme;
-    final bytes = photo;
+    final photos = widget.photos;
+    final title = widget.title;
+    final loading = widget.loading;
+    if (photos.isEmpty) return _empty(esquema, loading);
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: AspectRatio(
         aspectRatio: 16 / 10,
-        child: bytes != null
-            ? Semantics(
-                image: true,
-                label: 'Foto de: $title. Toca para ampliar.',
-                child: GestureDetector(
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => Scaffold(
-                        backgroundColor: Colors.black,
-                        appBar: AppBar(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
-                        ),
-                        body: Center(
-                          child: InteractiveViewer(
-                            maxScale: 5,
-                            child: SafeMemoryImage(bytes),
-                          ),
-                        ),
-                      ),
+        child: Stack(
+          children: [
+            PageView(
+              onPageChanged: (i) => setState(() => _page = i),
+              children: [
+                for (final (i, bytes) in photos.indexed)
+                  _photo(context, bytes, title, i, photos.length),
+              ],
+            ),
+            if (photos.length > 1)
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_page + 1}/${photos.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  child: SafeMemoryImage(bytes, fit: BoxFit.cover),
                 ),
-              )
-            : Container(
-                color: esquema.surface,
-                alignment: Alignment.center,
-                child: loading
-                    ? const CircularProgressIndicator()
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.image_not_supported_outlined,
-                            color: esquema.onSurfaceVariant,
-                          ),
-                          const SizedBox(height: 6),
-                          const Text('La foto se verá cuando haya internet.'),
-                        ],
-                      ),
               ),
+          ],
+        ),
       ),
     );
   }
+
+  Widget _photo(
+    BuildContext context,
+    Uint8List bytes,
+    String title,
+    int i,
+    int total,
+  ) => Semantics(
+    image: true,
+    label: total > 1
+        ? 'Foto ${i + 1} de $total de: $title. Toca para ampliar.'
+        : 'Foto de: $title. Toca para ampliar.',
+    child: GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+            ),
+            body: Center(
+              child: InteractiveViewer(
+                maxScale: 5,
+                child: SafeMemoryImage(bytes),
+              ),
+            ),
+          ),
+        ),
+      ),
+      child: SafeMemoryImage(bytes, fit: BoxFit.cover),
+    ),
+  );
+
+  Widget _empty(ColorScheme esquema, bool loading) => ClipRRect(
+    borderRadius: BorderRadius.circular(18),
+    child: AspectRatio(
+      aspectRatio: 16 / 10,
+      child: Container(
+        color: esquema.surface,
+        alignment: Alignment.center,
+        child: loading
+            ? const CircularProgressIndicator()
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.image_not_supported_outlined,
+                    color: esquema.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('La foto se verá cuando haya internet.'),
+                ],
+              ),
+      ),
+    ),
+  );
 }

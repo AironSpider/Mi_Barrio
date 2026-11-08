@@ -22,6 +22,11 @@ abstract class EmergencyRepository {
     required String description,
     required double lat,
     required double lng,
+    String? otherTypeLabel,
+    int? peopleCount,
+    bool? hasInjured,
+    List<String> vulnerableGroups = const [],
+    String? contactPhone,
   });
 
   /// "Voy en camino": el vecino [helperUserId] se ofrece a ayudar.

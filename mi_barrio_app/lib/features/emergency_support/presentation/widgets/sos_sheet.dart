@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/barrio_context/tenant_session.dart';
+import '../../../../core/database_sqlite/sqlite_database.dart';
 import '../../../../core/ui_kit/app_theme.dart';
 import '../../../../core/ui_kit/icon_scale.dart';
 import '../../domain/entities/vulnerable_report_entity.dart';
 import '../providers/emergency_provider.dart';
 
-/// Abre el flujo SOS (Clic 1 = botón "Pedir ayuda").
+/// Abre el flujo SOS (Clic 1 = botón "Ayuda").
 /// Devuelve true si se guardó el pedido.
 Future<bool> showSosSheet(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
@@ -32,12 +33,17 @@ Future<bool> showSosSheet(BuildContext context) async {
 
 /// Hoja "Pedir ayuda":
 /// - Clic 2: elegir qué pasa (tarjetas grandes con ícono y texto).
-/// - Clic 3: "Enviar pedido de ayuda".
-/// La urgencia se sugiere sola según el tipo y el detalle es opcional.
+/// - Clic 3: "Enviar pedido de ayuda" (siempre a la vista, abajo).
+/// La urgencia se sugiere sola según el tipo. Los datos de la urgencia
+/// (personas, heridos, quiénes necesitan más cuidado, teléfono) son opcionales.
 class SosSheet extends StatefulWidget {
   const SosSheet({super.key});
 
   static const sendButtonKey = ValueKey('sos_send_button');
+  static const otherFieldKey = ValueKey('sos_other_label');
+  static const peopleMinusKey = ValueKey('sos_people_minus');
+  static const peoplePlusKey = ValueKey('sos_people_plus');
+  static const phoneFieldKey = ValueKey('sos_phone');
 
   @override
   State<SosSheet> createState() => _SosSheetState();
@@ -50,17 +56,62 @@ class _SosSheetState extends State<SosSheet> {
     VulnerabilityType.movilidadReducida: Icons.accessible_rounded,
     VulnerabilityType.viviendaAfectada: Icons.house_siding_rounded,
     VulnerabilityType.faltaSuministros: Icons.water_drop_rounded,
+    VulnerabilityType.inundacion: Icons.flood_rounded,
+    VulnerabilityType.incendio: Icons.local_fire_department_rounded,
+    VulnerabilityType.atrapados: Icons.lock_person_rounded,
+    VulnerabilityType.otro: Icons.more_horiz_rounded,
   };
 
   final _detalle = TextEditingController();
+  final _otro = TextEditingController();
+  final _telefono = TextEditingController();
   String? _tipo;
   String _urgencia = UrgencyLevel.alta;
+  int? _personas;
+  bool? _heridos;
+  final Set<String> _grupos = {};
   bool _enviando = false;
   String? _error;
+
+  bool get _puedeEnviar =>
+      _tipo != null &&
+      !_enviando &&
+      (_tipo != VulnerabilityType.otro || _otro.text.trim().isNotEmpty);
+
+  @override
+  void initState() {
+    super.initState();
+    _otro.addListener(() => setState(() {}));
+    _cargarTelefono();
+  }
+
+  /// El teléfono del perfil ya viene escrito (se puede cambiar).
+  Future<void> _cargarTelefono() async {
+    try {
+      final db = await LocalDatabase.instance.database;
+      final rows = await db.query(
+        'users',
+        columns: ['phone', 'whatsapp'],
+        where: 'id = ?',
+        whereArgs: [TenantSession.instance.userId],
+        limit: 1,
+      );
+      if (rows.isEmpty || !mounted || _telefono.text.isNotEmpty) return;
+      final row = rows.first;
+      final phone = [row['whatsapp'], row['phone']]
+          .whereType<String>()
+          .firstWhere((p) => p.trim().isNotEmpty, orElse: () => '');
+      if (phone.isNotEmpty) _telefono.text = phone.trim();
+    } catch (_) {
+      // Sin perfil guardado: el campo queda vacío.
+    }
+  }
 
   @override
   void dispose() {
     _detalle.dispose();
+    _otro.dispose();
+    _telefono.dispose();
     super.dispose();
   }
 
@@ -74,7 +125,7 @@ class _SosSheetState extends State<SosSheet> {
 
   Future<void> _enviar() async {
     final tipo = _tipo;
-    if (tipo == null || _enviando) return;
+    if (!_puedeEnviar || tipo == null) return;
     setState(() {
       _enviando = true;
       _error = null;
@@ -90,6 +141,14 @@ class _SosSheetState extends State<SosSheet> {
         description: _detalle.text,
         lat: ubicacion.lat,
         lng: ubicacion.lng,
+        otherTypeLabel: tipo == VulnerabilityType.otro ? _otro.text : null,
+        peopleCount: _personas,
+        hasInjured: _heridos,
+        vulnerableGroups: [
+          for (final g in VulnerableGroup.labels.keys)
+            if (_grupos.contains(g)) g,
+        ],
+        contactPhone: _telefono.text,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (_) {
@@ -109,94 +168,221 @@ class _SosSheetState extends State<SosSheet> {
 
     return Padding(
       padding: EdgeInsets.only(bottom: teclado),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Pedir ayuda', style: texto.titleLarge),
-            const SizedBox(height: 4),
-            Text(
-              'Tus vecinos verán tu pedido aunque no tengas internet ahora.',
-              style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant),
-            ),
-            const SizedBox(height: 16),
-            Text('¿Qué está pasando?', style: texto.titleMedium),
-            const SizedBox(height: 12),
-            for (final tipo in VulnerabilityType.labels.keys) ...[
-              _TipoTile(
-                key: ValueKey('sos_type_$tipo'),
-                icon: _icons[tipo]!,
-                label: VulnerabilityType.labels[tipo]!,
-                selected: _tipo == tipo,
-                onTap: () => _elegir(tipo),
-              ),
-              const SizedBox(height: 8),
-            ],
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              alignment: Alignment.topCenter,
-              child: _tipo == null
-                  ? const SizedBox(width: double.infinity)
-                  : Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text('Urgencia', style: texto.titleMedium),
-                          const SizedBox(height: 8),
-                          SegmentedButton<String>(
-                            showSelectedIcon: false,
-                            style: SegmentedButton.styleFrom(
-                              minimumSize: const Size(48, 52),
-                            ),
-                            segments: [
-                              for (final nivel in UrgencyLevel.labels.keys)
-                                ButtonSegment(
-                                  value: nivel,
-                                  label: Text(UrgencyLevel.labels[nivel]!),
-                                ),
-                            ],
-                            selected: {_urgencia},
-                            onSelectionChanged: (v) =>
-                                setState(() => _urgencia = v.first),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Pedir ayuda', style: texto.titleLarge),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tus vecinos verán tu pedido aunque no tengas internet ahora.',
+                    style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('¿Qué está pasando?', style: texto.titleMedium),
+                  const SizedBox(height: 12),
+                  for (final tipo in VulnerabilityType.labels.keys) ...[
+                    _TipoTile(
+                      key: ValueKey('sos_type_$tipo'),
+                      icon: _icons[tipo]!,
+                      label: VulnerabilityType.labels[tipo]!,
+                      selected: _tipo == tipo,
+                      onTap: () => _elegir(tipo),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  // "Otro": solo con esta opción se escribe qué pasa.
+                  if (_tipo == VulnerabilityType.otro)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 4),
+                      child: TextField(
+                        key: SosSheet.otherFieldKey,
+                        controller: _otro,
+                        autofocus: true,
+                        maxLength: VulnerabilityType.maxOtherLabel,
+                        textCapitalization: TextCapitalization.sentences,
+                        style: texto.bodyLarge,
+                        decoration: InputDecoration(
+                          labelText: '¿Qué está pasando?',
+                          hintText: 'Ej: Cayó un poste con cables',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _detalle,
-                            maxLength: 200,
-                            textCapitalization: TextCapitalization.sentences,
-                            style: texto.bodyLarge,
-                            decoration: InputDecoration(
-                              labelText: 'Detalle (opcional)',
-                              hintText: 'Ej: Vivo en la casa azul, 2do piso',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: texto.bodyMedium?.copyWith(color: esquema.error)),
-            ],
-            const SizedBox(height: 16),
-            FilledButton(
-              key: SosSheet.sendButtonKey,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(56),
-                backgroundColor: AppPalette.emergencyPrimary,
-                foregroundColor: AppPalette.emergencyOnPrimary,
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    alignment: Alignment.topCenter,
+                    child: _tipo == null
+                        ? const SizedBox(width: double.infinity)
+                        : _detalles(context),
+                  ),
+                ],
               ),
-              onPressed: _tipo == null || _enviando ? null : _enviar,
-              child: Text(_enviando ? 'Guardando…' : 'Enviar pedido de ayuda'),
             ),
-          ],
-        ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_error != null) ...[
+                  Text(_error!, style: texto.bodyMedium?.copyWith(color: esquema.error)),
+                  const SizedBox(height: 8),
+                ],
+                FilledButton(
+                  key: SosSheet.sendButtonKey,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                    backgroundColor: AppPalette.emergencyPrimary,
+                    foregroundColor: AppPalette.emergencyOnPrimary,
+                  ),
+                  onPressed: _puedeEnviar ? _enviar : null,
+                  child: Text(_enviando ? 'Guardando…' : 'Enviar pedido de ayuda'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Urgencia y datos que ayudan a decidir a quién atender primero.
+  Widget _detalles(BuildContext context) {
+    final texto = Theme.of(context).textTheme;
+    final esquema = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Urgencia', style: texto.titleMedium),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(minimumSize: const Size(48, 52)),
+            segments: [
+              for (final nivel in UrgencyLevel.labels.keys)
+                ButtonSegment(value: nivel, label: Text(UrgencyLevel.labels[nivel]!)),
+            ],
+            selected: {_urgencia},
+            onSelectionChanged: (v) => setState(() => _urgencia = v.first),
+          ),
+          const SizedBox(height: 20),
+          Text('Datos que ayudan (opcional)', style: texto.titleMedium),
+          Text(
+            'Así los vecinos y la junta saben a quién ayudar primero.',
+            style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          // ¿Cuántas personas?
+          Row(
+            children: [
+              Expanded(child: Text('¿Cuántas personas?', style: texto.bodyLarge)),
+              IconButton.outlined(
+                key: SosSheet.peopleMinusKey,
+                tooltip: 'Menos personas',
+                onPressed: _personas == null
+                    ? null
+                    : () => setState(
+                        () => _personas = _personas! <= 1 ? null : _personas! - 1,
+                      ),
+                icon: const Icon(Icons.remove_rounded),
+              ),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  _personas?.toString() ?? '—',
+                  textAlign: TextAlign.center,
+                  style: texto.titleMedium,
+                ),
+              ),
+              IconButton.outlined(
+                key: SosSheet.peoplePlusKey,
+                tooltip: 'Más personas',
+                onPressed: (_personas ?? 0) >= 99
+                    ? null
+                    : () => setState(() => _personas = (_personas ?? 0) + 1),
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // ¿Hay heridos? (tocar de nuevo deja la respuesta en blanco)
+          Row(
+            children: [
+              Expanded(child: Text('¿Hay heridos?', style: texto.bodyLarge)),
+              for (final (valor, etiqueta) in const [(true, 'Sí'), (false, 'No')])
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: ChoiceChip(
+                    key: ValueKey('sos_injured_$valor'),
+                    label: Text(etiqueta),
+                    selected: _heridos == valor,
+                    onSelected: (_) =>
+                        setState(() => _heridos = _heridos == valor ? null : valor),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('¿Hay alguien que necesite más cuidado?', style: texto.bodyLarge),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry in VulnerableGroup.labels.entries)
+                FilterChip(
+                  key: ValueKey('sos_group_${entry.key}'),
+                  label: Text(entry.value),
+                  selected: _grupos.contains(entry.key),
+                  onSelected: (on) => setState(
+                    () => on ? _grupos.add(entry.key) : _grupos.remove(entry.key),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            key: SosSheet.phoneFieldKey,
+            controller: _telefono,
+            keyboardType: TextInputType.phone,
+            maxLength: 20,
+            style: texto.bodyLarge,
+            decoration: InputDecoration(
+              labelText: 'Teléfono para ubicarte',
+              prefixIcon: const Icon(Icons.phone_rounded),
+              counterText: '',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _detalle,
+            maxLength: 200,
+            minLines: 2,
+            maxLines: 4,
+            textCapitalization: TextCapitalization.sentences,
+            style: texto.bodyLarge,
+            decoration: InputDecoration(
+              labelText: 'Cuéntanos más (opcional)',
+              hintText: 'Ej: Casa azul, 2do piso. Somos 4 y hay un bebé',
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -158,7 +158,7 @@ class _HumanitarianBoardScreenState extends State<HumanitarianBoardScreen> {
             const SizedBox(height: 4),
             Text(
               widget.isEmergencyMode
-                  ? 'Ordenados por urgencia. Ofrece ayuda si puedes llegar.'
+                  ? 'Ordenados por urgencia. Brinda ayuda si puedes llegar.'
                   : 'No hay una emergencia activa. Si un vecino pide ayuda, aparecerá aquí.',
               style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant),
             ),

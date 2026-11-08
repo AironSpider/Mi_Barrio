@@ -14,6 +14,7 @@ from app.features.solidarity_network.schemas import (
     CommentCreate,
     CommentResponse,
     PostPhotoResponse,
+    PostPhotosResponse,
     ReviewCreate,
     ReviewResponse,
     SolidarityPostCreate,
@@ -112,6 +113,18 @@ async def get_solidarity_post_photo(
     if not post.photo_b64:
         raise HTTPException(status_code=404, detail="Esta publicación no tiene foto")
     return PostPhotoResponse(id=post.id, photo_b64=post.photo_b64)
+
+
+@router.get("/{post_id}/photos", response_model=PostPhotosResponse)
+async def get_solidarity_post_photos(
+    post_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Todas las fotos del favor (hasta 4). Las apps viejas usan /photo (la primera)."""
+    post = await _post_or_404(db, tenant_id, post_id)
+    photos = list(post.photos or ([post.photo_b64] if post.photo_b64 else []))
+    return PostPhotosResponse(id=post.id, photos=photos)
 
 
 @router.patch("/{post_id}/coordinate", response_model=SolidarityPostResponse)

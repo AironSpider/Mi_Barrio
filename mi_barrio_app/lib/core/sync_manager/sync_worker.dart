@@ -123,6 +123,7 @@ class SyncWorker {
       'coordinator_user_id',
       'coordinator_name',
       'is_under_review', // moderación (solo bajada)
+      'photo_count', // las fotos se piden aparte (solo bajada)
     ],
     'local_services': [
       'id',
@@ -159,6 +160,11 @@ class SyncWorker {
       'lng',
       'status',
       'helper_user_id',
+      'other_type_label',
+      'people_count',
+      'has_injured',
+      'vulnerable_groups',
+      'contact_phone',
       'is_deleted',
       'updated_at',
     ],
@@ -188,6 +194,7 @@ class SyncWorker {
     'is_active',
     'has_photo',
     'is_under_review',
+    'has_injured',
   };
 
   SyncWorker({required this.baseUrl, http.Client? client})
@@ -449,7 +456,8 @@ class SyncWorker {
             for (final col in entry.value) {
               if (!record.containsKey(col)) continue;
               final value = record[col];
-              row[col] = _boolColumns.contains(col)
+              // "¿Hay heridos?" sin responder sigue siendo null (no "no").
+              row[col] = _boolColumns.contains(col) && !(value == null && col == 'has_injured')
                   ? ((value == true || value == 1) ? 1 : 0)
                   : value;
             }

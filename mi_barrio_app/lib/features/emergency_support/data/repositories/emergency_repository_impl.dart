@@ -63,6 +63,11 @@ class EmergencyRepositoryImpl implements EmergencyRepository {
     required String description,
     required double lat,
     required double lng,
+    String? otherTypeLabel,
+    int? peopleCount,
+    bool? hasInjured,
+    List<String> vulnerableGroups = const [],
+    String? contactPhone,
   }) async {
     RecordValidation.uuid(tenantId, 'tenantId');
     RecordValidation.uuid(reporterUserId, 'reporterUserId');
@@ -70,6 +75,16 @@ class EmergencyRepositoryImpl implements EmergencyRepository {
     RecordValidation.oneOf(urgencyLevel, UrgencyLevel.values, 'urgencyLevel');
     RecordValidation.coordinates(lat, lng);
     final detail = description.trim();
+    final other = otherTypeLabel?.trim();
+    if (vulnerabilityType == VulnerabilityType.otro && (other == null || other.isEmpty)) {
+      throw ArgumentError.value(otherTypeLabel, 'otherTypeLabel', 'Cuéntanos qué está pasando');
+    }
+    if (other != null && other.length > VulnerabilityType.maxOtherLabel) {
+      throw ArgumentError.value(otherTypeLabel, 'otherTypeLabel', 'Máximo ${VulnerabilityType.maxOtherLabel} caracteres');
+    }
+    if (peopleCount != null && (peopleCount < 1 || peopleCount > 99)) {
+      throw ArgumentError.value(peopleCount, 'peopleCount', 'Entre 1 y 99');
+    }
     if (detail.length > 2000) {
       throw ArgumentError.value(description, 'description', 'Máximo 2000 caracteres');
     }
@@ -81,11 +96,18 @@ class EmergencyRepositoryImpl implements EmergencyRepository {
       urgencyLevel: urgencyLevel,
       vulnerabilityType: vulnerabilityType,
       // El servidor exige descripción: si el vecino no escribió nada, se usa el tipo.
-      description: detail.isEmpty ? VulnerabilityType.labels[vulnerabilityType]! : detail,
+      description: detail.isEmpty
+          ? (vulnerabilityType == VulnerabilityType.otro ? other! : VulnerabilityType.labels[vulnerabilityType]!)
+          : detail,
       lat: lat,
       lng: lng,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
       isPending: true,
+      otherTypeLabel: vulnerabilityType == VulnerabilityType.otro ? other : null,
+      peopleCount: peopleCount,
+      hasInjured: hasInjured,
+      vulnerableGroups: vulnerableGroups,
+      contactPhone: contactPhone?.trim().isEmpty ?? true ? null : contactPhone!.trim(),
     );
     await _save(report);
     return report;

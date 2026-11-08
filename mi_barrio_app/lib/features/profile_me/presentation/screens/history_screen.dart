@@ -153,8 +153,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         children: [
                           for (final r in _sos)
                             _HistoryTile(
-                              icon: Icons.sos_rounded,
-                              title: VulnerabilityType.labels[r.vulnerabilityType] ?? r.vulnerabilityType,
+                              icon: Icons.warning_amber_rounded,
+                              title: r.typeLabel,
                               subtitle: ReportStatus.labels[r.status] ?? r.status,
                               chip: r.isPending ? SyncChipStatus.pending : SyncChipStatus.synced,
                             ),

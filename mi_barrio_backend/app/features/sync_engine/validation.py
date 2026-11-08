@@ -9,6 +9,7 @@ import re
 from typing import get_args
 
 from app.shared.contract_values import (
+    MAX_OTHER_TYPE_LABEL,
     MAX_PHOTO_B64,
     MAX_SERVICE_PHOTOS,
     FlowType,
@@ -21,6 +22,7 @@ from app.shared.contract_values import (
     ServiceCategory,
     UrgencyLevel,
     VulnerabilityType,
+    VulnerableGroup,
 )
 
 MAX_BATCH = 200
@@ -42,6 +44,7 @@ _RULES: dict[str, dict[str, tuple[str, object]]] = {
         "lng": ("lng", None),
         # Foto opcional del favor: mismo tope que las fotos de calificaciones.
         "photo_b64": ("text_opt", (0, 110_000)),
+        "photos": ("photos", None),
     },
     "local_services": {
         "category": ("enum", _one_of(ServiceCategory)),
@@ -67,6 +70,10 @@ _RULES: dict[str, dict[str, tuple[str, object]]] = {
         "description": ("text", (1, 2000)),
         "lat": ("lat", None),
         "lng": ("lng", None),
+        "other_type_label": ("text_opt", (0, MAX_OTHER_TYPE_LABEL)),
+        "people_count": ("people", None),
+        "vulnerable_groups": ("groups", _one_of(VulnerableGroup)),
+        "contact_phone": ("phone_opt", None),
     },
     "content_reports": {
         "target_type": ("enum", _one_of(ReportTargetType)),
@@ -96,7 +103,7 @@ _HTTPS_URL = re.compile(r"^https://[^\s]+$")
 # Mismo patrón que la app (profile_local_storage.dart).
 _EMAIL = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 
-_BOOL_FIELDS = {"is_deleted", "is_emergency_context", "is_available_in_emergency", "tutorial_completed"}
+_BOOL_FIELDS = {"is_deleted", "is_emergency_context", "is_available_in_emergency", "tutorial_completed", "has_injured"}
 
 
 def _number(field: str, value) -> float:
@@ -161,6 +168,16 @@ def validate_payload(table: str, payload: dict) -> None:
                 raise ValueError(
                     f"photos debe ser una lista de hasta {MAX_SERVICE_PHOTOS} fotos (máx. {MAX_PHOTO_B64} caracteres c/u)"
                 )
+        elif rule == "people":
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 99:
+                raise ValueError(f"{field} debe ser un número entre 1 y 99")
+        elif rule == "groups":
+            if value is None or value == "":
+                continue
+            if not isinstance(value, str) or any(g not in param for g in value.split(",")):
+                raise ValueError(f"{field} inválido: {value!r}")
         elif rule == "rating":
             if value is None:
                 continue

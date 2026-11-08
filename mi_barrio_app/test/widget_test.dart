@@ -6,6 +6,7 @@ import 'package:mi_barrio_app/core/ui_kit/main_navigation_shell.dart';
 import 'package:mi_barrio_app/core/ui_kit/quick_publish_fab.dart';
 import 'package:mi_barrio_app/core/ui_kit/search_filter_bar.dart';
 import 'package:mi_barrio_app/core/barrio_context/emergency_mode_provider.dart';
+import 'package:mi_barrio_app/features/emergency_support/presentation/providers/emergency_provider.dart';
 import 'package:mi_barrio_app/features/proximity_services/presentation/screens/services_directory_screen.dart';
 import 'package:mi_barrio_app/features/auth_barrio/data/models/user_model.dart';
 import 'package:mi_barrio_app/features/auth_barrio/domain/entities/user_entity.dart';
@@ -295,42 +296,40 @@ void main() {
     expect(find.byKey(MainNavigationShell.emergencyBannerKey), findsNothing);
   });
 
-  testWidgets('el botón (+) abre el modal de publicación rápida', (
+  testWidgets('en Servicios, Publicar abre el formulario de servicio', (
     tester,
   ) async {
+    HelpLocator.resolve = () async =>
+        const HelpLocation(lat: -5.1945, lng: -80.6328, fromGps: false);
     await _pumpAuthenticatedApp(tester);
 
     await tester.tap(find.byKey(QuickPublishFab.fabKey));
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.text('Pedir un servicio'), findsOneWidget);
+    expect(find.text('Brindar'), findsOneWidget);
   });
 
-  testWidgets('sin onPublish, el botón (+) avisa en lugar de fallar', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          authProvider.overrideWith(
-            (ref) => AuthNotifier(
-              ref.read(authRepositoryProvider),
-              initialState: const AuthState.unauthenticated(),
-            ),
-          ),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.day(),
-          home: const MainNavigationShell(isEmergencyMode: false),
-        ),
-      ),
-    );
+  testWidgets('en Apoyo, Publicar abre la pantalla de apoyo', (tester) async {
+    HelpLocator.resolve = () async =>
+        const HelpLocation(lat: -5.1945, lng: -80.6328, fromGps: false);
+    await _pumpAuthenticatedApp(tester);
 
+    await tester.tap(find.text('Apoyo'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(QuickPublishFab.fabKey));
-    await tester.pump();
-    expect(find.byType(SnackBar), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('Pedir apoyo'), findsOneWidget);
+    expect(find.text('Otro'), findsOneWidget);
   });
 
-  testWidgets('el botón (+) llama a onPublish cuando está conectado', (
+  testWidgets('en el Mapa no hay botón Publicar (día a día)', (tester) async {
+    await _pumpAuthenticatedApp(tester);
+    await tester.tap(find.text('Mapa'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(QuickPublishFab.fabKey), findsNothing);
+  });
+
+  testWidgets('en emergencia, "Ayuda" (sin ícono) llama a onPublish y muestra el Mapa', (
     tester,
   ) async {
     var calls = 0;
@@ -345,9 +344,9 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          theme: AppTheme.day(),
+          theme: AppTheme.emergency(),
           home: MainNavigationShell(
-            isEmergencyMode: false,
+            isEmergencyMode: true,
             onPublish: () async {
               calls++;
               return true;
@@ -357,10 +356,12 @@ void main() {
       ),
     );
 
+    expect(find.text('Ayuda'), findsOneWidget);
+    expect(find.byIcon(Icons.sos_rounded), findsNothing);
     await tester.tap(find.byKey(QuickPublishFab.fabKey));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(calls, 1);
-    expect(find.text('Muro solidario'), findsOneWidget);
+    expect(find.text('Mapa de ayuda'), findsOneWidget);
   });
 
   for (final emergency in [false, true]) {

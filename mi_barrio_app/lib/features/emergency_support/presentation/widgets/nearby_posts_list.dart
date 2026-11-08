@@ -187,7 +187,7 @@ class _EntryTile extends StatelessWidget {
         : (SolidarityModality.labels[post!.modality] ?? 'Favor');
     final subtitle = [
       isService ? 'Servicio' : 'Favor',
-      isNeed ? 'Necesita' : 'Ofrece',
+      isNeed ? 'Pide' : 'Brinda',
       kind,
       'a ${LocalDistance.label(entry.km)}',
       if (entry.emergency) 'Emergencia',

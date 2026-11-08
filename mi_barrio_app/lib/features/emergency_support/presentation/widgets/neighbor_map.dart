@@ -104,8 +104,8 @@ class _NeighborMapState extends State<NeighborMap> {
         add(r.reporterUserId, PinItem(
           id: r.id,
           kind: PinItemKind.sos,
-          title: VulnerabilityType.labels[r.vulnerabilityType] ?? 'Pide ayuda',
-          subtitle: r.description != VulnerabilityType.labels[r.vulnerabilityType]
+          title: r.typeLabel,
+          subtitle: r.description != r.typeLabel
               ? r.description
               : ReportStatus.labels[r.status],
           lat: r.lat,
@@ -122,7 +122,7 @@ class _NeighborMapState extends State<NeighborMap> {
           kind: PinItemKind.favor,
           title: p.title,
           subtitle:
-              '${p.flowType == SolidarityFlowType.ofrezcoAyuda ? 'Ofrece' : 'Necesita'} · '
+              '${p.flowType == SolidarityFlowType.ofrezcoAyuda ? 'Brinda' : 'Pide'} · '
               '${SolidarityModality.labels[p.modality] ?? p.modality}',
           lat: p.lat,
           lng: p.lng,
@@ -267,14 +267,14 @@ Color _kindColor(BuildContext context, PinItemKind kind) {
 }
 
 IconData _kindIcon(PinItemKind kind) => switch (kind) {
-      PinItemKind.sos => Icons.sos_rounded,
+      PinItemKind.sos => Icons.warning_amber_rounded,
       PinItemKind.service => Icons.handyman_rounded,
       PinItemKind.favor => Icons.volunteer_activism_rounded,
     };
 
 String _kindLabel(PinItemKind kind) => switch (kind) {
       PinItemKind.sos => 'Pide ayuda',
-      PinItemKind.service => 'Ofrece un servicio',
+      PinItemKind.service => 'Brinda un servicio',
       PinItemKind.favor => 'Favor del muro',
     };
 

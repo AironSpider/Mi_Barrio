@@ -96,10 +96,10 @@ class OfferServiceSheet extends StatefulWidget {
     this.existing,
     this.lat,
     this.lng,
-    this.initialFlowType = LocalServiceModel.flowOffer,
+    this.initialFlowType = LocalServiceModel.flowNeed,
   });
 
-  /// Con qué opción abre: Ofrezco (por defecto) o Necesito.
+  /// Con qué opción abre: Pedir (por defecto, como en Apoyo) o Brindar.
   final String initialFlowType;
 
   final String? tenantId;
@@ -341,7 +341,34 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
               ? 'Editar servicio'
               : _isNeed
               ? 'Pedir un servicio'
-              : 'Ofrecer un servicio',
+              : 'Brindar un servicio',
+        ),
+      ),
+      // "Publicar" siempre a la vista: no hace falta bajar (regla de 3 clics).
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: FilledButton.icon(
+            key: OfferServiceSheet.publishKey,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(56),
+            ),
+            onPressed: _canPublish ? _publish : null,
+            icon: _saving
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : Icon(_isEdit ? Icons.save_rounded : Icons.check_rounded),
+            label: Text(
+              _isEdit
+                  ? 'Guardar cambios'
+                  : _isNeed
+                  ? 'Publicar pedido'
+                  : 'Publicar servicio',
+            ),
+          ),
         ),
       ),
       body: ListView(
@@ -351,21 +378,21 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
             'Se guarda en tu teléfono y se publica cuando haya internet.',
             style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant),
           ),
-          section('¿Ofreces o necesitas?'),
+          section('¿Brindas o pides?'),
           SegmentedButton<String>(
             key: OfferServiceSheet.flowKey,
             style: SegmentedButton.styleFrom(minimumSize: const Size(48, 52)),
             showSelectedIcon: false,
             segments: const [
               ButtonSegment(
-                value: LocalServiceModel.flowOffer,
-                label: Text('Ofrezco'),
-                icon: Icon(Icons.handyman_rounded),
+                value: LocalServiceModel.flowNeed,
+                label: Text('Pedir'),
+                icon: Icon(Icons.campaign_rounded),
               ),
               ButtonSegment(
-                value: LocalServiceModel.flowNeed,
-                label: Text('Necesito'),
-                icon: Icon(Icons.campaign_rounded),
+                value: LocalServiceModel.flowOffer,
+                label: Text('Brindar'),
+                icon: Icon(Icons.handyman_rounded),
               ),
             ],
             selected: {_flow},
@@ -386,7 +413,7 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
                 ),
             ],
           ),
-          section(_isNeed ? '¿Qué necesitas?' : '¿Qué ofreces?'),
+          section(_isNeed ? '¿Qué servicio pides?' : '¿Qué servicio brindas?'),
           TextField(
             key: OfferServiceSheet.titleKey,
             controller: _title,
@@ -572,28 +599,6 @@ class _OfferServiceSheetState extends State<OfferServiceSheet> {
               ),
             ),
           ],
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            key: OfferServiceSheet.publishKey,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(56),
-            ),
-            onPressed: _canPublish ? _publish : null,
-            icon: _saving
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  )
-                : Icon(_isEdit ? Icons.save_rounded : Icons.check_rounded),
-            label: Text(
-              _isEdit
-                  ? 'Guardar cambios'
-                  : _isNeed
-                  ? 'Publicar pedido'
-                  : 'Publicar servicio',
-            ),
-          ),
           if (_isEdit) ...[
             const SizedBox(height: 10),
             TextButton.icon(

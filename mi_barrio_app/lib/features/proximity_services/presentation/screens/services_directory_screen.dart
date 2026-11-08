@@ -6,7 +6,6 @@ import '../../../../core/barrio_context/emergency_mode_provider.dart';
 import '../../../../core/barrio_context/tenant_session.dart';
 import '../../../../core/database_sqlite/sync_outbox_dao.dart';
 import '../../../../core/sync_manager/sync_coordinator.dart';
-import '../../../../core/ui_kit/done_confirmation.dart';
 import '../../../../core/ui_kit/podium_frame.dart';
 import '../../../../core/ui_kit/search_filter_bar.dart';
 import '../../../../shared/emergency_ranking.dart';
@@ -15,7 +14,6 @@ import '../../data/datasources/endorsements_sqlite_ds.dart';
 import '../../data/datasources/services_sqlite_ds.dart';
 import '../../data/models/endorsement_model.dart';
 import '../../data/models/service_model.dart';
-import '../widgets/offer_service_sheet.dart';
 import '../widgets/service_card.dart';
 import '../widgets/service_detail_sheet.dart';
 import '../widgets/service_category_ui.dart';
@@ -58,7 +56,6 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
   bool _isLoading = true;
   String? _loadError;
   int _loadVersion = 0;
-  MerchantProfile _merchant = const MerchantProfile.none();
 
   @override
   void initState() {
@@ -78,7 +75,6 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_loadServices());
-      unawaited(_loadMerchant());
     });
   }
 
@@ -204,28 +200,6 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
     }
   }
 
-  Future<void> _loadMerchant() async {
-    final profile = await loadMerchantProfile(_userId, tenantId: _tenantId);
-    if (!mounted) return;
-    setState(() => _merchant = profile);
-  }
-
-  Future<void> _openOffer() async {
-    final messenger = ScaffoldMessenger.of(context);
-    final published = await showOfferServiceSheet(
-      context,
-      tenantId: _tenantId,
-      userId: _userId,
-      datasource: _servicesDatasource,
-      profile: _merchant,
-    );
-    if (!published || !mounted) return;
-    DoneConfirmation.show(
-      messenger,
-      'Tu servicio ya está publicado. Se enviará solo cuando haya señal.',
-    );
-  }
-
   static const _categoryGroup = 'oficio';
   static const _flowGroup = 'modalidad';
   static const _mineGroup = 'mios';
@@ -239,8 +213,8 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
           title: 'Modalidad',
           allLabel: 'Todas',
           options: [
-            FilterOption(LocalServiceModel.flowNeed, 'Necesito'),
-            FilterOption(LocalServiceModel.flowOffer, 'Ofrezco'),
+            FilterOption(LocalServiceModel.flowNeed, 'Pedir'),
+            FilterOption(LocalServiceModel.flowOffer, 'Brindar'),
           ],
         ),
         const FilterGroup.toggle(id: _mineGroup, title: 'Seleccionar los míos'),
@@ -340,17 +314,8 @@ class _ServicesDirectoryScreenState extends State<ServicesDirectoryScreen> {
             ),
             const SizedBox(height: 8),
           ],
-          // Vecinos y comerciantes ofrecen o piden servicios.
-          FilledButton.icon(
-            key: const ValueKey('offer_service_button'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(56),
-            ),
-            onPressed: () => unawaited(_openOffer()),
-            icon: const Icon(Icons.storefront_rounded),
-            label: const Text('Ofrecer o pedir un servicio'),
-          ),
-          const SizedBox(height: 16),
+          // Pedir o brindar un servicio: botón "Publicar" de abajo (el botón
+          // grande de aquí era redundante).
           SearchFilterBar(
             searchFieldKey: const ValueKey('services_search'),
             filterButtonKey: const ValueKey('services_filters_button'),

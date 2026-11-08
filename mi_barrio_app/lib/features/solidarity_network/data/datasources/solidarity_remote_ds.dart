@@ -16,6 +16,25 @@ class SolidarityRemoteDatasource {
       ? body.whereType<Map<String, dynamic>>().toList(growable: false)
       : const [];
 
+  /// Todas las fotos del favor (hasta 4). Si el servidor aún no tiene la ruta
+  /// nueva, usa la de una sola foto. Vacío si no tiene o no hay red.
+  Future<List<String>> fetchPhotos(String tenantId, String postId) async {
+    try {
+      final r = await _api.get('${_base(postId)}/photos', tenantId);
+      if (r.statusCode == 200) {
+        final body = jsonDecode(r.body);
+        final photos = body is Map ? body['photos'] : null;
+        if (photos is List) {
+          return [for (final p in photos) if (p is String && p.isNotEmpty) p];
+        }
+      }
+    } catch (_) {
+      // sin red o servidor anterior: se intenta la foto única
+    }
+    final single = await fetchPhoto(tenantId, postId);
+    return single == null ? const [] : [single];
+  }
+
   /// Foto del favor en base64, o null si no tiene / no hay red.
   Future<String?> fetchPhoto(String tenantId, String postId) async {
     try {

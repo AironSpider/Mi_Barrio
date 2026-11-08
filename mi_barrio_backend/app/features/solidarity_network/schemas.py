@@ -47,6 +47,12 @@ class PostPhotoResponse(BaseModel):
     content_type: str = "image/jpeg"
 
 
+class PostPhotosResponse(BaseModel):
+    id: uuid.UUID
+    photos: list[str]
+    content_type: str = "image/jpeg"
+
+
 # ── Comentarios ──
 class CommentCreate(BaseModel):
     body: str = Field(..., min_length=1, max_length=500, examples=["¡Yo te presto la escalera!"])

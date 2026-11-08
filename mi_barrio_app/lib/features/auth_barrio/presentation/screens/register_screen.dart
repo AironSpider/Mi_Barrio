@@ -7,6 +7,7 @@ import '../../../../core/ui_kit/app_theme.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
 import '../../domain/entities/user_entity.dart';
 import '../providers/auth_provider.dart';
+import '../register_draft.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/auth_validators.dart';
 
@@ -46,6 +47,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void initState() {
     super.initState();
     _password.addListener(() => setState(() {}));
+    _loadDraft();
+  }
+
+  /// "Volver para cambiar datos": vuelve con lo que había escrito (la
+  /// contraseña no se guarda: se escribe de nuevo).
+  Future<void> _loadDraft() async {
+    final draft = await RegisterDraft.load();
+    if (draft == null || !mounted) return;
+    setState(() {
+      if (_joinCode.text.isEmpty) _joinCode.text = draft.joinCode;
+      if (_name.text.isEmpty) _name.text = draft.fullName;
+      if (_email.text.isEmpty) _email.text = draft.email;
+      _role = draft.role == UserRole.comerciante.apiValue
+          ? UserRole.comerciante
+          : UserRole.vecino;
+    });
+    if (draft.joinCode.isNotEmpty) _onCodeChanged(draft.joinCode);
   }
 
   /// Con Google no hace falta nombre, correo ni contraseña: solo el barrio y el rol.
@@ -128,6 +146,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+    await RegisterDraft.save(
+      RegisterDraft(
+        joinCode: _joinCode.text.trim(),
+        fullName: _name.text.trim(),
+        email: _email.text.trim(),
+        role: _role.apiValue,
+      ),
+    );
     await ref
         .read(authProvider.notifier)
         .register(
@@ -150,7 +176,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final loading = auth.status == AuthStatus.loading || _googleBusy;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Crear cuenta')),
+      appBar: AppBar(
+        title: const Text('Crear cuenta'),
+        leading: AuthBackButton(
+          tooltip: 'Volver al inicio de sesión',
+          onPressed: loading ? null : () => Navigator.of(context).maybePop(),
+        ),
+        leadingWidth: 64,
+      ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,

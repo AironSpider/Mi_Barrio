@@ -10,6 +10,8 @@ FlowType = Literal["SOLICITO_AYUDA", "OFREZCO_AYUDA"]
 Modality = Literal[
     "PRESTAMO_HERRAMIENTA", "AYUDA_TEMPORAL", "DONACION_MATERIAL",
     "INTERCAMBIO_HABILIDAD", "MOVILIDAD_SOLIDARIA", "RECURSO_CRITICO",
+    # Nuevos: más tipos de favor y "Otro" (el detalle va en la descripción).
+    "ALIMENTOS", "ROPA", "MASCOTAS", "APOYO_ESCOLAR", "OTRO",
 ]
 PostStatus = Literal["DISPONIBLE", "EN_COORDINACION", "COMPLETADO"]
 ServiceCategory = Literal[
@@ -28,7 +30,12 @@ UrgencyLevel = Literal["CRITICA", "ALTA", "MEDIA"]
 VulnerabilityType = Literal[
     "ADULTO_MAYOR_SOLO", "MOVILIDAD_REDUCIDA", "ATENCION_MEDICA",
     "VIVIENDA_AFECTADA", "FALTA_SUMINISTROS",
+    # Lluvias e incendios + "Otro" (el vecino escribe qué pasa, máx. 30).
+    "INUNDACION", "INCENDIO", "ATRAPADOS", "OTRO",
 ]
+# Grupos que necesitan más cuidado en una emergencia (pueden ser varios).
+VulnerableGroup = Literal["NINOS", "MAYORES", "DISCAPACIDAD", "EMBARAZADA", "MASCOTAS"]
+MAX_OTHER_TYPE_LABEL = 30
 ReportStatus = Literal["PENDIENTE_APOYO", "VECINOS_EN_CAMINO", "ATENDIDO"]
 # Reportes de publicaciones (moderación vecinal).
 ReportTargetType = Literal["SOLIDARITY_POST", "LOCAL_SERVICE"]

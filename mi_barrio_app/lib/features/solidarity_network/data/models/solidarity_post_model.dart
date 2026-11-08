@@ -17,14 +17,27 @@ class SolidarityModality {
   static const intercambioHabilidad = 'INTERCAMBIO_HABILIDAD';
   static const movilidadSolidaria = 'MOVILIDAD_SOLIDARIA';
   static const recursoCritico = 'RECURSO_CRITICO';
+  static const alimentos = 'ALIMENTOS';
+  static const ropa = 'ROPA';
+  static const mascotas = 'MASCOTAS';
+  static const apoyoEscolar = 'APOYO_ESCOLAR';
 
+  /// "Otro": no se escribe una categoría nueva; el detalle va en la descripción.
+  static const otro = 'OTRO';
+
+  /// En el orden en que se muestran ("Otro" siempre al final).
   static const labels = {
     prestamoHerramienta: 'Herramienta',
     intercambioHabilidad: 'Habilidad',
     donacionMaterial: 'Material',
     ayudaTemporal: 'Soporte',
     movilidadSolidaria: 'Movilidad',
+    alimentos: 'Alimentos',
+    ropa: 'Ropa',
+    mascotas: 'Mascotas',
+    apoyoEscolar: 'Apoyo escolar',
     recursoCritico: 'Recurso crítico',
+    otro: 'Otro',
   };
 
   static Set<String> get values => labels.keys.toSet();
@@ -65,6 +78,7 @@ class SolidarityPostModel {
     this.coordinatorUserId,
     this.coordinatorName,
     this.isUnderReview = false,
+    this.photoCount = 0,
   });
 
   static const table = 'solidarity_posts';
@@ -95,7 +109,7 @@ class SolidarityPostModel {
   final String? contactPhone;
   final String? contactWhatsapp;
 
-  /// true si tiene foto (se descarga aparte, ver `post_photos`).
+  /// true si tiene foto (se descargan aparte, ver `post_photo_list`).
   final bool hasPhoto;
 
   /// Quién está ayudando (lo registra el servidor al coordinar).
@@ -104,6 +118,9 @@ class SolidarityPostModel {
 
   /// 3 vecinos lo reportaron: oculto hasta que el administrador lo revise.
   final bool isUnderReview;
+
+  /// Cuántas fotos tiene (hasta 4; se descargan aparte).
+  final int photoCount;
 
   bool get isPending => syncStatus == SqliteTables.syncPending;
 
@@ -141,6 +158,7 @@ class SolidarityPostModel {
             clearCoordinator ? null : coordinatorUserId ?? this.coordinatorUserId,
         coordinatorName: clearCoordinator ? null : coordinatorName,
         isUnderReview: isUnderReview,
+        photoCount: photoCount,
       );
 
   Map<String, Object?> toSqlite() => {
@@ -165,6 +183,7 @@ class SolidarityPostModel {
         'coordinator_user_id': coordinatorUserId,
         'coordinator_name': coordinatorName,
         'is_under_review': isUnderReview ? 1 : 0,
+        'photo_count': photoCount,
       };
 
   /// Payload para la cola outbox / `/sync/push` (formato del contrato).
@@ -207,6 +226,8 @@ class SolidarityPostModel {
       coordinatorUserId: row['coordinator_user_id'] as String?,
       coordinatorName: row['coordinator_name'] as String?,
       isUnderReview: (row['is_under_review'] as int? ?? 0) == 1,
+      photoCount: row['photo_count'] as int? ??
+          ((row['has_photo'] as int? ?? 0) == 1 ? 1 : 0),
     );
   }
 }

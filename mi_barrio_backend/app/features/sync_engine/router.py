@@ -143,7 +143,10 @@ async def pull_delta(
     }
     profiles = await public_profiles(db, tenant_uuid, people)
     for post in delta["solidarity_posts"]:
-        post["has_photo"] = bool(post.pop("photo_b64", None))
+        first = post.pop("photo_b64", None)
+        photos = post.pop("photos", None) or ([first] if first else [])
+        post["has_photo"] = bool(photos)
+        post["photo_count"] = len(photos)
         author = profiles.get(uuid.UUID(post["author_user_id"]), {})
         post["author_name"] = author.get("name")
         post["contact_phone"] = author.get("contact_phone")

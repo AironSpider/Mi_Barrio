@@ -83,6 +83,11 @@ class InMemoryEmergencyRepository implements EmergencyRepository {
     required String description,
     required double lat,
     required double lng,
+    String? otherTypeLabel,
+    int? peopleCount,
+    bool? hasInjured,
+    List<String> vulnerableGroups = const [],
+    String? contactPhone,
   }) async {
     if (!VulnerabilityType.values.contains(vulnerabilityType)) {
       throw ArgumentError.value(vulnerabilityType, 'vulnerabilityType');
@@ -103,6 +108,11 @@ class InMemoryEmergencyRepository implements EmergencyRepository {
       lng: lng,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
       isPending: true,
+      otherTypeLabel: otherTypeLabel,
+      peopleCount: peopleCount,
+      hasInjured: hasInjured,
+      vulnerableGroups: vulnerableGroups,
+      contactPhone: contactPhone,
     );
     _reports.add(report);
     _changes.add(null);

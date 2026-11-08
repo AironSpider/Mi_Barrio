@@ -304,6 +304,12 @@ async def process_sync_push(
                     provider = await db.get(User, principal_id)
                     if provider is None or provider.is_deleted:
                         raise ValueError("la cuenta ya no está activa")
+                if (
+                    model_class is VulnerableReport
+                    and payload.get("vulnerability_type") == "OTRO"
+                    and not (payload.get("other_type_label") or "").strip()
+                ):
+                    raise ValueError("cuéntanos qué está pasando (opción Otro)")
                 if model_class is ContentReport:
                     if existing_record is not None:
                         # Ya estaba reportada por este vecino: no se repite ni se edita.

@@ -14,7 +14,6 @@ import 'package:mi_barrio_app/core/database_sqlite/sqlite_tables.dart';
 import 'package:mi_barrio_app/core/sync_manager/sync_coordinator.dart';
 import 'package:mi_barrio_app/core/sync_manager/sync_worker.dart';
 import 'package:mi_barrio_app/core/ui_kit/app_theme.dart';
-import 'package:mi_barrio_app/core/ui_kit/quick_publish_modal.dart';
 import 'package:mi_barrio_app/features/emergency_support/domain/entities/vulnerable_report_entity.dart';
 import 'package:mi_barrio_app/features/proximity_services/data/datasources/services_sqlite_ds.dart';
 import 'package:mi_barrio_app/features/proximity_services/data/models/service_model.dart';
@@ -22,6 +21,7 @@ import 'package:mi_barrio_app/features/proximity_services/presentation/screens/s
 import 'package:mi_barrio_app/features/proximity_services/presentation/widgets/service_detail_sheet.dart';
 import 'package:mi_barrio_app/features/solidarity_network/data/datasources/solidarity_sqlite_ds.dart';
 import 'package:mi_barrio_app/features/solidarity_network/data/models/solidarity_post_model.dart';
+import 'package:mi_barrio_app/features/solidarity_network/presentation/screens/apoyo_screen.dart';
 import 'package:mi_barrio_app/features/solidarity_network/presentation/screens/collaborative_wall_screen.dart';
 import 'package:mi_barrio_app/shared/contact_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -171,32 +171,27 @@ void main() {
 
   // ───────── Hallazgo 2: Publicar con letra grande ─────────
   group('Publicar con letra 2x (adulta mayor)', () {
-    testWidgets('las opciones se leen completas, en una columna y sin errores', (tester) async {
+    testWidgets('la pantalla de Apoyo se lee completa y sin errores', (tester) async {
       tester.view.physicalSize = const Size(1080, 2340);
       tester.view.devicePixelRatio = 2.75;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(app(
-        Builder(builder: (context) => Scaffold(
-          body: Center(child: FilledButton(
-            onPressed: () => showQuickPublishModal(context, isEmergencyMode: false, onPublish: (_) async {}),
-            child: const Text('abrir'),
-          )),
-        )),
+        const ApoyoScreen(lat: lat, lng: lng),
         textScale: 2.0,
       ));
-      await tester.tap(find.text('abrir'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      for (final label in ['Herramienta', 'Habilidad', 'Cosas o materiales', 'Soporte']) {
+      for (final label in ['Herramienta', 'Habilidad', 'Material', 'Soporte', 'Otro']) {
         final text = find.text(label);
+        // La lista se arma a medida que se baja: se desplaza hasta verla.
+        await tester.scrollUntilVisible(text, 150, scrollable: find.byType(Scrollable).first);
         expect(text, findsOneWidget, reason: label);
         final paragraph = tester.renderObject<RenderParagraph>(text);
         expect(paragraph.didExceedMaxLines, isFalse, reason: '"$label" no se corta');
       }
-      final a = tester.getTopLeft(find.text('Herramienta'));
-      final b = tester.getTopLeft(find.text('Habilidad'));
-      expect(b.dy, greaterThan(a.dy), reason: 'con letra grande: una debajo de la otra');
+      // "Publicar" siempre a la vista, aunque la pantalla sea larga.
+      expect(find.byKey(ApoyoScreen.publishKey).hitTestable(), findsOneWidget);
     });
   });
 

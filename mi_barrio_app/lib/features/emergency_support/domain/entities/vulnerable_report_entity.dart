@@ -16,6 +16,11 @@ class VulnerableReport {
     this.helperUserId,
     required this.updatedAt,
     this.isPending = false,
+    this.otherTypeLabel,
+    this.peopleCount,
+    this.hasInjured,
+    this.vulnerableGroups = const [],
+    this.contactPhone,
   });
 
   final String id;
@@ -41,6 +46,23 @@ class VulnerableReport {
   /// true si todavía no llegó al servidor (se muestra "Pendiente").
   final bool isPending;
 
+  // ── Datos para decidir a quién ayudar primero (todos opcionales) ──
+  /// Lo que escribió el vecino si eligió "Otro" (máx. 30 caracteres).
+  final String? otherTypeLabel;
+  final int? peopleCount;
+  final bool? hasInjured;
+
+  /// Valores de [VulnerableGroup] (puede haber varios).
+  final List<String> vulnerableGroups;
+  final String? contactPhone;
+
+  /// Qué pasa, en palabras simples (con "Otro", lo que escribió el vecino).
+  String get typeLabel =>
+      vulnerabilityType == VulnerabilityType.otro &&
+          (otherTypeLabel?.trim().isNotEmpty ?? false)
+      ? otherTypeLabel!.trim()
+      : VulnerabilityType.labels[vulnerabilityType] ?? vulnerabilityType;
+
   bool get needsHelp => status == ReportStatus.pendienteApoyo;
 
   VulnerableReport copyWith({String? status, String? helperUserId, bool? isPending, String? updatedAt}) {
@@ -57,6 +79,11 @@ class VulnerableReport {
       helperUserId: helperUserId ?? this.helperUserId,
       updatedAt: updatedAt ?? this.updatedAt,
       isPending: isPending ?? this.isPending,
+      otherTypeLabel: otherTypeLabel,
+      peopleCount: peopleCount,
+      hasInjured: hasInjured,
+      vulnerableGroups: vulnerableGroups,
+      contactPhone: contactPhone,
     );
   }
 }
@@ -88,6 +115,14 @@ class VulnerabilityType {
   static const movilidadReducida = 'MOVILIDAD_REDUCIDA';
   static const viviendaAfectada = 'VIVIENDA_AFECTADA';
   static const faltaSuministros = 'FALTA_SUMINISTROS';
+  // Lluvias e incendios
+  static const inundacion = 'INUNDACION';
+  static const incendio = 'INCENDIO';
+  static const atrapados = 'ATRAPADOS';
+
+  /// "Otro": el vecino escribe qué pasa (máx. [maxOtherLabel] caracteres).
+  static const otro = 'OTRO';
+  static const maxOtherLabel = 30;
 
   /// Lenguaje simple (lo entiende una niña de 10 años o una persona bajo
   /// estrés). El valor que viaja al servidor NO cambia, solo el texto.
@@ -97,11 +132,15 @@ class VulnerabilityType {
     movilidadReducida: 'No puede caminar o moverse',
     viviendaAfectada: 'Se dañó la casa',
     faltaSuministros: 'No hay agua o comida',
+    inundacion: 'Se inundó o entró el agua',
+    incendio: 'Hay fuego o humo',
+    atrapados: 'Quedamos atrapados o aislados',
+    otro: 'Otro',
   };
 
   /// Urgencia sugerida por tipo (el vecino no tiene que pensar en eso al pedir ayuda).
   static String defaultUrgency(String type) => switch (type) {
-    atencionMedica => UrgencyLevel.critica,
+    atencionMedica || incendio || atrapados => UrgencyLevel.critica,
     faltaSuministros => UrgencyLevel.media,
     _ => UrgencyLevel.alta,
   };
@@ -123,4 +162,28 @@ class ReportStatus {
   };
 
   static Set<String> get values => labels.keys.toSet();
+}
+
+/// Personas que necesitan más cuidado en una emergencia (contrato:
+/// `vulnerable_groups`, separados por coma).
+class VulnerableGroup {
+  VulnerableGroup._();
+  static const ninos = 'NINOS';
+  static const mayores = 'MAYORES';
+  static const discapacidad = 'DISCAPACIDAD';
+  static const embarazada = 'EMBARAZADA';
+  static const mascotas = 'MASCOTAS';
+
+  static const labels = {
+    ninos: 'Niños',
+    mayores: 'Personas mayores',
+    discapacidad: 'Con discapacidad',
+    embarazada: 'Embarazada',
+    mascotas: 'Mascotas',
+  };
+
+  static List<String> parse(String? raw) => [
+    for (final g in (raw ?? '').split(','))
+      if (labels.containsKey(g.trim())) g.trim(),
+  ];
 }

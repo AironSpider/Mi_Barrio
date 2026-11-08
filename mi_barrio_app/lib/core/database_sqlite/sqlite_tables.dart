@@ -13,7 +13,7 @@ class SqliteTables {
 
   /// Versión actual del esquema. Súbela al agregar tablas o columnas
   /// y añade el paso correspondiente en [migrations].
-  static const int schemaVersion = 10;
+  static const int schemaVersion = 11;
 
   // ── Valores permitidos (idénticos al contrato del backend) ──
   static const syncPending = 'PENDING';
@@ -44,7 +44,20 @@ class SqliteTables {
       has_photo INTEGER NOT NULL DEFAULT 0,
       coordinator_user_id TEXT,
       coordinator_name TEXT,
-      is_under_review INTEGER NOT NULL DEFAULT 0
+      is_under_review INTEGER NOT NULL DEFAULT 0,
+      photo_count INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
+
+  /// Fotos de favores (hasta 4, en orden). Reemplaza a `post_photos`, que
+  /// guardaba solo una (se copia al actualizar).
+  static const createPostPhotoList = '''
+    CREATE TABLE IF NOT EXISTS post_photo_list (
+      post_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      tenant_id TEXT NOT NULL,
+      photo_b64 TEXT NOT NULL,
+      PRIMARY KEY (post_id, position)
     )
   ''';
 
@@ -223,7 +236,12 @@ class SqliteTables {
       helper_user_id TEXT,
       is_deleted INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL,
-      sync_status TEXT NOT NULL DEFAULT 'SYNCED'
+      sync_status TEXT NOT NULL DEFAULT 'SYNCED',
+      other_type_label TEXT,
+      people_count INTEGER,
+      has_injured INTEGER,
+      vulnerable_groups TEXT,
+      contact_phone TEXT
     )
   ''';
 
@@ -278,6 +296,7 @@ class SqliteTables {
     createPostPhotos,
     createServicePhotos,
     createContentReports,
+    createPostPhotoList,
     ...indexes,
     ...indexesV3,
     ...indexesV4,
@@ -295,7 +314,8 @@ class SqliteTables {
   ///     (contacto del comerciante; lo manda el servidor en el pull).
   /// v8 (Sprint 13): favores con autor, contacto, foto y coordinador + post_photos.
   /// v9 (Sprint 13): servicios con precio y fotos (service_photos); reseñas con nombre.
-  /// v10: servicios Necesito/Ofrezco + insignia + reportes (content_reports).
+  /// v10: servicios Pedir/Brindar + insignia + reportes (content_reports).
+  /// v11: varias fotos por favor (post_photo_list) + datos del pedido de ayuda.
   static const Map<int, List<String>> migrations = {
     2: [createLocalServices, ...indexes],
     3: [
@@ -318,6 +338,13 @@ class SqliteTables {
     // v10: servicios Necesito/Ofrezco, insignia Vecino/Negocio, moderación.
     // Se baja todo de nuevo UNA vez para completar los campos nuevos.
     10: [createContentReports, 'DELETE FROM sync_state'],
+    // v11: varias fotos por favor (se copia la que ya había) y datos del SOS.
+    11: [
+      createPostPhotoList,
+      'INSERT OR IGNORE INTO post_photo_list (post_id, position, tenant_id, photo_b64) '
+          'SELECT post_id, 0, tenant_id, photo_b64 FROM post_photos',
+      'DELETE FROM sync_state',
+    ],
   };
 
   /// Columnas nuevas en tablas existentes, por versión destino.
@@ -360,6 +387,16 @@ class SqliteTables {
         'provider_role': 'TEXT',
       },
       'solidarity_posts': {'is_under_review': 'INTEGER NOT NULL DEFAULT 0'},
+    },
+    11: {
+      'solidarity_posts': {'photo_count': 'INTEGER NOT NULL DEFAULT 0'},
+      'vulnerable_reports': {
+        'other_type_label': 'TEXT',
+        'people_count': 'INTEGER',
+        'has_injured': 'INTEGER',
+        'vulnerable_groups': 'TEXT',
+        'contact_phone': 'TEXT',
+      },
     },
   };
 }

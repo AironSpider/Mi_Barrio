@@ -121,7 +121,7 @@ void main() {
   });
 
   group('Comerciante recién registrado', () {
-    testWidgets('ve "Ofrecer servicio" sin avisos de aprobación', (tester) async {
+    testWidgets('no ve avisos de aprobación', (tester) async {
       login(role: 'COMERCIANTE');
       await tester.runAsync(() async {
         await (await local.database).insert('users', {
@@ -140,7 +140,6 @@ void main() {
         app(Scaffold(body: ServicesDirectoryScreen(tenantId: tenant, userId: me))),
       );
       await settle(tester);
-      expect(find.text('Ofrecer o pedir un servicio'), findsOneWidget);
       expect(find.textContaining('aprobación'), findsNothing);
     });
   });

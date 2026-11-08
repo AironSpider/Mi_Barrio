@@ -26,7 +26,7 @@ class ServiceCard extends StatelessWidget {
     this.isUnderReview = false,
   });
 
-  /// true = es un pedido ("Necesito"): no lleva estrellas ni Visto Bueno.
+  /// true = es un pedido ("Pedir"): no lleva estrellas ni Visto Bueno.
   final bool isNeed;
 
   /// "Vecino" o "Negocio": quién lo publica.
@@ -120,7 +120,7 @@ class ServiceCard extends StatelessWidget {
                             if (publisherBadge != null)
                               _Badge(text: publisherBadge!),
                             if (isOwn) const _Badge(text: 'Tuyo', strong: true),
-                            if (isNeed) const _Badge(text: 'Necesita', need: true),
+                            if (isNeed) const _Badge(text: 'Pide', need: true),
                           ],
                         ),
                         const SizedBox(height: 2),
@@ -286,7 +286,7 @@ class _Tag extends StatelessWidget {
   }
 }
 
-/// Insignia corta junto al rubro: "Vecino" / "Negocio", "Tuyo" o "Necesita".
+/// Insignia corta junto al rubro: "Vecino" / "Negocio", "Tuyo" o "Pide".
 class _Badge extends StatelessWidget {
   const _Badge({required this.text, this.strong = false, this.need = false});
 

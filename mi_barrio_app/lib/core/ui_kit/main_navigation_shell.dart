@@ -6,11 +6,14 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../features/emergency_support/presentation/screens/emergency_map_screen.dart';
 import '../../features/onboarding_tutorial/presentation/screens/tutorial_screen.dart';
+import '../../features/proximity_services/presentation/widgets/offer_service_sheet.dart';
+import '../../features/solidarity_network/presentation/screens/apoyo_screen.dart';
 import '../../features/profile_me/presentation/screens/profile_screen.dart';
 import '../../features/proximity_services/presentation/screens/services_directory_screen.dart';
 import '../../features/proximity_services/presentation/screens/merchant_business_screen.dart';
 import '../../features/solidarity_network/presentation/screens/collaborative_wall_screen.dart';
 import 'app_theme.dart';
+import 'done_confirmation.dart';
 import 'global_sync_status_bar.dart';
 import 'quick_publish_fab.dart';
 import '../barrio_context/emergency_mode_provider.dart';
@@ -107,6 +110,9 @@ class MainNavigationShell extends StatefulWidget {
 
   /// Estado de sync para la barra global (por defecto, el del SyncCoordinator).
   final ValueListenable<SyncPhase>? syncPhase;
+
+  /// Botón "Ayuda" en modo emergencia (pedido de ayuda). En el día a día,
+  /// "Publicar" abre el formulario de la pestaña (Servicios o Apoyo).
   final Future<bool> Function()? onPublish;
   final ValueChanged<bool>? onEmergencyPreviewChanged;
 
@@ -137,26 +143,46 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   }
 
   Future<void> _handlePublish() async {
-    final onPublish = widget.onPublish;
-    if (onPublish != null) {
+    final messenger = ScaffoldMessenger.of(context);
+    // Emergencia: "Ayuda" abre el pedido de ayuda en cualquier pestaña y
+    // después se muestra el Mapa de ayuda.
+    if (widget.isEmergencyMode) {
+      final onPublish = widget.onPublish;
+      if (onPublish == null) return;
       final published = await onPublish();
-      // Tras publicar se muestra el resultado: el muro (Apoyo) en modo normal,
-      // o el Mapa de ayuda tras pedir ayuda en emergencia.
-      final destino = widget.isEmergencyMode
-          ? MainNavigationShell.mapaTabIndex
-          : MainNavigationShell.apoyoTabIndex;
-      if (published && mounted && _index != destino) {
-        setState(() => _index = destino);
+      if (published && mounted && _index != MainNavigationShell.mapaTabIndex) {
+        setState(() => _index = MainNavigationShell.mapaTabIndex);
       }
       return;
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('La publicación rápida estará lista pronto.'),
-        ),
+    // Día a día: cada pestaña abre SU formulario (Servicios o Apoyo).
+    final tabs = ShellTabs.forCurrentRole();
+    final tabId = _index < tabs.length ? tabs[_index].id : '';
+    final session = TenantSession.instance;
+    if (tabId == 'servicios') {
+      final profile = await loadMerchantProfile(session.userId, tenantId: session.tenantId);
+      if (!mounted) return;
+      final saved = await showOfferServiceSheet(
+        context,
+        tenantId: session.tenantId,
+        userId: session.userId,
+        profile: profile,
       );
+      if (saved) {
+        DoneConfirmation.show(
+          messenger,
+          'Tu servicio ya está publicado. Se enviará solo cuando haya señal.',
+        );
+      }
+    } else if (tabId == 'apoyo') {
+      final saved = await showApoyoScreen(context);
+      if (saved) {
+        DoneConfirmation.show(
+          messenger,
+          'Tu publicación ya está en el muro. Se enviará sola cuando haya señal.',
+        );
+      }
+    }
   }
 
   @override

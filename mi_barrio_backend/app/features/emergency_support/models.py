@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Boolean, String, Float, Text
+from sqlalchemy import Boolean, SmallInteger, String, Float, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
@@ -16,6 +16,12 @@ class VulnerableReport(Base, BarrioBaseMixin):
     lng: Mapped[float] = mapped_column(Float, nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="PENDIENTE_APOYO", nullable=False)
     helper_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # Datos para decidir a quién ayudar primero (todos opcionales).
+    other_type_label: Mapped[str | None] = mapped_column(String(30), nullable=True)  # si el tipo es OTRO
+    people_count: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    has_injured: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    vulnerable_groups: Mapped[str | None] = mapped_column(String(120), nullable=True)  # "NINOS,MAYORES"
+    contact_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 class SupportGroup(Base, BarrioBaseMixin):
     """Grupo de apoyo del barrio (brigada, albergue, olla común...). Lo administra la junta."""

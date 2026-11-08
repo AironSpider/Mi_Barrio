@@ -1,6 +1,7 @@
 import uuid
 
 from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, SmallInteger, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +23,8 @@ class SolidarityPost(Base, BarrioBaseMixin):
     lng: Mapped[float] = mapped_column(Float, nullable=False)
     # Foto opcional (JPEG comprimido en base64). No viaja en el pull: se pide aparte.
     photo_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Hasta 4 fotos (la primera también queda en photo_b64 para apps viejas).
+    photos: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     # Quién está ayudando: lo pone el servidor al coordinar (para las reseñas).
     coordinator_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     # true = 3 vecinos lo reportaron: oculto hasta que el administrador lo revise.

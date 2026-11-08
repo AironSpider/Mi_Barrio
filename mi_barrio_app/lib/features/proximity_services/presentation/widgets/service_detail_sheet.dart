@@ -414,11 +414,11 @@ class _ServiceDetailSheetState extends State<ServiceDetailSheet> {
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      // Un pedido ("Necesito") no se califica: no tiene estrellas.
+                      // Un pedido ("Pedir") no se califica: no tiene estrellas.
                       if (service.isNeed)
                         const Chip(
                           avatar: Icon(Icons.campaign_rounded, size: 18),
-                          label: Text('Necesita este servicio'),
+                          label: Text('Pide este servicio'),
                         )
                       else
                         StarRatingDisplay(

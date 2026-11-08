@@ -123,6 +123,22 @@ class AuthRemoteDatasource {
     return _decodeResponse(response);
   }
 
+  /// "Volver para cambiar datos": borra la cuenta que nunca confirmó su
+  /// correo. Si falla (sin red), registrarse de nuevo igual reemplaza sus datos.
+  Future<void> deleteUnverifiedAccount(String token) async {
+    final response = await _request(
+      () => _client
+          .delete(
+            Uri.parse('$_baseUrl/api/v1/auth/unverified-account'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(ApiConfig.timeout),
+    );
+    if (response.statusCode >= 400 && response.statusCode != 404) {
+      throw AuthException('No se pudo borrar la cuenta', statusCode: response.statusCode);
+    }
+  }
+
   /// Barrios de la plataforma (solo SUPER_ADMIN).
   Future<List<NeighborhoodSummary>> listNeighborhoods(String token) async {
     final response = await _request(

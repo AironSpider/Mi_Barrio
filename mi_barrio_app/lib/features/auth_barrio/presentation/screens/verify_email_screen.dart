@@ -5,7 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/user_entity.dart';
+import '../../data/datasources/auth_remote_datasource.dart';
+import '../../../../core/auth/auth_session_store.dart';
 import '../providers/auth_provider.dart';
+import '../register_draft.dart';
+import '../widgets/account_widgets.dart';
 import '../widgets/auth_validators.dart';
 
 /// Aparece después de crear una cuenta con contraseña: hay que escribir el
@@ -19,6 +23,7 @@ class VerifyEmailScreen extends ConsumerStatefulWidget {
   static const submitKey = ValueKey('verify_submit');
   static const resendKey = ValueKey('verify_resend');
   static const messageKey = ValueKey('verify_message');
+  static const backLinkKey = ValueKey('verify_back_link');
 
   /// Espera entre reenvíos (igual que el servidor).
   static const resendAfter = Duration(seconds: 60);
@@ -36,10 +41,43 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
   int _wait = VerifyEmailScreen.resendAfter.inSeconds;
   Timer? _timer;
 
+  /// true = llegó aquí creando la cuenta ("Volver para cambiar datos");
+  /// false = iniciando sesión ("Volver a inicio de sesión").
+  bool _fromRegister = false;
+
   @override
   void initState() {
     super.initState();
     _startCountdown(); // el servidor acaba de enviar el primer código
+    RegisterDraft.load().then((draft) {
+      final email = widget.user.email?.trim().toLowerCase();
+      if (!mounted || draft == null || email == null) return;
+      setState(() => _fromRegister = draft.email.trim().toLowerCase() == email);
+    });
+  }
+
+  /// Sale de esta pantalla aunque el código nunca llegue (antes se quedaba
+  /// atrapado aquí, incluso al cerrar y abrir la app).
+  Future<void> _goBack() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    if (_fromRegister) {
+      // La cuenta sin confirmar se borra para poder registrarse de nuevo
+      // (con el mismo u otro correo). Sin red, registrarse otra vez igual
+      // reemplaza sus datos.
+      final token = AuthSessionStore.instance.token;
+      if (token != null) {
+        try {
+          await AuthRemoteDatasource().deleteUnverifiedAccount(token);
+        } catch (_) {}
+      }
+      RegisterDraft.reopenRequested = true;
+    } else {
+      await RegisterDraft.clear();
+    }
+    await ref.read(authProvider.notifier).logout();
+    // Si cerrar sesión falló, la pantalla sigue: se puede volver a intentar.
+    if (mounted) setState(() => _busy = false);
   }
 
   @override
@@ -70,6 +108,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     final error = await ref
         .read(authProvider.notifier)
         .verifyEmail(_code.text.trim());
+    if (error == null) await RegisterDraft.clear();
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -95,6 +134,9 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     if (error == null) _startCountdown();
   }
 
+  String get _backLabel =>
+      _fromRegister ? 'Volver para cambiar datos' : 'Volver a inicio de sesión';
+
   @override
   Widget build(BuildContext context) {
     final texto = Theme.of(context).textTheme;
@@ -103,15 +145,11 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Confirma tu correo'),
-        automaticallyImplyLeading: false,
-        actions: [
-          TextButton(
-            onPressed: _busy
-                ? null
-                : () => ref.read(authProvider.notifier).logout(),
-            child: const Text('Salir'),
-          ),
-        ],
+        leading: AuthBackButton(
+          tooltip: _backLabel,
+          onPressed: _busy ? null : _goBack,
+        ),
+        leadingWidth: 64,
       ),
       body: SafeArea(
         child: Align(
@@ -221,6 +259,14 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
                         _wait > 0
                             ? 'Reenviar código en $_wait s'
                             : 'Reenviar código',
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Center(
+                      child: UnderlinedLink(
+                        key: VerifyEmailScreen.backLinkKey,
+                        label: _backLabel,
+                        onPressed: _busy ? null : _goBack,
                       ),
                     ),
                   ],

@@ -102,28 +102,41 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
     if tenant is None:
         raise HTTPException(status_code=404, detail="No encontramos un barrio con ese código")
 
-    existing = await db.scalar(select(User.id).where(User.email == email))
+    existing = await db.scalar(select(User).where(User.email == email))
     platform_admin = await db.scalar(
         select(PlatformAdmin.id).where(PlatformAdmin.email == email)
     )
-    if existing is not None or platform_admin is not None:
+    if platform_admin is not None or (
+        existing is not None and (existing.email_verified or existing.is_deleted)
+    ):
         raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese correo")
 
-    user = User(
-        id=uuid.uuid4(),
-        tenant_id=tenant.id,
-        full_name=payload.full_name.strip(),
-        email=email,
-        password_hash=await _hash(payload.password),
-        role=payload.role,
-        is_approved=True,  # sin aprobación de la junta: publica al instante
-        email_verified=False,  # se confirma con el código que llega al correo
-        phone="",
-        home_lat=tenant.center_lat,
-        home_lng=tenant.center_lng,
-        tutorial_completed=False,
-    )
-    db.add(user)
+    if existing is not None:
+        # La cuenta nunca confirmó su correo ("Volver para cambiar datos"):
+        # se reemplazan sus datos en lugar de bloquear el correo para siempre.
+        user = existing
+        user.tenant_id = tenant.id
+        user.full_name = payload.full_name.strip()
+        user.password_hash = await _hash(payload.password)
+        user.role = payload.role
+        user.home_lat = tenant.center_lat
+        user.home_lng = tenant.center_lng
+    else:
+        user = User(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            full_name=payload.full_name.strip(),
+            email=email,
+            password_hash=await _hash(payload.password),
+            role=payload.role,
+            is_approved=True,  # sin aprobación de la junta: publica al instante
+            email_verified=False,  # se confirma con el código que llega al correo
+            phone="",
+            home_lat=tenant.center_lat,
+            home_lng=tenant.center_lng,
+            tutorial_completed=False,
+        )
+        db.add(user)
     try:
         await db.commit()
     except IntegrityError as exc:
@@ -133,15 +146,19 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db_s
             detail="Ya existe una cuenta con ese correo",
         ) from exc
     await db.refresh(user)
+    # La respuesta se arma ANTES del código: si el código falla (p. ej. se pidió
+    # otro hace menos de 60 s), el rollback no deja la cuenta sin datos.
+    response = _auth_response(user, tenant)
+    full_name = user.full_name
     # El código de verificación sale en segundo plano: si el correo falla,
     # la cuenta igual se crea y el vecino puede pedir otro código.
     try:
         code = await account_codes.issue_code(db, email, account_codes.PURPOSE_VERIFY)
         await db.commit()
-        await email_sender.send_verification_code(email, user.full_name, code)
+        await email_sender.send_verification_code(email, full_name, code)
     except HTTPException:
         await db.rollback()
-    return _auth_response(user, tenant)
+    return response
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -228,6 +245,35 @@ async def current_user(
     if tenant is None:
         raise HTTPException(status_code=403, detail="El barrio de la cuenta no está disponible")
     return _user_response(user, tenant)
+
+
+@router.delete("/unverified-account", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_unverified_account(
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """"Volver para cambiar datos": borra la cuenta que nunca confirmó su correo,
+    así el vecino puede registrarse de nuevo (con el mismo u otro correo)."""
+    claims = getattr(request.state, "auth_claims", None)
+    if claims is None or claims.get("role") == "SUPER_ADMIN":
+        raise HTTPException(status_code=401, detail="Se requiere una sesión Bearer")
+    user = await db.get(User, uuid.UUID(claims["sub"]))
+    if user is None or user.is_deleted:
+        return None
+    if user.email_verified:
+        raise HTTPException(status_code=409, detail="Esta cuenta ya está confirmada")
+    try:
+        await db.delete(user)
+        await db.commit()
+    except IntegrityError:
+        # Algo la referencia: se da de baja y se libera el correo.
+        await db.rollback()
+        user = await db.get(User, uuid.UUID(claims["sub"]))
+        if user is not None:
+            user.is_deleted = True
+            user.email = None
+            await db.commit()
+    return None
 
 
 platform_router = APIRouter(prefix="/api/v1/platform", tags=["Platform administration"])

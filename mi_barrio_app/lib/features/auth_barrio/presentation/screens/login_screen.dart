@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ui_kit/app_theme.dart';
 import '../providers/auth_provider.dart';
+import '../register_draft.dart';
 import '../widgets/account_widgets.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
@@ -100,6 +101,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.initState();
     for (final c in [_email, _password]) {
       c.addListener(_onEdit);
+    }
+    // "Volver para cambiar datos": se abre "Crear cuenta" con lo que tenía.
+    if (RegisterDraft.reopenRequested) {
+      RegisterDraft.reopenRequested = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const RegisterScreen()),
+        );
+      });
     }
   }
 

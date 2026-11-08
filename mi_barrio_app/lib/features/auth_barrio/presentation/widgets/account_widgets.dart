@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../../core/ui_kit/app_theme.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
@@ -264,7 +265,7 @@ class RoleChoice extends StatelessWidget {
           key: vecinoKey,
           icon: Icons.home_rounded,
           title: 'Soy vecino',
-          subtitle: 'Pido y ofrezco ayuda y servicios a mis vecinos.',
+          subtitle: 'Pido y brindo ayuda y servicios a mis vecinos.',
           selected: role == UserRole.vecino,
           onTap: onChanged == null ? null : () => onChanged!(UserRole.vecino),
         ),
@@ -442,4 +443,76 @@ Future<String?> continueWithGoogle(
     GoogleSignInOutcome.failed =>
       result.message ?? 'No se pudo entrar con Google.',
   };
+}
+
+/// Botón ‹ de las pantallas de cuenta: círculo blanco, sin borde, con sombra.
+/// Es el mismo en registro, código de confirmación y recuperar contraseña.
+class AuthBackButton extends StatelessWidget {
+  const AuthBackButton({super.key, required this.onPressed, this.tooltip = 'Regresar'});
+
+  final VoidCallback? onPressed;
+  final String tooltip;
+
+  static const buttonKey = ValueKey('auth_back_button');
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(6),
+      child: Tooltip(
+        message: tooltip,
+        child: Semantics(
+          button: true,
+          label: tooltip,
+          excludeSemantics: true,
+          child: Material(
+            key: buttonKey,
+            color: AppPalette.card,
+            shape: const CircleBorder(),
+            elevation: 3,
+            shadowColor: Colors.black38,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onPressed,
+              child: const SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: FaIcon(
+                    FontAwesomeIcons.angleLeft,
+                    size: 20,
+                    color: AppPalette.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Enlace subrayado de abajo ("Volver a inicio de sesión", "Volver para
+/// cambiar datos"): hace obvio cómo salir de la pantalla.
+class UnderlinedLink extends StatelessWidget {
+  const UnderlinedLink({super.key, required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+      child: Text(
+        label,
+        style: const TextStyle(
+          decoration: TextDecoration.underline,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
 }

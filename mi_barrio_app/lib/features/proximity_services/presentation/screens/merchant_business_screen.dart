@@ -144,7 +144,7 @@ class _MerchantBusinessScreenState extends State<MerchantBusinessScreen> {
             ),
             onPressed: () => _offer(),
             icon: const Icon(Icons.add_business_rounded),
-            label: const Text('Ofrecer un servicio'),
+            label: const Text('Brindar un servicio'),
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
@@ -173,7 +173,7 @@ class _MerchantBusinessScreenState extends State<MerchantBusinessScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Todavía no publicaste servicios. Toca "Ofrecer un servicio": '
+                      'Todavía no publicaste servicios. Toca "Brindar un servicio": '
                       'agrega fotos, precio y dónde atiendes.',
                       textAlign: TextAlign.center,
                       style: texto.bodyLarge,

@@ -125,8 +125,8 @@ class _CollaborativeWallScreenState extends State<CollaborativeWallScreen> {
           title: 'Modalidad',
           allLabel: 'Todas',
           options: [
-            FilterOption(SolidarityFlowType.solicitoAyuda, 'Necesito'),
-            FilterOption(SolidarityFlowType.ofrezcoAyuda, 'Ofrezco'),
+            FilterOption(SolidarityFlowType.solicitoAyuda, 'Pedir'),
+            FilterOption(SolidarityFlowType.ofrezcoAyuda, 'Brindar'),
           ],
         ),
         const FilterGroup.toggle(id: _mineGroup, title: 'Seleccionar los míos'),
@@ -441,7 +441,7 @@ class _PostCard extends StatelessWidget {
                     size: 18,
                     color: colorScheme.primary,
                   ),
-                  label: Text(isOffer ? 'Ofrezco ayuda' : 'Necesito ayuda'),
+                  label: Text(isOffer ? 'Brindo ayuda' : 'Pido ayuda'),
                 ),
                 if (isOwn)
                   Chip(

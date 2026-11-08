@@ -127,7 +127,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       child: CircularProgressIndicator(strokeWidth: 2.5),
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('Recuperar contraseña')),
+      appBar: AppBar(
+        title: const Text('Recuperar contraseña'),
+        leading: AuthBackButton(
+          tooltip: 'Volver a inicio de sesión',
+          onPressed: _busy ? null : () => Navigator.of(context).maybePop(),
+        ),
+        leadingWidth: 64,
+      ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
@@ -284,6 +291,15 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                                     _error = null;
                                   }),
                             child: const Text('Usar otro correo'),
+                          ),
+                          // Esperando el código: salida obvia aunque no llegue.
+                          Center(
+                            child: UnderlinedLink(
+                              label: 'Volver a inicio de sesión',
+                              onPressed: _busy
+                                  ? null
+                                  : () => Navigator.of(context).maybePop(),
+                            ),
                           ),
                         ],
                       ),

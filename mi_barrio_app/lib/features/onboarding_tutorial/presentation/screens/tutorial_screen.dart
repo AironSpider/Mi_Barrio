@@ -27,7 +27,7 @@ class TutorialScreen extends StatefulWidget {
           'Publicas en 3 toques, incluso sin internet.',
     ),
     (
-      icon: Icons.sos_rounded,
+      icon: Icons.warning_amber_rounded,
       title: 'Pedir ayuda en emergencia',
       description: 'Si hay una emergencia, toca "Pedir ayuda". Tu pedido se guarda '
           'en el teléfono y llega a tus vecinos apenas vuelva la señal.',

@@ -13,7 +13,6 @@ import 'core/sync_manager/sync_coordinator.dart';
 import 'core/ui_kit/app_theme.dart';
 import 'core/ui_kit/dev_tools.dart';
 import 'core/ui_kit/main_navigation_shell.dart';
-import 'core/ui_kit/quick_publish_launcher.dart';
 import 'features/auth_barrio/presentation/providers/auth_provider.dart';
 import 'features/auth_barrio/domain/entities/user_entity.dart';
 import 'features/auth_barrio/presentation/screens/login_screen.dart';
@@ -181,13 +180,9 @@ class _AuthGate extends ConsumerWidget {
         userId: user.id,
         child: MainNavigationShell(
           isEmergencyMode: isEmergencyMode,
-          // En emergencia el botón principal es "Pedir ayuda" (SOS en 3 clics).
-          onPublish: () => isEmergencyMode
-              ? showSosSheet(context)
-              : QuickPublishLauncher.open(
-                  context,
-                  isEmergencyMode: isEmergencyMode,
-                ),
+          // En emergencia, "Ayuda" abre el pedido de ayuda (SOS en 3 clics).
+          // En el día a día, cada pestaña abre su formulario (lo decide el shell).
+          onPublish: () => showSosSheet(context),
           onEmergencyPreviewChanged: onEmergencyPreviewChanged,
         ),
       ),

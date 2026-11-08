@@ -20,6 +20,9 @@ class SolidaritySqliteDatasource {
   /// Tope de la foto (JPEG comprimido en base64), igual que las calificaciones.
   static const maxPhotoB64Length = 80 * 1024;
 
+  /// Fotos por favor (igual que los servicios).
+  static const maxPhotos = 4;
+
   /// Guarda una publicación al instante (Clic 3: "Publicar Ahora").
   ///
   /// - Genera el UUID v4 en el teléfono.
@@ -39,13 +42,20 @@ class SolidaritySqliteDatasource {
     String? description,
     bool isEmergencyContext = false,
     String? photoB64,
+    List<String> photos = const [],
   }) async {
-    if (photoB64 != null && photoB64.length > maxPhotoB64Length) {
-      throw ArgumentError.value(
-        '(${photoB64.length} caracteres)',
-        'photoB64',
-        'La foto es demasiado grande; elige otra o tómala de nuevo',
-      );
+    final allPhotos = [?photoB64, ...photos];
+    if (allPhotos.length > maxPhotos) {
+      throw ArgumentError.value(allPhotos.length, 'photos', 'Máximo $maxPhotos fotos');
+    }
+    for (final photo in allPhotos) {
+      if (photo.length > maxPhotoB64Length) {
+        throw ArgumentError.value(
+          '(${photo.length} caracteres)',
+          'photoB64',
+          'La foto es demasiado grande; elige otra o tómala de nuevo',
+        );
+      }
     }
     RecordValidation.uuid(tenantId, 'tenantId');
     RecordValidation.uuid(authorUserId, 'authorUserId');
@@ -70,51 +80,76 @@ class SolidaritySqliteDatasource {
       lng: lng,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
       syncStatus: SqliteTables.syncPending,
-      hasPhoto: photoB64 != null,
+      hasPhoto: allPhotos.isNotEmpty,
+      photoCount: allPhotos.length,
     );
 
     final db = await _db.database;
     await db.transaction((txn) async {
       await txn.insert(SolidarityPostModel.table, post.toSqlite());
-      if (photoB64 != null) await _savePhoto(txn, tenantId, post.id, photoB64);
+      await _savePhotos(txn, tenantId, post.id, allPhotos);
       await _outboxDao.queueMutation(
         tenantId: tenantId,
         targetTable: SolidarityPostModel.table,
         recordId: post.id,
         operation: OutboxOperation.upsert,
-        // La foto viaja solo al crear; los cambios de estado no la reenvían.
-        payload: {...post.toSyncPayload(), 'photo_b64': ?photoB64},
+        // Las fotos viajan solo al crear; los cambios de estado no las reenvían.
+        // La primera también va en photo_b64 (servidores y apps anteriores).
+        payload: {
+          ...post.toSyncPayload(),
+          if (allPhotos.isNotEmpty) 'photo_b64': allPhotos.first,
+          if (allPhotos.isNotEmpty) 'photos': allPhotos,
+        },
         executor: txn,
       );
     });
     return post;
   }
 
-  /// Foto del favor guardada en el teléfono (null si no se descargó aún).
+  /// Fotos del favor guardadas en el teléfono, en orden (vacío si aún no se
+  /// descargaron).
+  Future<List<String>> localPhotos(String postId) async {
+    final db = await _db.database;
+    final rows = await db.query('post_photo_list',
+        columns: ['photo_b64'],
+        where: 'post_id = ?',
+        whereArgs: [postId],
+        orderBy: 'position ASC');
+    return [for (final r in rows) r['photo_b64']! as String];
+  }
+
+  /// Primera foto (compatibilidad).
   Future<String?> localPhoto(String postId) async {
-    final db = await _db.database;
-    final rows = await db.query('post_photos',
-        columns: ['photo_b64'], where: 'post_id = ?', whereArgs: [postId], limit: 1);
-    return rows.isEmpty ? null : rows.first['photo_b64'] as String?;
+    final photos = await localPhotos(postId);
+    return photos.isEmpty ? null : photos.first;
   }
 
-  /// Guarda la foto descargada para verla luego sin internet.
-  Future<void> cachePhoto(String tenantId, String postId, String photoB64) async {
+  /// Guarda las fotos descargadas para verlas luego sin internet.
+  Future<void> cachePhotos(String tenantId, String postId, List<String> photos) async {
     final db = await _db.database;
-    await _savePhoto(db, tenantId, postId, photoB64);
+    await db.transaction((txn) => _savePhotos(txn, tenantId, postId, photos));
   }
 
-  static Future<void> _savePhoto(
+  /// Compatibilidad: guarda una sola foto.
+  Future<void> cachePhoto(String tenantId, String postId, String photoB64) =>
+      cachePhotos(tenantId, postId, [photoB64]);
+
+  static Future<void> _savePhotos(
     DatabaseExecutor db,
     String tenantId,
     String postId,
-    String photoB64,
-  ) =>
-      db.insert(
-        'post_photos',
-        {'post_id': postId, 'tenant_id': tenantId, 'photo_b64': photoB64},
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+    List<String> photos,
+  ) async {
+    await db.delete('post_photo_list', where: 'post_id = ?', whereArgs: [postId]);
+    for (final (i, photo) in photos.indexed) {
+      await db.insert('post_photo_list', {
+        'post_id': postId,
+        'position': i,
+        'tenant_id': tenantId,
+        'photo_b64': photo,
+      });
+    }
+  }
 
   /// Publicaciones activas del barrio, de la más reciente a la más antigua.
   ///
