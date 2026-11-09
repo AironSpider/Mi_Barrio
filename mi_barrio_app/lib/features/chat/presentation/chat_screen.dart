@@ -153,6 +153,7 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.neighborUserId,
         text,
       );
+      if (!mounted) return;
       _input.clear();
       _add(sent);
     } catch (e) {
@@ -223,12 +224,29 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Semantics(
-                liveRegion: true,
-                child: Text(
-                  _error!,
-                  style: texto.bodyMedium?.copyWith(color: esquema.error),
-                ),
+              child: Column(
+                children: [
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      _error!,
+                      style: texto.bodyMedium?.copyWith(color: esquema.error),
+                    ),
+                  ),
+                  if (_messages.isEmpty)
+                    TextButton.icon(
+                      key: const ValueKey('chat_retry'),
+                      onPressed: () {
+                        setState(() {
+                          _loading = true;
+                          _error = null;
+                        });
+                        unawaited(_load());
+                      },
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Reintentar'),
+                    ),
+                ],
               ),
             ),
           SafeArea(
@@ -412,52 +430,55 @@ class _Bubble extends StatelessWidget {
     final time =
         '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}';
     final fg = mine ? esquema.onPrimary : esquema.onSurface;
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
-        ),
-        child: Semantics(
-          label: '${mine ? 'Tú' : message.senderName}, $time: ${message.body}',
-          excludeSemantics: true,
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 3),
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-            decoration: BoxDecoration(
-              color: mine ? esquema.primary : esquema.surface,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: Radius.circular(mine ? 18 : 4),
-                bottomRight: Radius.circular(mine ? 4 : 18),
+    return Row(
+      mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: [
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+          ),
+          child: Semantics(
+            label:
+                '${mine ? 'Tú' : message.senderName}, $time: ${message.body}',
+            excludeSemantics: true,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 3),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+              decoration: BoxDecoration(
+                color: mine ? esquema.primary : esquema.surface,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(mine ? 18 : 4),
+                  bottomRight: Radius.circular(mine ? 4 : 18),
+                ),
+                border: mine
+                    ? null
+                    : Border.all(color: esquema.outline.withValues(alpha: 0.3)),
               ),
-              border: mine
-                  ? null
-                  : Border.all(color: esquema.outline.withValues(alpha: 0.3)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    message.body,
-                    style: texto.bodyLarge?.copyWith(color: fg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      message.body,
+                      style: texto.bodyLarge?.copyWith(color: fg),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  time,
-                  style: texto.labelSmall?.copyWith(
-                    color: fg.withValues(alpha: 0.8),
+                  const SizedBox(height: 2),
+                  Text(
+                    time,
+                    style: texto.labelSmall?.copyWith(
+                      color: fg.withValues(alpha: 0.8),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/ui_kit/app_theme.dart';
 import '../../../../core/ui_kit/sync_status_chip.dart';
+import '../../../../core/ui_kit/location_map.dart';
+import '../../../../shared/contact_launcher.dart';
 import '../../domain/entities/vulnerable_report_entity.dart';
 
 /// Tarjeta de un pedido de ayuda.
@@ -64,7 +66,8 @@ class HelpReportCard extends StatelessWidget {
                       children: [
                         _Badge(
                           icon: urgencyIcon,
-                          label: 'Urgencia ${UrgencyLevel.labels[report.urgencyLevel] ?? ''}',
+                          label:
+                              'Urgencia ${UrgencyLevel.labels[report.urgencyLevel] ?? ''}',
                           color: urgencyColor,
                         ),
                         if (distanceLabel != null)
@@ -81,18 +84,22 @@ class HelpReportCard extends StatelessWidget {
                     Row(
                       children: [
                         Icon(
-                          _typeIcons[report.vulnerabilityType] ?? Icons.help_rounded,
+                          _typeIcons[report.vulnerabilityType] ??
+                              Icons.help_rounded,
                           color: esquema.onSurface,
                         ),
                         const SizedBox(width: 8),
                         Expanded(child: Text(tipo, style: texto.titleMedium)),
                       ],
                     ),
-                    if (report.description.isNotEmpty && report.description != tipo) ...[
+                    if (report.description.isNotEmpty &&
+                        report.description != tipo) ...[
                       const SizedBox(height: 4),
                       Text(
                         report.description,
-                        style: texto.bodyMedium?.copyWith(color: esquema.onSurfaceVariant),
+                        style: texto.bodyMedium?.copyWith(
+                          color: esquema.onSurfaceVariant,
+                        ),
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -106,8 +113,16 @@ class HelpReportCard extends StatelessWidget {
                         Text(
                           isMine ? 'Tu pedido · $estado' : estado,
                           style: texto.labelLarge?.copyWith(
-                            color: report.needsHelp ? esquema.onSurface : AppPalette.syncSynced,
+                            color: report.needsHelp
+                                ? esquema.onSurface
+                                : AppPalette.syncSynced,
                           ),
+                        ),
+                        OutlinedButton.icon(
+                          key: ValueKey('report_location_${report.id}'),
+                          onPressed: () => _showLocation(context),
+                          icon: const Icon(Icons.location_on_outlined),
+                          label: const Text('Ver ubicación'),
                         ),
                         if (!isMine && report.needsHelp && onOfferHelp != null)
                           FilledButton.icon(
@@ -121,6 +136,61 @@ class HelpReportCard extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLocation(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Ubicación de ${report.typeLabel}',
+              style: Theme.of(sheetContext).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            LocationMap(
+              lat: report.lat,
+              lng: report.lng,
+              label: 'Ubicación del pedido de ayuda',
+              height: 240,
+              icon: Icons.warning_rounded,
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              'Latitud ${report.lat.toStringAsFixed(5)} · '
+              'Longitud ${report.lng.toStringAsFixed(5)}',
+              textAlign: TextAlign.center,
+              style: Theme.of(sheetContext).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () async {
+                final opened = await ContactLauncher.directions(
+                  report.lat,
+                  report.lng,
+                );
+                if (!opened && sheetContext.mounted) {
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('No se pudo abrir la app de mapas.'),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.directions_rounded),
+              label: const Text('Abrir en mapas'),
             ),
           ],
         ),
@@ -146,7 +216,8 @@ class _Badge extends StatelessWidget {
         Flexible(
           child: Text(
             label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color),
+            style: Theme.of(context).textTheme.labelMedium
+                ?.copyWith(color: color),
           ),
         ),
       ],

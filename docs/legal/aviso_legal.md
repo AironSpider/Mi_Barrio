@@ -23,7 +23,6 @@
 | Adrián Alejandro Ruiz Carreño (líder) |
 | Dandy Alexandre Abadie Atoche |
 | Dayana Jacinta Catalina Sandoval Nizama |
-| Juspin Edu Otero Saldarriaga |
 | Yolanda Isabel Castro Ortega |
 
 ---
